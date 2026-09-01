@@ -1,0 +1,143 @@
+cp mafftash_premafft.tmpl mafftash_premafft.pl
+cp seekquencer_premafft.tmpl seekquencer_premafft.pl
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c mtxutl.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c io.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c mltaln9.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c tddis.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c constants.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c nj.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c partSalignmm.c  
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Lalignmm.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c rna.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Salignmm.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Dalignmm.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Falign.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Falign_localhom.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Galign11.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c Lalign11.c 
+io.c: In function 'input_new':
+io.c:1108:30: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+ 1108 |                 mojiretsu[i] = getc( fp );
+      |                 ~~~~~~~~~~~~~^~~~~~~~~~~~
+io.c:1100:14: note: at offset 10 into destination object 'mojiretsu' of size 10
+ 1100 |         char mojiretsu[10];
+      |              ^~~~~~~~~
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c genalign11.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c MSalignmm.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c fftFunctions.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c fft.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c tditeration.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c dvtditr.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c defs.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c SAalignmm.c -o SAalignmm.o
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c treeOperation.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c addfunctions.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c dndfast7.c
+gcc -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration   -c -o dndblast.o dndblast.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c sextet5.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c mafft-distance.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c MSalign11.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c suboptalign11.c 
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c pairlocalalignmain.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c pairlocalalign.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c multi2hat3s.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c pairash.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c addsingle.c
+gcc -o maffttext2hex maffttext2hex.c  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o hex2maffttext hex2maffttext.c  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c splittbfast.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c disttbfast.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c tbfast.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c nodepair.c
+mltaln9.c: In function 'fixed_musclesupg_double_realloc_nobk_halfmtx_treeout_memsave':
+mltaln9.c:6494:28: warning: argument 2 range [18446744071562067968, 18446744073709551615] exceeds maximum object size 9223372036854775807 [-Walloc-size-larger-than=]
+ 6494 |                 int *mem = calloc( sizeof( int ), nseq );
+      |                            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from mltaln.h:13,
+                 from mltaln9.c:1:
+/home/ingmar/miniforge3/envs/pml0/x86_64-conda-linux-gnu/sysroot/usr/include/stdlib.h:675:14: note: in a call to allocation function 'calloc' declared here
+  675 | extern void *calloc (size_t __nmemb, size_t __size)
+      |              ^~~~~~
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c mafft-profile.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c f2cl.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c mccaskillwrap.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c contrafoldwrap.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c countlen.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c seq2regtable.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c regtable2seq.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c score.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c getlag.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c dndpre.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c setcore.c
+gcc -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration   -c -o filter.o filter.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c replaceu.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c restoreu.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c setdirection.c
+gcc  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration -c makedirectionlist.c
+gcc -o version version.c  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread 
+sed "s:_LIBDIR:/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft:" mafft.tmpl  > mafft
+sed "s:_BINDIR:/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin:" mafft-homologs.tmpl  > mafft-homologs.rb
+sed "s:_BINDIR:/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin:" mafft-sparsecore.tmpl  > mafft-sparsecore.rb
+gcc -o f2cl mtxutl.o io.o f2cl.o constants.o defs.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o countlen mtxutl.o io.o countlen.o defs.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o seq2regtable mtxutl.o io.o seq2regtable.o defs.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o dvtditr mtxutl.o io.o mltaln9.o tddis.o constants.o nj.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o MSalignmm.o fftFunctions.o fft.o tditeration.o dvtditr.o defs.o SAalignmm.o treeOperation.o addfunctions.o   -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o dndfast7 dndfast7.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o dndblast dndblast.o io.o constants.o mtxutl.o mltaln9.o tddis.o defs.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o sextet5 io.o constants.o mtxutl.o mltaln9.o tddis.o sextet5.o defs.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o mafft-distance io.o constants.o mtxutl.o mltaln9.o tddis.o mafft-distance.o defs.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o pairlocalalign mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o MSalignmm.o Galign11.o Lalign11.o genalign11.o MSalign11.o suboptalign11.o SAalignmm.o pairlocalalignmain.o pairlocalalign.o defs.o fft.o fftFunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o multi2hat3s mtxutl.o io.o mltaln9.o tddis.o constants.o multi2hat3s.o defs.o fft.o fftFunctions.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o pairash mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o MSalignmm.o Galign11.o Lalign11.o genalign11.o MSalign11.o suboptalign11.o SAalignmm.o pairash.o defs.o fft.o fftFunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o addsingle mtxutl.o io.o mltaln9.o tddis.o constants.o MSalignmm.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o addsingle.o defs.o fft.o fftFunctions.o addfunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o splittbfast mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o  Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o splittbfast.o defs.o fft.o fftFunctions.o   -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o disttbfast mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o disttbfast.o defs.o fft.o fftFunctions.o addfunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o tbfast mtxutl.o io.o mltaln9.o tddis.o constants.o MSalignmm.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o tbfast.o defs.o fft.o fftFunctions.o addfunctions.o pairlocalalign.o MSalign11.o   -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o nodepair mtxutl.o io.o mltaln9.o tddis.o constants.o MSalignmm.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o nodepair.o defs.o fft.o fftFunctions.o addfunctions.o pairlocalalign.o MSalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o mafft-profile io.o mtxutl.o mltaln9.o tddis.o constants.o partSalignmm.o MSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o SAalignmm.o Galign11.o Lalign11.o genalign11.o Falign.o Falign_localhom.o fftFunctions.o fft.o mafft-profile.o defs.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o mccaskillwrap mtxutl.o io.o mccaskillwrap.o constants.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o contrafoldwrap mtxutl.o io.o contrafoldwrap.o constants.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o regtable2seq mtxutl.o io.o regtable2seq.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o score io.o mtxutl.o mltaln9.o score.o constants.o defs.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o getlag mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o Dalignmm.o getlag.o defs.o fft.o fftFunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o dndpre dndpre.o io.o constants.o mtxutl.o mltaln9.o defs.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o setcore mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o setcore.o defs.o fft.o fftFunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o filter mtxutl.o io.o filter.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o replaceu mtxutl.o io.o replaceu.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o restoreu mtxutl.o io.o restoreu.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o setdirection mtxutl.o io.o setdirection.o defs.o mltaln9.o Galign11.o Lalign11.o genalign11.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+gcc -o makedirectionlist mtxutl.o io.o mltaln9.o tddis.o constants.o partSalignmm.o Lalignmm.o rna.o Salignmm.o  Dalignmm.o Falign.o Falign_localhom.o Galign11.o Lalign11.o genalign11.o SAalignmm.o MSalignmm.o makedirectionlist.o defs.o fft.o fftFunctions.o addfunctions.o  -Denablemultithread  -std=c99 -O3 -g -march=native -ffp-contract=off -fno-omit-frame-pointer -fpermissive -std=gnu17 -Wno-implicit-function-declaration  -lm  -lpthread
+cp mafft mafft-homologs.rb mafft-sparsecore.rb ../scripts
+chmod 755 ../scripts/*
+cp mafftash_premafft.pl seekquencer_premafft.pl dvtditr dndfast7 dndblast sextet5 mafft-distance pairlocalalign multi2hat3s pairash addsingle maffttext2hex hex2maffttext splittbfast disttbfast tbfast nodepair mafft-profile f2cl mccaskillwrap contrafoldwrap countlen seq2regtable regtable2seq score getlag dndpre setcore filter replaceu restoreu setdirection makedirectionlist version  ../binaries
+chmod 755 ../binaries/*
+done.
+cp mafft mafft-homologs.rb mafft-sparsecore.rb ../scripts
+chmod 755 ../scripts/*
+cp mafftash_premafft.pl seekquencer_premafft.pl dvtditr dndfast7 dndblast sextet5 mafft-distance pairlocalalign multi2hat3s pairash addsingle maffttext2hex hex2maffttext splittbfast disttbfast tbfast nodepair mafft-profile f2cl mccaskillwrap contrafoldwrap countlen seq2regtable regtable2seq score getlag dndpre setcore filter replaceu restoreu setdirection makedirectionlist version  ../binaries
+chmod 755 ../binaries/*
+done.
+mkdir -p /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft
+chmod 755 /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft
+mkdir -p /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin
+chmod 755 /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin
+chmod 755 mafft mafft-homologs.rb mafft-sparsecore.rb
+install mafft mafft-homologs.rb mafft-sparsecore.rb  /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin
+chmod 755 dvtditr dndfast7 dndblast sextet5 mafft-distance pairlocalalign multi2hat3s pairash addsingle maffttext2hex hex2maffttext splittbfast disttbfast tbfast nodepair mafft-profile f2cl mccaskillwrap contrafoldwrap countlen seq2regtable regtable2seq score getlag dndpre setcore filter replaceu restoreu setdirection makedirectionlist version  ||:     # in MinGW, it's ok if this fails
+true dvtditr dndfast7 dndblast sextet5 mafft-distance pairlocalalign multi2hat3s pairash addsingle maffttext2hex hex2maffttext splittbfast disttbfast tbfast nodepair mafft-profile f2cl mccaskillwrap contrafoldwrap countlen seq2regtable regtable2seq score getlag dndpre setcore filter replaceu restoreu setdirection makedirectionlist version  ||: # may fail for dash_client on mac.
+install dvtditr dndfast7 dndblast sextet5 mafft-distance pairlocalalign multi2hat3s pairash addsingle maffttext2hex hex2maffttext splittbfast disttbfast tbfast nodepair mafft-profile f2cl mccaskillwrap contrafoldwrap countlen seq2regtable regtable2seq score getlag dndpre setcore filter replaceu restoreu setdirection makedirectionlist version  /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft
+install mafftash_premafft.pl seekquencer_premafft.pl /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft
+( cd /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin; \
+rm -f linsi ginsi einsi fftns fftnsi nwns nwnsi xinsi qinsi; \
+rm -f mafft-linsi mafft-ginsi mafft-einsi mafft-fftns mafft-fftnsi mafft-nwns mafft-nwnsi mafft-xinsi mafft-qinsi mafft-randomcore.rb ; \
+ln -s mafft linsi; ln -s mafft ginsi; ln -s mafft fftns; \
+ln -s mafft fftnsi; ln -s mafft nwns; ln -s mafft nwnsi; \
+ln -s mafft einsi; \
+ln -s mafft mafft-linsi; ln -s mafft mafft-ginsi; ln -s mafft mafft-fftns; \
+ln -s mafft mafft-fftnsi; ln -s mafft mafft-nwns; ln -s mafft mafft-nwnsi; \
+ln -s mafft mafft-einsi; ln -s mafft mafft-xinsi; ln -s mafft mafft-qinsi;\
+rm -f mafft-profile mafft-profile.exe; ln -s /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft/mafft-profile .; \
+rm -f mafft-distance mafft-distance.exe; ln -s /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft/mafft-distance . )
+mkdir -p /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/share/man/man1
+chmod 755 /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/share/man/man1
+install -m 644 mafft.1 mafft-homologs.1 /tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/share/man/man1

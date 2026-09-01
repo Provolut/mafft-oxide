@@ -5,7 +5,7 @@ localdb = "sp"
 # by locally installed blast. Leave this if you do
 # not use the '-l' option.
 
-mafftpath = "/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_acc/bin/mafft"   
+mafftpath = "/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/bin/mafft"   
 # path of mafft. "/usr/local/bin/mafft"
 # if mafft is in your command path, "mafft" is ok.
 

@@ -36,7 +36,7 @@ fi
 if [ "$MAFFT_BINARIES" ]; then
 	prefix="$MAFFT_BINARIES"
 else
-	prefix=/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_acc/libexec/mafft
+	prefix=/tmp/claude-1006/-home-ingmar-Devel-python-provolut-ml0/eb135fd3-46a2-4dfe-8192-c180ac3d9cfb/scratchpad/prof/mafft-repo/prefix_fused/libexec/mafft
 fi
 export prefix # iranai
 
