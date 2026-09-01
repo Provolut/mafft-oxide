@@ -1,0 +1,6 @@
+*.o
+core/mafft
+core/tbfast
+core/dvtditr
+core/disttbfast
+prefix*/
