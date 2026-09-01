@@ -192,12 +192,18 @@ static void match_calc( double *match, double **cpmx1, double **cpmx2, int i1, i
 		cpmxpdptpt = cpmxpd;
 		while( lgth2-- )
 		{
-			*matchpt = 0.0;
+			/* Accumulated in a register rather than into *matchpt. The
+			 * compiler cannot do this itself: nothing tells it that `match`
+			 * does not alias `scarr` or the profile column, so it must store
+			 * and reload the running total on every term -- that store was
+			 * 17% of this function's samples. The additions happen in the
+			 * same order, so the result is unchanged. */
+			double acc = 0.0;
 			cpmxpdnpt = *cpmxpdnptpt++;
 			cpmxpdpt = *cpmxpdptpt++;
 			while( *cpmxpdnpt>-1 )
-				*matchpt += scarr[*cpmxpdnpt++] * *cpmxpdpt++;
-			matchpt++;
+				acc += scarr[*cpmxpdnpt++] * *cpmxpdpt++;
+			*matchpt++ = acc;
 		} 
 	}
 	free( scarr );
