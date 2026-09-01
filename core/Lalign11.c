@@ -1,5 +1,11 @@
 #include "mltaln.h"
 #include "dp.h"
+#if defined(__AVX512F__) && defined(__AVX512VL__)
+#include <immintrin.h>
+#define LALIGN11_AVX512 1
+#else
+#define LALIGN11_AVX512 0
+#endif
 
 #define DEBUG 0
 #define DEBUG2 0
@@ -225,6 +231,9 @@ double L__align11( double **n_dynamicmtx, double scoreoffset, char **seq1, char 
 	static TLS double mi, *m;
 	static TLS int **ijp;
 	static TLS int mpi, *mp;
+	static TLS double *miv;   /* hoisted mi scan */
+	static TLS double *wmv;   /* pre-clamp wm, for the argmax pass */
+	static TLS int *mpiv;     /* and its argmax  */
 	static TLS double *w1, *w2;
 	static TLS double *match;
 	static TLS double *initverticalw;    /* kufuu sureba iranai */
@@ -280,6 +289,9 @@ double L__align11( double **n_dynamicmtx, double scoreoffset, char **seq1, char 
 
 			FreeFloatVec( m );
 			FreeIntVec( mp );
+			FreeFloatVec( miv );
+			FreeFloatVec( wmv );
+			FreeIntVec( mpiv );
 
 			FreeCharMtx( mseq );
 			if( amino_dynamicmtx ) FreeDoubleMtx( amino_dynamicmtx ); amino_dynamicmtx = NULL;
@@ -335,6 +347,9 @@ double L__align11( double **n_dynamicmtx, double scoreoffset, char **seq1, char 
 
 			FreeFloatVec( m );
 			FreeIntVec( mp );
+			FreeFloatVec( miv );
+			FreeFloatVec( wmv );
+			FreeIntVec( mpiv );
 
 			FreeCharMtx( mseq );
 			if( amino_dynamicmtx ) FreeDoubleMtx( amino_dynamicmtx ); amino_dynamicmtx = NULL;
@@ -360,6 +375,9 @@ double L__align11( double **n_dynamicmtx, double scoreoffset, char **seq1, char 
 
 		m = AllocateFloatVec( ll2+2 );
 		mp = AllocateIntVec( ll2+2 );
+		miv = AllocateFloatVec( ll2+2 );
+		wmv = AllocateFloatVec( ll2+2 );
+		mpiv = AllocateIntVec( ll2+2 );
 
 		mseq = AllocateCharMtx( njob, ll1+ll2 );
 
@@ -519,6 +537,29 @@ fprintf( stderr, "\n" );
 		mpjpt = mp + 1;
 		lastj = lgth2+1;
 
+		/* The mi/mpi recurrence reads only `previousw`, never a value this row
+		 * writes, so it can run ahead of the cells that consume it. Hoisted for
+		 * that reason: what is left in the loop below is elementwise in j. Same
+		 * operations in the same order, so the values are identical -- and every
+		 * one of them is an exact integer here (the score matrix and both
+		 * penalties are ints), so no reassociation question arises. */
+		{
+			double miscan = previousw[0];
+			int mpiscan = 0;
+			int jj;
+			for( jj=1; jj<lastj; jj++ )
+			{
+				miv[jj] = miscan;
+				mpiv[jj] = mpiscan;
+				if( previousw[jj-1] > miscan )
+				{
+					miscan = previousw[jj-1];
+					mpiscan = jj-1;
+				}
+				miscan += fpenalty_ex;
+			}
+		}
+
 		if( trywarp )
 		{
 			prevwmrecordspt = prevwmrecords;
@@ -527,6 +568,126 @@ fprintf( stderr, "\n" );
 			warpipt = warpi + 1;
 			warpjpt = warpj + 1;
 		}
+		/* Straight-line form of the loop below, for the common case where no
+		 * warp is being tried. Every branch there wrote something -- a traceback
+		 * code, a column maximum, an index -- which is why the compiler reported
+		 * "unsupported control flow" and left the whole row scalar. Written as
+		 * selects instead, the body is elementwise in j and vectorises.
+		 *
+		 * Identical results, not merely close: the comparisons and the order of
+		 * the arithmetic are unchanged, and every value here is an exact integer
+		 * (the score matrix and both penalties are ints), so nothing depends on
+		 * how the additions associate.
+		 *
+		 * The running maximum is not in here. It carries an index, and an argmax
+		 * reduction blocks vectorisation the same way the branches did, so it
+		 * reads `wmv` in a second pass -- which sees the pre-clamp values, as the
+		 * original does, because the clamp happens after it. */
+		if( !trywarp )
+		{
+			double *pw = previousw;
+			double *cw = currentw;
+			double *mm = m;
+			int *mpp = mp;
+			int *ijpi = ijp[i];
+			int jj;
+
+			jj = 1;
+#if LALIGN11_AVX512
+			/* Eight cells at a time. The doubles ride in __m512d and the traceback
+			 * indices in the matching __m256i, which is why this is written out
+			 * rather than left to the vectoriser: the loop mixes 64-bit scores with
+			 * 32-bit indices, and the compiler will not pick a vectorisation factor
+			 * across the two ("no vectype for stmt").
+			 *
+			 * Every comparison is _CMP_GT_OQ / _CMP_LT_OQ against the same operands
+			 * in the same order as the scalar tail below, and no addition is
+			 * reassociated, so the two produce identical values. */
+			{
+				const __m512d vpen = _mm512_set1_pd( fpenalty );
+				const __m512d vpenex = _mm512_set1_pd( fpenalty_ex );
+				const __m512d vthr = _mm512_set1_pd( localthr );
+				const __m512d vthr2 = _mm512_set1_pd( localthr2 );
+				const __m256i vstop = _mm256_set1_epi32( localstop );
+				const __m256i vi = _mm256_set1_epi32( i );
+				const __m256i vim1 = _mm256_set1_epi32( i-1 );
+				const __m256i vstep = _mm256_setr_epi32( 0, 1, 2, 3, 4, 5, 6, 7 );
+
+				for( ; jj+8 <= lastj; jj += 8 )
+				{
+					const __m256i vjj = _mm256_add_epi32( _mm256_set1_epi32( jj ), vstep );
+					const __m512d diag = _mm512_loadu_pd( pw + jj - 1 );
+					const __m512d gi = _mm512_add_pd( _mm512_loadu_pd( miv + jj ), vpen );
+					const __m512d mmv = _mm512_loadu_pd( mm + jj );
+					const __m512d gj = _mm512_add_pd( mmv, vpen );
+					const __m256i mppv = _mm256_loadu_si256( (const __m256i *)( mpp + jj ) );
+
+					const __mmask8 ki = _mm512_cmp_pd_mask( gi, diag, _CMP_GT_OQ );
+					const __m512d w1v = _mm512_mask_blend_pd( ki, diag, gi );
+					const __m256i ip1 = _mm256_mask_blend_epi32(
+						ki, _mm256_setzero_si256(),
+						_mm256_sub_epi32( _mm256_loadu_si256( (const __m256i *)( mpiv + jj ) ), vjj ) );
+
+					const __mmask8 kj = _mm512_cmp_pd_mask( gj, w1v, _CMP_GT_OQ );
+					const __m512d w2v = _mm512_mask_blend_pd( kj, w1v, gj );
+					const __m256i ip2 = _mm256_mask_blend_epi32(
+						kj, ip1, _mm256_sub_epi32( vi, mppv ) );
+
+					const __mmask8 km = _mm512_cmp_pd_mask( diag, mmv, _CMP_GT_OQ );
+					_mm256_storeu_si256( (__m256i *)( mpp + jj ),
+						_mm256_mask_blend_epi32( km, mppv, vim1 ) );
+					_mm512_storeu_pd( mm + jj,
+						_mm512_add_pd( _mm512_mask_blend_pd( km, mmv, diag ), vpenex ) );
+
+					_mm512_storeu_pd( wmv + jj, w2v );
+
+					{
+						const __mmask8 kstop = _mm512_cmp_pd_mask( w2v, vthr, _CMP_LT_OQ );
+						_mm256_storeu_si256( (__m256i *)( ijpi + jj ),
+							_mm256_mask_blend_epi32( kstop, ip2, vstop ) );
+						_mm512_storeu_pd( cw + jj, _mm512_add_pd(
+							_mm512_loadu_pd( cw + jj ),
+							_mm512_mask_blend_pd( kstop, w2v, vthr2 ) ) );
+					}
+				}
+			}
+#endif
+			for( ; jj<lastj; jj++ )
+			{
+				const double diag = pw[jj-1];
+				const double gi = miv[jj] + fpenalty;
+				const double gj = mm[jj] + fpenalty;
+				const int taki = ( gi > diag );
+				const double w1v = taki ? gi : diag;
+				const int ip1 = taki ? -( jj - mpiv[jj] ) : 0;
+				const int takj = ( gj > w1v );
+				const double w2v = takj ? gj : w1v;
+				const int ip2 = takj ? +( i - mpp[jj] ) : ip1;
+				const int takm = ( diag > mm[jj] );
+
+				mpp[jj] = takm ? i-1 : mpp[jj];
+				mm[jj] = ( takm ? diag : mm[jj] ) + fpenalty_ex;
+
+				wmv[jj] = w2v;
+
+				{
+					const int stop = ( w2v < localthr );
+					ijpi[jj] = stop ? localstop : ip2;
+					cw[jj] += stop ? localthr2 : w2v;
+				}
+			}
+
+			for( jj=1; jj<lastj; jj++ )
+			{
+				if( maxwm < wmv[jj] )
+				{
+					maxwm = wmv[jj];
+					endali = i;
+					endalj = jj;
+				}
+			}
+		}
+		else
 		for( j=1; j<lastj; j++ )
 		{
 			wm = *prept;
@@ -538,20 +699,11 @@ fprintf( stderr, "\n" );
 #if 0
 			fprintf( stderr, "%5.0f?", g );
 #endif
-			if( (g=mi+fpenalty) > wm )
+			if( (g=miv[j]+fpenalty) > wm )
 			{
 				wm = g;
-				*ijppt = -( j - mpi );
+				*ijppt = -( j - mpiv[j] );
 			}
-			if( *prept > mi )
-			{
-				mi = *prept;
-				mpi = j-1;
-			}
-
-#if USE_PENALTY_EX
-			mi += fpenalty_ex;
-#endif
 
 #if 0 
 			fprintf( stderr, "%5.0f?", g );
