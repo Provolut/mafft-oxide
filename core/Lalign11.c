@@ -612,6 +612,8 @@ fprintf( stderr, "\n" );
 				const __m256i vi = _mm256_set1_epi32( i );
 				const __m256i vim1 = _mm256_set1_epi32( i-1 );
 				const __m256i vstep = _mm256_setr_epi32( 0, 1, 2, 3, 4, 5, 6, 7 );
+				__m512d vbest = _mm512_set1_pd( -1.0e308 );
+				__m256i vbestj = _mm256_setzero_si256();
 
 				for( ; jj+8 <= lastj; jj += 8 )
 				{
@@ -639,7 +641,11 @@ fprintf( stderr, "\n" );
 					_mm512_storeu_pd( mm + jj,
 						_mm512_add_pd( _mm512_mask_blend_pd( km, mmv, diag ), vpenex ) );
 
-					_mm512_storeu_pd( wmv + jj, w2v );
+					{
+						const __mmask8 kbest = _mm512_cmp_pd_mask( w2v, vbest, _CMP_GT_OQ );
+						vbest = _mm512_mask_blend_pd( kbest, vbest, w2v );
+						vbestj = _mm256_mask_blend_epi32( kbest, vbestj, vjj );
+					}
 
 					{
 						const __mmask8 kstop = _mm512_cmp_pd_mask( w2v, vthr, _CMP_LT_OQ );
@@ -648,6 +654,27 @@ fprintf( stderr, "\n" );
 						_mm512_storeu_pd( cw + jj, _mm512_add_pd(
 							_mm512_loadu_pd( cw + jj ),
 							_mm512_mask_blend_pd( kstop, w2v, vthr2 ) ) );
+					}
+				}
+
+				/* One reduction per row rather than a second pass over it. Within a
+				 * lane the strict > above already kept the earliest j; across lanes
+				 * the smallest index wins a tie, which is the same cell the scalar
+				 * loop would have stopped at. */
+				{
+					double lane[8];
+					int lanej[8];
+					int l, bl = 0;
+					_mm512_storeu_pd( lane, vbest );
+					_mm256_storeu_si256( (__m256i *)lanej, vbestj );
+					for( l=1; l<8; l++ )
+						if( lane[l] > lane[bl] || ( lane[l] == lane[bl] && lanej[l] < lanej[bl] ) )
+							bl = l;
+					if( jj > 1 && maxwm < lane[bl] )
+					{
+						maxwm = lane[bl];
+						endali = i;
+						endalj = lanej[bl];
 					}
 				}
 			}
@@ -668,7 +695,12 @@ fprintf( stderr, "\n" );
 				mpp[jj] = takm ? i-1 : mpp[jj];
 				mm[jj] = ( takm ? diag : mm[jj] ) + fpenalty_ex;
 
-				wmv[jj] = w2v;
+				if( maxwm < w2v )
+				{
+					maxwm = w2v;
+					endali = i;
+					endalj = jj;
+				}
 
 				{
 					const int stop = ( w2v < localthr );
@@ -677,15 +709,6 @@ fprintf( stderr, "\n" );
 				}
 			}
 
-			for( jj=1; jj<lastj; jj++ )
-			{
-				if( maxwm < wmv[jj] )
-				{
-					maxwm = wmv[jj];
-					endali = i;
-					endalj = jj;
-				}
-			}
 		}
 		else
 		for( j=1; j<lastj; j++ )
