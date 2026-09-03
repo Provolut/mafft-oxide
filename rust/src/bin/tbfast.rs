@@ -44,6 +44,8 @@ struct TbArgs {
     legacygapcost: bool,
     /// `-t` / `-^`: write the guide tree.
     treeout: i32,
+    /// `-U` (`--treein`): read the guide tree from `_guidetree`.
+    treein: bool,
     /// `-T`: stop before aligning.
     noalign: bool,
     /// `-y` in *tbfast's own* parser. Distinct from the `distout` the pairwise
@@ -89,6 +91,7 @@ impl Default for TbArgs {
             fmodel: 0,
             legacygapcost: false,
             treeout: 0,
+            treein: false,
             noalign: false,
             distout: 0,
             pair_poffset: NOTSPECIFIED,
@@ -241,6 +244,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'O' => a.outgap = false,
             'L' => a.legacygapcost = true,
             't' => a.treeout = 1,
+            'U' => a.treein = true,
             '^' => a.treeout = 2,
             'T' => a.noalign = true,
             'y' => {
@@ -277,6 +281,10 @@ fn refuse(a: &TbArgs) -> Option<String> {
     }
     if a.treeout == 2 {
         bad.push("-^ (--nodeout) is not ported".into());
+    }
+    if a.treein && a.unalignlevel > 0.0 {
+        // The C derives `expdist` from the user tree in that case.
+        bad.push("-U with --allowshift is not ported".into());
     }
     if a.nthread > 0 || a.nthreadtb > 0 || a.pair_nthread > 0 {
         bad.push("threads change the result; run with -C 0".into());
@@ -493,7 +501,23 @@ fn main() {
         a.legacygapcost,
     );
 
-    let mut tr = if a.treeout == 1 {
+    let mut tr = if a.treein {
+        match tree::load_tree(
+            njob,
+            if a.treeout == 1 {
+                Some(&input.name[..])
+            } else {
+                None
+            },
+            a.outnumber,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
+    } else if a.treeout == 1 {
         tree::upgma_treeout(
             njob,
             &mut iscore,

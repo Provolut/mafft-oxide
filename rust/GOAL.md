@@ -10,7 +10,7 @@ ported is refused loudly. `verify.sh`, `verify_tbfast.sh`, `verify_e2e.sh`,
 into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
-`--legacygapcost`, `-y`/`-T`/`-t`, 10-mer nucleotide tuples.
+`--legacygapcost`, `-y`/`-T`/`-t`/`-U`, 10-mer nucleotide tuples.
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -24,9 +24,10 @@ Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 2. **Input modes**, each with its own harness argument vectors: `-^`
    (`--nodeout`, the density annotation on the tree); `--add` /
    `--addprofile` (`disttbfast` gets `-K -I <n>`; the aligning work is in
-   `addsingle`, still C, but our binaries are on the path); sub-alignments
-   (`-H`); `--treein` (`-U`); external anchors (`-l <file>`); `--keeplength`
-   (`-Y`); `-q` (sparse pickup); `-r` (one iteration).
+   `addsingle`, still C, but our binaries are on the path, and `--keeplength`
+   (`-Y`) rides with it); sub-alignments (`-H`); external anchors (`-l`);
+   `-q` (sparse pickup); `-r` (one iteration, `dooneiteration`); the generated
+   guide trees `--treein` can ask for (shuffle, pileup, auto, compact, ...).
 
 3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Large, low demand.

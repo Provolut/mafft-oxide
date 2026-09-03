@@ -97,6 +97,45 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --treein (-U): a user guide tree read from `_guidetree`, which means no
+# distance matrix or all-pairs stage feeding it. The tree must match the input's sequence
+# count, so it is generated per input rather than being an ARGSETS entry.
+P="-u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L"
+T="-W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 2 ] || continue
+  for shape in ladder balanced; do
+    for extra in "" "-t"; do
+      rm -rf "$work/c" "$work/r"
+      mkdir -p "$work/c" "$work/r"
+      python3 "$here/gen_treein.py" "$n" "$shape" > "$work/c/_guidetree"
+      cp "$work/c/_guidetree" "$work/r/_guidetree"
+      ( cd "$work/c" && $CBIN _ $P _ -+ 2 $T -U $extra < "$f" > /dev/null 2> err.log )
+      cst=$?
+      ( cd "$work/r" && $RBIN _ $P _ -+ 2 $T -U $extra < "$f" > /dev/null 2> err.log )
+      rst=$?
+      label="$(basename "$f") [-U $shape $extra]"
+      if [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+        continue
+      fi
+      bad=""
+      for o in pre order hat2 hat3 infile.tree; do
+        if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+          cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+        fi
+      done
+      if [ -n "$bad" ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      else
+        pass=$((pass+1))
+      fi
+    done
+  done
+done
+
 echo "pass=$pass fail=$fail"
 if [ $fail -ne 0 ]; then
   printf 'FAILED:%b\n' "$failed"

@@ -443,8 +443,8 @@ impl Args {
         if self.subalignment {
             bad.push("-H (sub-alignments) is not ported");
         }
-        if self.treein || self.topin {
-            bad.push("-U (--treein) is not ported");
+        if self.topin {
+            bad.push("--topin is not ported");
         }
         if self.oneiteration {
             bad.push("-r (one iteration) is not ported");
@@ -468,9 +468,6 @@ impl Args {
         }
         if self.scoremtx == 2 {
             bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");
-        }
-        if self.specificityconsideration != 0.0 {
-            bad.push("-s > 0 (--allowshift/--unalignlevel) is not ported");
         }
         if self.treeout == 2 {
             bad.push("-^ (--nodeout) is not ported");

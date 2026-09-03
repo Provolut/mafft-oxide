@@ -49,6 +49,16 @@ impl Chain {
         }
         Chain { next, prev }
     }
+
+    /// Unlink `jm`, as the C does with `acjmprev`/`acjmnext`.
+    fn unlink(&mut self, jm: usize) {
+        let prev = self.prev[jm];
+        let next = self.next[jm];
+        self.next[prev as usize] = next;
+        if next != -1 {
+            self.prev[next as usize] = prev;
+        }
+    }
 }
 
 /// `setnearest()`: nearest live neighbour of `pos` in the half matrix.
@@ -297,6 +307,109 @@ fn newick_name(name: &[u8], outnumber: bool) -> String {
     }
     let tail = &nametmp[start.min(nametmp.len())..];
     String::from_utf8_lossy(&tail[..tail.len().min(900)]).into_owned()
+}
+
+/// `loadtree()`: build the guide tree from `_guidetree` instead of from a
+/// distance matrix.
+///
+/// The file is one line per internal node, `i j len0 len1`, with 1-based
+/// sequence numbers and `i < j`; `newick2mafft.rb` produces it from a Newick
+/// tree. The bookkeeping is the same as `upgma`'s, only the merge order comes
+/// from the file rather than from the minimum. The C's inner loop over the
+/// live chain computes four indices and uses none of them -- there is no
+/// distance matrix to update here -- so it is not reproduced.
+pub fn load_tree(nseq: usize, names: Option<&[Vec<u8>]>, outnumber: bool) -> Result<Tree, String> {
+    let text =
+        std::fs::read_to_string("_guidetree").map_err(|_| "cannot open _guidetree".to_string())?;
+    let mut lines = text.lines();
+
+    let mut topol = vec![[-1i32, -1i32]; nseq];
+    let mut len = vec![[0.0f64, 0.0f64]; nseq];
+    let mut dep = vec![Treedep::default(); nseq];
+    let mut ac = Chain::new(nseq);
+    let mut hist = vec![-1i32; nseq];
+    let mut nmemar = vec![1i32; nseq];
+    let mut height = vec![0.0f64; nseq];
+
+    let mut tree: Vec<String> = Vec::new();
+    if let Some(name) = names {
+        tree = (0..nseq)
+            .map(|i| format!("\n{}_{}\n", i + 1, newick_name(&name[i], outnumber)))
+            .collect();
+    }
+    let mut treetmp = String::new();
+
+    let fmt_err = "\n\nFormat error (1) in the tree?  It has to be a bifurcated and rooted tree.\nPlease use newick2mafft.rb to generate a tree file from a newick tree.\n";
+    for k in 0..nseq - 1 {
+        let line = lines.next().ok_or_else(|| fmt_err.to_string())?;
+        let f: Vec<&str> = line.split_whitespace().collect();
+        if f.len() < 4 {
+            return Err("\n\nFormat error (2) in the tree?  It has to be a bifurcated and rooted tree.\nPlease use newick2mafft.rb to generate a tree file from a newick tree.\n".into());
+        }
+        let a0: i64 = f[0].parse().map_err(|_| fmt_err.to_string())?;
+        let a1: i64 = f[1].parse().map_err(|_| fmt_err.to_string())?;
+        let l0: f64 = f[2].parse().map_err(|_| fmt_err.to_string())?;
+        let l1: f64 = f[3].parse().map_err(|_| fmt_err.to_string())?;
+        let im = (a0 - 1) as i64;
+        let jm = (a1 - 1) as i64;
+        if im >= jm {
+            return Err("\n\nIncorrect guide tree\nPlease use newick2mafft.rb to generate a tree file from a newick tree.\n".into());
+        }
+        if im > nseq as i64 - 1 || jm > nseq as i64 - 1 {
+            return Err(format!(
+                "\n\nCheck the guide tree.\nim={}, jm={}\nPlease use newick2mafft.rb to generate a tree file from a newick tree.\n",
+                im + 1,
+                jm + 1
+            ));
+        }
+        let (im, jm) = (im as usize, jm as usize);
+        len[k][0] = if l0 < 0.0 { 0.0 } else { l0 };
+        len[k][1] = if l1 < 0.0 { 0.0 } else { l1 };
+
+        let prevnode = hist[im];
+        dep[k].child0 = prevnode;
+        let nmemim = nmemar[im];
+        topol[k][0] = if prevnode == -1 {
+            im as i32
+        } else {
+            let p = prevnode as usize;
+            topol[p][0].min(topol[p][1])
+        };
+
+        let nmemjm = nmemar[jm];
+        let prevnode = hist[jm];
+        dep[k].child1 = prevnode;
+        topol[k][1] = if prevnode == -1 {
+            jm as i32
+        } else {
+            let p = prevnode as usize;
+            topol[p][0].min(topol[p][1])
+        };
+
+        hist[im] = k as i32;
+        nmemar[im] = nmemim + nmemjm;
+
+        if names.is_some() {
+            treetmp = format!(
+                "({}:{:7.5},{}:{:7.5})",
+                tree[im], len[k][0], tree[jm], len[k][1]
+            );
+            tree[im] = treetmp.clone();
+            tree[jm] = String::new();
+        }
+
+        ac.unlink(jm);
+
+        height[im] += len[k][0];
+        dep[k].distfromtip = height[im];
+    }
+
+    if names.is_some() {
+        std::fs::write("infile.tree", format!("{};\n#by loadtree\n", treetmp))
+            .expect("write infile.tree");
+    }
+
+    Ok(Tree { topol, len, dep })
 }
 
 /// `topolorder_lessargs()`: in-order list of the leaves under `pos`.

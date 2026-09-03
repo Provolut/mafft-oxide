@@ -64,6 +64,9 @@ ARGSETS=(
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -y h -T -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   # 10-mer nucleotide tuples (--tuplesize 10); protein refuses it, as in the C
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 10 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # --allowshift / --unalignlevel: the shift (warp) DP and the per-node
+  # dynamic matrix
+  "-q 0 -E 2 -V -1.53 -s 0.8 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 2.00 -h 0 -F -X 0.1 -x 100"
   # -t (--treeout): the Newick file, including the -n name rewriting
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -T -n -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
@@ -115,6 +118,44 @@ for f in "$CORPUS"/*; do
       continue
     fi
     pass=$((pass+1))
+  done
+done
+
+# --treein (-U): a user guide tree read from `_guidetree`, which means no
+# distance matrix is built at all. The tree must match the input's sequence
+# count, so it is generated per input rather than being an ARGSETS entry.
+UARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 2 ] || continue
+  for shape in ladder balanced; do
+    for extra in "" "-t"; do
+      rm -rf "$work/c" "$work/r"
+      mkdir -p "$work/c" "$work/r"
+      python3 "$here/gen_treein.py" "$n" "$shape" > "$work/c/_guidetree"
+      cp "$work/c/_guidetree" "$work/r/_guidetree"
+      ( cd "$work/c" && $CBIN $UARGS $extra < "$f" > out.fa 2> err.log )
+      cst=$?
+      ( cd "$work/r" && $RBIN $UARGS $extra < "$f" > out.fa 2> err.log )
+      rst=$?
+      label="$(basename "$f") [-U $shape $extra]"
+      if [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+        continue
+      fi
+      bad=""
+      for o in out.fa order infile.tree; do
+        if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+          cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+        fi
+      done
+      if [ -n "$bad" ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      else
+        pass=$((pass+1))
+      fi
+    done
   done
 done
 

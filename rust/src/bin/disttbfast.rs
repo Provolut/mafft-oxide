@@ -83,22 +83,57 @@ fn main() {
         eprintln!("tuplesize must be 6 or 10 for dna sequence");
         std::process::exit(1);
     }
-    let (mut mtx, _nogaplen) =
-        dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize);
+    // `check_guidetreefile()`: the first line of `_guidetree` selects between a
+    // real tree and a family of generated ones. Only the real tree is ported.
+    if args.treein {
+        let first = std::fs::read_to_string("_guidetree")
+            .map(|t| t.lines().next().unwrap_or("").to_string())
+            .unwrap_or_else(|_| {
+                eprintln!("cannot open _guidetree");
+                std::process::exit(1);
+            });
+        for kw in [
+            "shuffle",
+            "pileup",
+            "auto",
+            "test",
+            "compact",
+            "very compact",
+            "stepadd",
+            "youngestlinkage",
+            "nodepair",
+        ] {
+            if first.starts_with(kw) {
+                eprintln!("disttbfast-rs: '{}' guide trees are not ported", kw);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // With a user tree there is no distance matrix at all.
+    let mut mtx: Vec<Vec<f64>> = if args.treein {
+        Vec::new()
+    } else {
+        dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize).0
+    };
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
     let mut st = AlignState::new();
     let mut fs = falign::FalignState::new();
     let mut bseq: Vec<Vec<u8>> = Vec::new();
 
-    let nguidetree = args.nguidetree.max(1) as usize;
+    let nguidetree = if args.treein {
+        1
+    } else {
+        args.nguidetree.max(1) as usize
+    };
     for iguidetree in 0..nguidetree {
         let calcpairdists = iguidetree != nguidetree - 1;
 
         // `-y`: emit the k-tuple distance matrix. This happens before the tree
         // is built, and with `-T` (noalign) and no `-t` the run stops here --
         // before `order` is written.
-        if args.distout != 0 {
+        if args.distout != 0 && !args.treein {
             io::write_hat2(njob, &input.name, &mtx);
             if args.treeout == 0 && args.noalign {
                 io::write_data(&mut out, &input.name, &input.seq);
@@ -108,7 +143,23 @@ fn main() {
             }
         }
 
-        let mut tr = if args.treeout == 1 {
+        let mut tr = if args.treein {
+            match tree::load_tree(
+                njob,
+                if args.treeout == 1 {
+                    Some(&input.name[..])
+                } else {
+                    None
+                },
+                args.outnumber,
+            ) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
+            }
+        } else if args.treeout == 1 {
             tree::upgma_treeout(
                 njob,
                 &mut mtx,

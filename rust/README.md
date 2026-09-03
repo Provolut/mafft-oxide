@@ -111,7 +111,7 @@ quietly returning a different alignment:
 
 - `--aamatrix` (a matrix read from a file) and `--text` (the 256-symbol
   alphabet)
-- `--add` / `--addprofile`, sub-alignments, `--treein`, external anchors
+- `--add` / `--addprofile`, sub-alignments, external anchors
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
 - `--keeplength`
@@ -197,8 +197,8 @@ Current status, on this source tree:
 
 | check | result |
 |---|---|
-| `verify.sh`, generated corpus (88 inputs × 33 argument sets) | 2904/2904 identical |
-| `verify_tbfast.sh`, generated corpus (40 inputs × 18 argument sets) | 720/720 identical |
+| `verify.sh`, generated corpus (88 inputs × 34 argument sets, plus `--treein`) | 3344/3344 identical |
+| `verify_tbfast.sh`, generated corpus (40 inputs × 18, plus `--treein`) | 880/880 identical |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
 | `cargo test` | 66/66 |
