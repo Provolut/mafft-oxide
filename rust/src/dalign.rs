@@ -461,3 +461,107 @@ pub fn calcpfac_gap_noidatend(gaplen1i: &Col, gaplen2j: &Col, newgaplen: i32) ->
     pfac += pfac1 * pfac2;
     pfac
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build(rows: &[&str], eff: &[f64]) -> Vec<Col> {
+        let owned: Vec<Vec<u8>> = rows.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let refs: Vec<&[u8]> = owned.iter().map(|s| s.as_slice()).collect();
+        let l = owned[0].len();
+        let mut g = vec![Col::Null; l + 2];
+        gaplencount(owned.len(), l, &mut g, &refs, eff);
+        g
+    }
+
+    /// Every expected value here was taken from the C, through
+    /// `gen_glharness.c`, as an f64 bit pattern. `verify_gaplen.sh` checks the
+    /// same code against a built `core/` over 203 fuzzed pairs; these pin a
+    /// few of those answers so `cargo test` alone still covers the layer.
+    #[test]
+    fn gaplencount_spreads_one_gap_back_over_the_columns_it_spans() {
+        // "MNGTEG---DNFY" at weight 0.25: a 3-residue gap whose run ends at
+        // column 9, recorded at columns 6..9 with relend counting down.
+        let g = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        for c in g.iter().take(6) {
+            assert!(c.is_null());
+        }
+        let expect = [(6, 3, 3, -1), (7, 3, 2, 0), (8, 3, 1, 0), (9, 3, 0, 0)];
+        for (col, len, relend, prev) in expect {
+            let v = g[col].get().unwrap_or_else(|| panic!("column {} empty", col));
+            assert_eq!(v[0].len, len, "col {} len", col);
+            assert_eq!(v[0].relend, relend, "col {} relend", col);
+            assert_eq!(v[0].freq, 0.25, "col {} freq", col);
+            assert_eq!(v[0].idatprev, prev, "col {} idatprev", col);
+            assert_eq!(v[0].npat, 1, "col {} npat", col);
+        }
+        // The run's own column chains forward to nothing: idatnext -2 is the
+        // marker `gaplencount` writes before `fillgaplen` links the rest.
+        assert_eq!(g[9].get().unwrap()[0].idatnext, -2);
+        assert_eq!(g[6].get().unwrap()[0].idatnext, 0);
+    }
+
+    #[test]
+    fn a_gap_free_group_records_nothing() {
+        let g = build(&["MNGTEGDNFY"], &[1.0]);
+        assert!(g.iter().all(|c| c.is_null()));
+    }
+
+    #[test]
+    fn two_different_gap_lengths_at_one_column_are_two_patterns() {
+        // Both rows end a gap at column 4, of different lengths, so column 4
+        // carries two entries and `npat` is 2.
+        let g = build(&["MN--TEG", "M---TEG"], &[0.5, 0.5]);
+        let v = g[4].get().expect("column 4 has both runs");
+        assert_eq!(v[0].npat, 2);
+        let mut lens: Vec<i32> = v.iter().take_while(|e| e.idatnext != -1).map(|e| e.len).collect();
+        lens.sort();
+        assert_eq!(lens, vec![2, 3]);
+    }
+
+    #[test]
+    fn calcpfac_matches_the_c_on_a_pinned_pair() {
+        // Group 1 "MNGTEG---DNFY"/"MNGTEGAAADNFY" at 0.25/0.75, group 2
+        // "MN--TEGDNF" at 1.0. Bit patterns straight from gen_glharness.c.
+        let g1 = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        let g2 = build(&["MN--TEGDNF"], &[1.0]);
+        // Column 4 of group 2 ends its 2-residue gap; against a group-1
+        // column with no pattern the straight factor is 1 and opening is 0.
+        assert_eq!(calcpfacnoidatend(&g1[0], &g2[4]).to_bits(), 0x3ff0000000000000);
+        assert_eq!(calcpfac_gap_noidatend(&g1[0], &g2[4], 2).to_bits(), 0);
+        assert_eq!(calcpfac_gapex_noidatend(&g1[0], &g2[4], 2).to_bits(), 0x3ff0000000000000);
+        // Away from that column the roles invert.
+        assert_eq!(calcpfacnoidatend(&g1[0], &g2[0]).to_bits(), 0);
+        assert_eq!(calcpfac_gap_noidatend(&g1[0], &g2[0], 2).to_bits(), 0x3ff0000000000000);
+        // Group-1 column 6 opens its own run, which drops the opening factor
+        // to 1 - 0.25 = 0.75.
+        assert_eq!(calcpfac_gap_noidatend(&g1[6], &g2[0], 2).to_bits(), 0x3fe8000000000000);
+    }
+
+    #[test]
+    fn duplicate_then_extend_leaves_the_source_untouched() {
+        let src = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        let mut dst = vec![Col::Null; src.len()];
+        duplicategaplencompactx(&mut dst, &src, 0, src.len() as i32 - 2);
+        assert_eq!(dst[6], src[6]);
+        assert_eq!(dst[9], src[9]);
+        let before = src[6].clone();
+        gaplenextendnoidatend(&mut dst, 6, 5);
+        assert_eq!(src[6], before, "the source must not move");
+        // relend != 0 at column 6, so its own length grows.
+        assert_eq!(dst[6].get().unwrap()[0].len, 8);
+    }
+
+    #[test]
+    fn duplicate_stops_at_a_barrier() {
+        let src = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        let mut dst = vec![Col::Null; src.len()];
+        dst[8] = Col::Barrier;
+        duplicategaplencompactx(&mut dst, &src, 0, src.len() as i32 - 2);
+        assert_eq!(dst[6], src[6]);
+        assert_eq!(dst[7], src[7]);
+        assert_eq!(dst[8], Col::Barrier, "the barrier survives");
+        assert!(dst[9].is_null(), "nothing past the barrier is copied");
+    }
+}
