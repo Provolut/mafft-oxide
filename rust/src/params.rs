@@ -435,7 +435,15 @@ impl Args {
     pub fn check_supported(&self) -> Result<(), Unsupported> {
         let mut bad: Vec<&str> = Vec::new();
         if !matches!(self.alg, b'A' | b'M' | b'a') {
-            bad.push("only alg 'A' (-A), 'M' (-M) and 'a' (-&) are ported; -@ is not");
+            // `-@` (`mafft --sp`) selects `D__align`, the generalized-affine
+            // DP in `Dalignmm.c`. It is the one aligner still unported: it
+            // threads six `Gaplen***` cubes of per-column gap-length
+            // distributions through the DP, and the sharing between them is
+            // load-bearing, so it is not a variation on the affine DPs here.
+            bad.push(
+                "alg -@ (--sp) is not ported: D__align, the generalized-affine DP; \
+                 -A, -M (--memsave) and -& are supported",
+            );
         }
         if self.keeplength && self.nadd == 0 {
             // The C reaches `restoreoriginalgaps( njob, bseq, NULL )` and
