@@ -321,6 +321,9 @@ pub struct Constants {
     pub fft_threshold: i32,
     /// `'p'` or `'d'`: which branch of `constants()` built this.
     pub dorp: u8,
+    /// `-L` (`--legacygapcost`): drop the gap-frequency weighting in
+    /// `A__align`. Read only there, and only on its non-cpmxhist branch.
+    pub legacygapcost: bool,
     /// `-s` / `-u`: how far a shift is allowed to pay for itself
     /// (`--allowshift` / `--unalignlevel`). Zero disables the whole mechanism.
     pub specificityconsideration: f64,
@@ -790,6 +793,7 @@ impl Constants {
             fft_threshold,
             specificityconsideration: args.specificityconsideration,
             dorp,
+            legacygapcost: args.legacygapcost,
             amino,
             amino_n,
             amino_grp,

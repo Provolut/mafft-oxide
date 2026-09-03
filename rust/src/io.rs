@@ -282,3 +282,37 @@ pub fn write_data(out: &mut Vec<u8>, name: &[Vec<u8>], aseq: &[Vec<u8>]) {
 pub fn gappick0(seq: &[u8]) -> Vec<u8> {
     seq.iter().copied().filter(|&c| c != b'-').collect()
 }
+
+/// `WriteFloatHat2_pointer_halfmtx()`: the `hat2` distance-matrix file.
+///
+/// The line breaks are not cosmetic -- `dvtditr` parses this back, and the C
+/// wraps after every 12th entry *or* at the end of a row, whichever comes
+/// first.
+pub fn write_hat2(njob: usize, name: &[Vec<u8>], mtx: &[Vec<f64>]) {
+    use std::fmt::Write as _;
+    let mut max = 0.0f64;
+    for i in 0..njob - 1 {
+        for j in 1..njob - i {
+            if mtx[i][j] > max {
+                max = mtx[i][j];
+            }
+        }
+    }
+    let mut s = String::new();
+    let _ = writeln!(s, "{:5}", 1);
+    let _ = writeln!(s, "{:5}", njob);
+    let _ = writeln!(s, " {:6.3}", max * 2.5);
+    for (i, nm) in name.iter().enumerate().take(njob) {
+        let _ = writeln!(s, "{:4}. {}", i + 1, String::from_utf8_lossy(nm));
+    }
+    for i in 0..njob {
+        for j in i + 1..njob {
+            let _ = write!(s, "{:6.3}", mtx[i][j - i]);
+            let ijsa = j - i;
+            if ijsa % 12 == 0 || ijsa == njob - i - 1 {
+                s.push('\n');
+            }
+        }
+    }
+    std::fs::write("hat2", s).expect("write hat2");
+}

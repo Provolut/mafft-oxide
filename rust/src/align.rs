@@ -705,21 +705,38 @@ impl AlignState {
                 }
             }
 
-            // legacygapcost == 0 is enforced by check_supported().
-            if reuseprofiles {
-                profile::gapcountadd(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+            // `--legacygapcost` drops the weighting entirely. Note the C only
+            // consults it here: the cpmxhist branch above assumes head and
+            // tail gaps are absent "regardless of legacygap", so the two
+            // branches disagree once the flag is on.
+            if !cn.legacygapcost {
+                if reuseprofiles {
+                    profile::gapcountadd(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+                } else {
+                    profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+                }
+                profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);
+                for v in gapfreq1.iter_mut().take(lgth1 + 1) {
+                    *v = 1.0 - *v;
+                }
+                for v in gapfreq2.iter_mut().take(lgth2 + 1) {
+                    *v = 1.0 - *v;
+                }
+                headgapfreq1 = 1.0 - hgf1;
+                headgapfreq2 = 1.0 - hgf2;
             } else {
-                profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+                // The counting calls are skipped, not just overwritten: they
+                // update a `static` buffer incrementally, so skipping them is
+                // what the next call sees.
+                for v in gapfreq1.iter_mut().take(lgth1 + 1) {
+                    *v = 1.0;
+                }
+                for v in gapfreq2.iter_mut().take(lgth2 + 1) {
+                    *v = 1.0;
+                }
+                headgapfreq1 = 1.0;
+                headgapfreq2 = 1.0;
             }
-            profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);
-            for v in gapfreq1.iter_mut().take(lgth1 + 1) {
-                *v = 1.0 - *v;
-            }
-            for v in gapfreq2.iter_mut().take(lgth2 + 1) {
-                *v = 1.0 - *v;
-            }
-            headgapfreq1 = 1.0 - hgf1;
-            headgapfreq2 = 1.0 - hgf2;
         }
 
         let (cpmx1v, gapfreq1v, ogcp1ov, fgcp1ov): (&[Vec<f64>], &[f64], &[f64], &[f64]) =

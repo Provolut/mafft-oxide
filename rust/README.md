@@ -115,7 +115,7 @@ quietly returning a different alignment:
 - 10-mer nucleotide distances (`--tuplesize 10`, used only by `--parttree`)
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- `--legacygapcost`, `--keeplength`
+- `--keeplength`
 - the memory-saving aligner (`-M`) and the other `alg` values
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
 - **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
@@ -198,8 +198,8 @@ Current status, on this source tree:
 
 | check | result |
 |---|---|
-| `verify.sh`, generated corpus (88 inputs × 26 argument sets) | 2288/2288 identical |
-| `verify_tbfast.sh`, generated corpus (40 inputs × 14 argument sets) | 560/560 identical |
+| `verify.sh`, generated corpus (88 inputs × 30 argument sets) | 2640/2640 identical |
+| `verify_tbfast.sh`, generated corpus (40 inputs × 15 argument sets) | 600/600 identical |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
 | `cargo test` | 66/66 |

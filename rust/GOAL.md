@@ -9,7 +9,8 @@ ported is refused loudly. `verify.sh`, `verify_tbfast.sh`, `verify_e2e.sh`,
 `cargo test` and `test/script` must stay green, and new argument vectors go
 into the harnesses with the feature.
 
-Done so far: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`.
+Done so far: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
+`--legacygapcost`, `-y`/`-T`.
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -20,25 +21,23 @@ Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
    one scoring item left and the one that is not cheap. `--aamatrix` (a matrix
    read from a file, `n == -1`) rides along with it.
 
-2. **`--legacygapcost` (`-L`).** The pre-7.110 gap scoring, a separate branch
-   inside `A__align`.
-
-3. **Input modes**, each with its own harness argument vectors: `--add` /
+2. **Input modes**, each with its own harness argument vectors: `--add` /
    `--addprofile` (`disttbfast` gets `-K -I <n>`; the aligning work is in
    `addsingle`, still C, but our binaries are on the path); sub-alignments
    (`-H`); `--treein` (`-U`); external anchors (`-l <file>`); `--keeplength`
    (`-Y`); `-q` (sparse pickup); `-r` (one iteration).
 
-4. **Output-only modes** (`-y` distances, `-t`/`-^` tree, `-T` noalign): the
-   runs that skip the alignment. Small, and they unblock `--treeout`.
+3. **Tree output** (`-t`, `-^`): `..._treeout_memsave` is a second copy of the
+   UPGMA with Newick emission bolted on; diff it against the one in `tree.rs`
+   and add the string bookkeeping. `-y` and `-T` are done.
 
-5. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
+4. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Large, low demand.
 
-6. **10-mer nucleotide tuples** (`--tuplesize 10`): `makepointtable_nuc_dectet`,
+5. **10-mer nucleotide tuples** (`--tuplesize 10`): `makepointtable_nuc_dectet`,
    `D10LENFAC*`. Only `--parttree` uses it; do it with 8 if at all.
 
-7. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`
+6. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`
    (`--parttree`), `addsingle` (`--add`), `makedirectionlist`
    (`--adjustdirection`). All work today on our byte-identical output; porting
    them is scope growth, not parity.

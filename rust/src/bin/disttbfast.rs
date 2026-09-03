@@ -99,6 +99,19 @@ fn main() {
     for iguidetree in 0..nguidetree {
         let calcpairdists = iguidetree != nguidetree - 1;
 
+        // `-y`: emit the k-tuple distance matrix. This happens before the tree
+        // is built, and with `-T` (noalign) and no `-t` the run stops here --
+        // before `order` is written.
+        if args.distout != 0 {
+            io::write_hat2(njob, &input.name, &mtx);
+            if args.treeout == 0 && args.noalign {
+                io::write_data(&mut out, &input.name, &input.seq);
+                std::io::stdout().write_all(&out).unwrap();
+                eprintln!();
+                return;
+            }
+        }
+
         let mut tr = tree::upgma(njob, &mut mtx, args.sueff_global);
 
         // The `order` file the mafft wrapper uses for --reorder / clustal out.
@@ -112,6 +125,13 @@ fn main() {
                 eprintln!("Cannot open 'order': {}", e);
                 std::process::exit(1);
             }
+        }
+
+        if (args.treeout != 0 || args.distout != 0) && args.noalign {
+            io::write_data(&mut out, &input.name, &input.seq);
+            std::io::stdout().write_all(&out).unwrap();
+            eprintln!();
+            return;
         }
 
         let effarr: Vec<f64> = if args.tbrweight != 0 {

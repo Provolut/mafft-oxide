@@ -469,14 +469,11 @@ impl Args {
         if self.scoremtx == 2 {
             bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");
         }
-        if self.legacygapcost {
-            bad.push("-L (--legacygapcost) is not ported");
-        }
         if self.specificityconsideration != 0.0 {
             bad.push("-s > 0 (--allowshift/--unalignlevel) is not ported");
         }
-        if self.distout != 0 || self.treeout != 0 || self.noalign {
-            bad.push("-y/-t/-T (distance or tree output) is not ported");
+        if self.treeout != 0 {
+            bad.push("-t/-^ (tree output) is not ported");
         }
 
         if bad.is_empty() {

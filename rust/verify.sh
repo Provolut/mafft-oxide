@@ -54,6 +54,14 @@ ARGSETS=(
   # table's, which changes the matrix for all three model families
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -a -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -j 200 -a -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # --legacygapcost (-L): drops the gap-frequency weighting, but only on the
+  # branch of A__align that Falign takes, so both -F and non-FFT matter
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -L -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -L -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100"
+  # -y (distance output) and -T (no alignment), including the combination that
+  # stops before `order` is written
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -y h -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -y h -T -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
 )
 
 gen_corpus() {
@@ -91,11 +99,15 @@ for f in "$CORPUS"/*; do
       fail=$((fail+1)); failed="$failed\n  $label (stdout differs)"
       continue
     fi
-    if [ -f "$work/c/order" ] || [ -f "$work/r/order" ]; then
-      if ! cmp -s "$work/c/order" "$work/r/order"; then
-        fail=$((fail+1)); failed="$failed\n  $label (order differs)"
-        continue
+    bad=""
+    for out in order hat2; do
+      if [ -f "$work/c/$out" ] || [ -f "$work/r/$out" ]; then
+        cmp -s "$work/c/$out" "$work/r/$out" || bad="$bad $out"
       fi
+    done
+    if [ -n "$bad" ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      continue
     fi
     pass=$((pass+1))
   done

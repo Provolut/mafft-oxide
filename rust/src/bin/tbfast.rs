@@ -40,6 +40,8 @@ struct TbArgs {
     usenaivescore: bool,
     /// `-a` (`--fmodel`): take residue frequencies from the input.
     fmodel: i32,
+    /// `-L` (`--legacygapcost`) in the progressive stage.
+    legacygapcost: bool,
     pair_poffset: i32,
     pair_shift_factor: f64,
     pair_nblosum: i32,
@@ -77,6 +79,7 @@ impl Default for TbArgs {
             pair_ppenalty_ex2: NOTSPECIFIED,
             usenaivescore: false,
             fmodel: 0,
+            legacygapcost: false,
             pair_poffset: NOTSPECIFIED,
             pair_shift_factor: 1000.0,
             pair_nblosum: 62,
@@ -225,6 +228,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'X' => a.sueff_global = atof(&take().ok_or("-X")?),
             'F' => a.use_fft = true,
             'O' => a.outgap = false,
+            'L' => a.legacygapcost = true,
             'n' => a.outnumber = true,
             'D' => a.dorp = Some(b'd'),
             'P' => a.dorp = Some(b'p'),
@@ -279,6 +283,7 @@ fn constants_for(
     shift_factor: f64,
     specificityconsideration: f64,
     fmodel: i32,
+    legacygapcost: bool,
 ) -> Constants {
     let mut ca = mafft_rs::params::Args {
         nblosum,
@@ -290,6 +295,7 @@ fn constants_for(
         penalty_shift_factor: shift_factor,
         specificityconsideration,
         fmodel,
+        legacygapcost,
         ..Default::default()
     };
     ca.scoremtx = 1;
@@ -329,34 +335,6 @@ fn write_hat3(njob: usize, table: &localhom::LocalHomTable) {
 }
 
 /// `WriteFloatHat2_pointer_halfmtx()`: the distance matrix, for `dvtditr`.
-fn write_hat2(njob: usize, name: &[Vec<u8>], mtx: &[Vec<f64>]) {
-    use std::fmt::Write as _;
-    let mut max = 0.0f64;
-    for i in 0..njob - 1 {
-        for j in 1..njob - i {
-            if mtx[i][j] > max {
-                max = mtx[i][j];
-            }
-        }
-    }
-    let mut s = String::new();
-    let _ = writeln!(s, "{:5}", 1);
-    let _ = writeln!(s, "{:5}", njob);
-    let _ = writeln!(s, " {:6.3}", max * 2.5);
-    for (i, nm) in name.iter().enumerate().take(njob) {
-        let _ = writeln!(s, "{:4}. {}", i + 1, String::from_utf8_lossy(nm));
-    }
-    for i in 0..njob {
-        for j in i + 1..njob {
-            let _ = write!(s, "{:6.3}", mtx[i][j - i]);
-            let ijsa = j - i;
-            if ijsa % 12 == 0 || ijsa == njob - i - 1 {
-                s.push('\n');
-            }
-        }
-    }
-    std::fs::write("hat2", s).expect("write hat2");
-}
 
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -395,6 +373,7 @@ fn main() {
         a.pair_shift_factor,
         a.pair_unalignlevel,
         a.fmodel,
+        false,
     );
     // `initFiles()` runs here in the C, before `seqcheck()`, so an aborted run
     // still leaves an empty `pre` behind rather than no file at all.
@@ -454,7 +433,7 @@ fn main() {
     if a.iterate != 0 {
         write_hat3(njob, &table);
     }
-    write_hat2(njob, &input.name, &iscore);
+    io::write_hat2(njob, &input.name, &iscore);
 
     // --- progressive phase (its own scoring parameters) ---
     let cn = constants_for(
@@ -469,6 +448,7 @@ fn main() {
         a.shift_factor,
         a.unalignlevel,
         a.fmodel,
+        a.legacygapcost,
     );
 
     let mut tr = tree::upgma(njob, &mut iscore, a.sueff_global);
