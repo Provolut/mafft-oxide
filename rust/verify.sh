@@ -12,6 +12,26 @@ CBIN="${1:?usage: verify.sh <c-disttbfast> <rust-disttbfast-rs> [corpus-dir]}"
 RBIN="${2:?usage: verify.sh <c-disttbfast> <rust-disttbfast-rs> [corpus-dir]}"
 CORPUS="${3:-}"
 
+# Resolve the binaries to absolute paths and check they are runnable. Every
+# comparison below runs from a scratch directory, so a relative path would not
+# resolve -- and if *both* binaries fail to launch the run looks like a pass,
+# which is how this harness once reported thousands of identical results while
+# testing nothing at all.
+abspath() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *)  printf '%s/%s\n' "$(pwd)" "$1" ;;
+  esac
+}
+CBIN=$(abspath "$CBIN")
+RBIN=$(abspath "$RBIN")
+for b in "$CBIN" "$RBIN"; do
+  if [ ! -x "$b" ]; then
+    echo "verify: $b is not executable" 1>&2
+    exit 2
+  fi
+done
+
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -156,6 +176,41 @@ for f in "$CORPUS"/*; do
       done
       if [ -n "$bad" ]; then
         fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      else
+        pass=$((pass+1))
+      fi
+    done
+  done
+done
+
+# --add / --addprofile (-I n, -K): the first njob-n sequences are an existing
+# alignment whose columns must survive. The input has to be built from a real
+# alignment, so the C is run once first to produce one.
+AARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 4 ] || continue
+  rm -rf "$work/pre"; mkdir -p "$work/pre"
+  ( cd "$work/pre" && $CBIN $AARGS < "$f" > aligned.fa 2> /dev/null ) || continue
+  [ -s "$work/pre/aligned.fa" ] || continue
+  for nadd in 1 $((n/2)); do
+    [ "$nadd" -ge 1 ] || continue
+    for mode in add profile; do
+      python3 "$here/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
+      kflag=""
+      [ "$mode" = "add" ] && kflag="-K"
+      rm -rf "$work/c" "$work/r"
+      mkdir -p "$work/c" "$work/r"
+      ( cd "$work/c" && $CBIN $AARGS -I $nadd $kflag < "$work/pre/in.fa" > out.fa 2> err.log )
+      cst=$?
+      ( cd "$work/r" && $RBIN $AARGS -I $nadd $kflag < "$work/pre/in.fa" > out.fa 2> err.log )
+      rst=$?
+      label="$(basename "$f") [-I $nadd $mode]"
+      if [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      elif ! cmp -s "$work/c/out.fa" "$work/r/out.fa"; then
+        fail=$((fail+1)); failed="$failed\n  $label (stdout differs)"
       else
         pass=$((pass+1))
       fi

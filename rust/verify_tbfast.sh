@@ -12,6 +12,26 @@ CBIN="${1:?usage: verify_tbfast.sh <c-tbfast> <rust-tbfast-rs> [corpus-dir]}"
 RBIN="${2:?usage: verify_tbfast.sh <c-tbfast> <rust-tbfast-rs> [corpus-dir]}"
 CORPUS="${3:-}"
 
+# Resolve the binaries to absolute paths and check they are runnable. Every
+# comparison below runs from a scratch directory, so a relative path would not
+# resolve -- and if *both* binaries fail to launch the run looks like a pass,
+# which is how this harness once reported thousands of identical results while
+# testing nothing at all.
+abspath() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *)  printf '%s/%s\n' "$(pwd)" "$1" ;;
+  esac
+}
+CBIN=$(abspath "$CBIN")
+RBIN=$(abspath "$RBIN")
+for b in "$CBIN" "$RBIN"; do
+  if [ ! -x "$b" ]; then
+    echo "verify: $b is not executable" 1>&2
+    exit 2
+  fi
+done
+
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
