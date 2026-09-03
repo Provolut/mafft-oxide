@@ -526,10 +526,16 @@ done
 # compiles with USE_PENALTY_EX 0 where Salignmm.c uses 1, which is why forcing
 # it changes the alignment on 17 of the 86 corpus inputs.
 #
-# The FFT branch under -M is `Falign_udpari_long`, a different anchoring pass,
-# and is not ported -- so these argument vectors deliberately leave -F off.
+# The FFT branch under -M is `Falign_udpari_long`, which differs from `Falign`
+# in three ways: NKOUHO_LONG (500) candidate lags instead of NKOUHO (20), no
+# `break` when a lag yields no segment, and every block aligned by MSalignmm
+# with no 1x1 shortcut. `mafft --memsave` passes -M -B *and* -F, so that is
+# the combination a user actually gets.
 MARGSETS=(
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -M -B"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -M -B"
+  "-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -M -B"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -G -X 0.1 -x 100 -M -B"
   "-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -M -B"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -M -B"
   "-q 0 -E 2 -V -2.00 -s 0.0 -W 6 -O -C 0-0 -b 62 -g -0.05 -f -2.00 -Q 100.0 -h -0.1 -X 0.0 -x 100 -M -B"

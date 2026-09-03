@@ -67,7 +67,10 @@ pub fn st_final_gap_count(fgcp: &mut [f64], clus: usize, seq: &[&[u8]], eff: &[f
         let feff = eff[j];
         let s = seq[j];
         // C walks one past each position: gc looks at s[i+1], with s[len] == 0.
-        let mut gc = s[0] == b'-';
+        // `s[0]` is that same terminator when the block is empty -- which
+        // `MSalignmm` reaches, since unlike `A__align` it has no `lgth == 0`
+        // early-out and `Falign` can cut a zero-width block.
+        let mut gc = s.first() == Some(&b'-');
         for i in 0..len {
             let gb = gc;
             gc = i + 1 < len && s[i + 1] == b'-';

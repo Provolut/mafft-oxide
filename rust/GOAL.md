@@ -34,18 +34,16 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
    `compact`, `very compact`, `stepadd`, `youngestlinkage` -- byte-identical
    over 3096 comparisons including `infile.tree`.
 
-3. **`-M` (memsave)**, mostly done. `msalign.rs` has `MSalignmm` with its
-   Hirschberg recursion and single-block base case, and `treebase` now makes
-   the C's own 30000-column switch instead of refusing at it. 430 comparisons
-   byte-identical; on four 31000-column sequences peak RSS went from 6.4GB to
-   55.9MB against the C's 32.7MB. Left: `Falign_udpari_long` (844 lines), the
-   memsave FFT branch, so `-M` with `-F`/`-G` still refuses; `-@` (`--sp`,
-   `D__align`, 1801 lines), reachable, refused; `-&` (`Aalign`, 223 lines),
-   not reachable from the wrapper.
-   A fourth upstream defect turned up here and is reproduced: MSalignmm.c
-   :2459 passes `ogcp1o`/`fgcp1o` to `createogresult` where Salignmm.c:2119
-   passes `ogcp1opt`/`fgcp1opt`, so a node that reused a child's cached
-   profile hands up gap rows built from zeros. It changes 5 of 86 inputs.
+3. **`-M` (memsave)**, done. `msalign.rs` has `MSalignmm` with its Hirschberg
+   recursion; `falign.rs` gains `Falign_udpari_long` as a mode, which differs
+   from `Falign` in exactly three ways (500 candidate lags not 20, no `break`
+   on a lag with no segment, every block through `MSalignmm` with no 1x1
+   shortcut). `treebase` makes the C's own 30000-column switch. 688
+   comparisons byte-identical, plus `mafft --memsave` end to end; peak RSS on
+   four 31000-column sequences went from 6.4GB to 55.9MB against the C's
+   32.7MB. Two upstream defects reproduced here, both in issue #4.
+   Left in this item: `-@` (`--sp`, `D__align`, 1801 lines), reachable and
+   refused; `-&` (`Aalign`, 223 lines), not reachable from the wrapper.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical

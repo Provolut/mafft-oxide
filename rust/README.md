@@ -133,15 +133,9 @@ quietly returning a different alignment:
   the port refuses instead. 78 of the 88 corpus inputs never reach it.
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- the memory-saving FFT branch. `MSalignmm` itself is ported, including the
-  switch the C makes on its own past 30000 columns (`disttbfast.c:2836`,
-  `tbfast.c:1096`) -- that switch is sticky, since `alg` is a global, and it
-  is not an equivalent optimisation: `MSalignmm.c` compiles with
-  `USE_PENALTY_EX 0` where `Salignmm.c` uses 1, so forcing it with `-M -B`
-  changes the alignment on 17 of the 86 corpus inputs. What is not ported is
-  `Falign_udpari_long` (`Falign.c:2583`), the anchoring pass the C uses when
-  memsave and FFT are both on, so `-M` together with `-F`/`-G` is refused.
-- the other `alg` values: `-@` (`--sp`, `D__align`) and `-&` (`Aalign`)
+- the other `alg` values: `-@` (`--sp`, `D__align`) and `-&` (`Aalign`).
+  The memsave aligner (`-M`, `--memsave`, and the switch the C makes on its
+  own past 30000 columns) *is* ported, both its DP and its FFT anchoring.
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
 - **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
   a "not implemented", not a "cannot be implemented": measured on 39 corpus

@@ -880,6 +880,9 @@ pub fn msalignmm(
         gapfreq1[lgth1] = 1.0;
         gapfreq2[lgth2] = 1.0;
     } else {
+        // `ogcp1opt = ogcp1o` and friends (MSalignmm.c:2265-2267): on this
+        // branch the two names alias one buffer, so everything filled below
+        // reaches both the DP scaling and the result block.
         crate::profile::cpmx_calc_new(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
         crate::profile::cpmx_calc_new(cn, &g2, &mut cpmx2, eff2, lgth2, jcyc);
         let (mut hgf1, mut hgf2);
@@ -902,6 +905,10 @@ pub fn msalignmm(
             gapfreq1[lgth1] = 0.0;
             gapfreq2[lgth2] = 0.0;
         }
+        ogcp1opt.copy_from_slice(&ogcp1o);
+        ogcp2opt.copy_from_slice(&ogcp2o);
+        fgcp1opt.copy_from_slice(&fgcp1o);
+        fgcp2opt.copy_from_slice(&fgcp2o);
         if !cn.legacygapcost {
             crate::profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
             crate::profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);

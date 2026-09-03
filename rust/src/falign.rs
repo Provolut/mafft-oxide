@@ -24,6 +24,9 @@ use crate::fft::{calc_naiseki, Cpx, Fft};
 
 /// `NKOUHO` from `fft.h`: how many correlation peaks to try.
 const NKOUHO: usize = 20;
+/// `NKOUHO_LONG`: what `Falign_udpari_long` uses instead -- the memsave
+/// variant considers 25x as many candidate lags.
+const NKOUHO_LONG: usize = 500;
 /// `MAXSEG` from `mltaln.h`.
 const MAXSEG: usize = 100000;
 /// `SEGMENTSIZE` from `fftFunctions.c`.
@@ -44,9 +47,15 @@ struct Segment {
 /// `soukan`, as the C does.
 fn get_kouho(kouho: &mut [i32], nkouho: usize, soukan: &mut [f64], nlen2: usize) {
     let nlen4 = nlen2 / 2;
+    // `ikouho` is declared outside the outer loop in the C and initialised
+    // once. That matters as soon as `nkouho` exceeds the number of distinct
+    // peaks: every entry of `soukan` is then already -9999.9, nothing beats
+    // `max`, and the round reuses the previous round's index rather than
+    // picking 0. `Falign_udpari_long` asks for 500 candidates, so it gets
+    // there routinely; `Falign` asks for 20 and usually does not.
+    let mut ikouho = 0usize;
     for k in kouho.iter_mut().take(nkouho) {
         let mut max = -9999.9f64;
-        let mut ikouho = 0usize;
         for i in 0..nlen2 {
             let tmp = soukan[i];
             if tmp > max {
@@ -433,7 +442,7 @@ impl FalignState {
             naiseki: Vec::new(),
             naiseki_no_wa: Vec::new(),
             soukan: Vec::new(),
-            kouho: vec![0; NKOUHO],
+            kouho: vec![0; NKOUHO_LONG],
             cut1: vec![0; MAXSEG],
             cut2: vec![0; MAXSEG],
             segment: vec![Segment::default(); MAXSEG],
@@ -466,7 +475,15 @@ pub fn falign(
     outgap: bool,
     fftlog: &mut i32,
     newgapstr: u8,
+    // `Falign_udpari_long` rather than `Falign`: the C's FFT anchoring under
+    // `alg == 'M'`. The two differ in exactly two ways -- this one takes
+    // `NKOUHO_LONG` candidate lags instead of `NKOUHO`, and it aligns every
+    // block with `MSalignmm`, with no `clus1 == 1 && clus2 == 1` shortcut to
+    // `G__align11` (the C has that line, commented out and marked "CHUUI!!!").
+    // Everything else that differs between them is progress text.
+    memsave: bool,
 ) -> f64 {
+    let nkouho = if memsave { NKOUHO_LONG } else { NKOUHO };
     let clus1 = group1.len();
     let clus2 = group2.len();
     let len1 = group1[0].len();
@@ -551,11 +568,11 @@ pub fn falign(
         fs.soukan[m] = fs.naiseki_no_wa[nlen + nlen2 - m].r;
     }
 
-    get_kouho(&mut fs.kouho, NKOUHO, &mut fs.soukan, nlen);
+    get_kouho(&mut fs.kouho, nkouho, &mut fs.soukan, nlen);
 
     // --- collect anchors at each candidate lag ---
     let mut count = 0usize;
-    for k in 0..NKOUHO {
+    for k in 0..nkouho {
         let lag = fs.kouho[k];
         if lag <= -(len1 as i32) || len2 as i32 <= lag {
             continue;
@@ -585,7 +602,12 @@ pub fn falign(
             eprintln!("TOO MANY SEGMENTS.");
             std::process::exit(1);
         }
-        if tmpint == 0 {
+        // `Falign` gives up at the first lag that yields no segment;
+        // `Falign_udpari_long` has that `break` commented out ("090530
+        // yameta" -- stopped doing it), so it keeps scanning all 500
+        // candidates. This is the third difference between the two, and the
+        // only one the anchoring itself can see.
+        if !memsave && tmpint == 0 {
             break;
         }
         for _ in 0..tmpint {
@@ -705,7 +727,26 @@ pub fn falign(
             .map(|s| s[fs.cut2[i] as usize..fs.cut2[i + 1] as usize].to_vec())
             .collect();
 
-        if clus1 == 1 && clus2 == 1 {
+        if memsave {
+            let (sc, _) = crate::msalign::msalignmm(
+                cn,
+                n_dynamicmtx,
+                &mut block1,
+                &mut block2,
+                eff1,
+                eff2,
+                headgp,
+                tailgp,
+                Some((&sgap1, &sgap2, &egap1, &egap2)),
+                None,
+                None,
+                0.0,
+                0.0,
+                false,
+                newgapstr,
+            );
+            totalscore += sc;
+        } else if clus1 == 1 && clus2 == 1 {
             let mut s1 = std::mem::take(&mut block1[0]);
             let mut s2 = std::mem::take(&mut block2[0]);
             totalscore += ast.g_align11(

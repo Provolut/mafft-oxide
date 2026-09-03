@@ -290,15 +290,8 @@ pub fn treebase(
                     newgapstr,
                 );
             } else if opts.force_fft || (opts.use_fft && ffttry) {
-                if alg == b'M' {
-                    // The FFT branch under memsave is `Falign_udpari_long`,
-                    // a different anchoring pass, not `Falign` plus a
-                    // different block aligner. It is not ported.
-                    eprintln!(
-                        "disttbfast-rs: the memsave aligner reached the FFT branch, where the C\n                           uses Falign_udpari_long (Falign.c:2583) rather than Falign. That one is\n                           not ported. Run without -F/-G, or with -N (--nomemsave)."
-                    );
-                    std::process::exit(1);
-                }
+                // Under memsave the C anchors with `Falign_udpari_long`
+                // rather than `Falign`; `falign` takes that as a mode.
                 falign(
                     fs,
                     st,
@@ -311,6 +304,7 @@ pub fn treebase(
                     outgap,
                     &mut fftlog[m1],
                     newgapstr,
+                    alg == b'M',
                 );
             } else if alg == b'M' {
                 // `case( 'M' )` has no `clus1 == 1 && clus2 == 1` shortcut --
@@ -517,6 +511,12 @@ pub fn dooneiteration(
                 outgap,
                 &mut fftlog[m1],
                 b'-',
+                // `dooneiteration` uses `Falign_udpari_long` under memsave
+                // too (disttbfast.c:2399), but it never reaches the memsave
+                // switch: the refinement pass refuses at `l != 0` first, and
+                // `alg` cannot have been flipped by `treebase` because the
+                // two do not share it here.
+                false,
             );
         } else {
             fftlog[m1] = 0;
