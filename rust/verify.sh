@@ -187,6 +187,42 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --aamatrix (-b -1): the scoring matrix is read from `_aamtx` rather than
+# built in. The variants cover a permuted residue order, a `frequency` line
+# and `norescale` -- and, since `constants()` starts with
+# `if( nblosum < 0 ) dorp = 'p';`, the nucleotide half of the corpus is
+# expected to be refused by both binaries as protein with illegal characters.
+MARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  for variant in plain perm freq norescale permfreq nocomment; do
+    rm -rf "$work/c" "$work/r"
+    mkdir -p "$work/c" "$work/r"
+    python3 "$here/gen_aamtx.py" "$variant" > "$work/c/_aamtx" || continue
+    cp "$work/c/_aamtx" "$work/r/_aamtx"
+    ( cd "$work/c" && $CBIN $MARGS < "$f" > out.fa 2> err.log )
+    cst=$?
+    ( cd "$work/r" && $RBIN $MARGS < "$f" > out.fa 2> err.log )
+    rst=$?
+    label="$(basename "$f") [--aamatrix $variant]"
+    if [ $cst -ne $rst ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      continue
+    fi
+    bad=""
+    for o in out.fa order hat2; do
+      if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+        cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+      fi
+    done
+    if [ -n "$bad" ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+    else
+      pass=$((pass+1))
+    fi
+  done
+done
+
 # --add / --addprofile (-I n, -K): the first njob-n sequences are an existing
 # alignment whose columns must survive. The input has to be built from a real
 # alignment, so the C is run once first to produce one.

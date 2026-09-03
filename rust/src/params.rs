@@ -458,9 +458,11 @@ impl Args {
         // Kimura's model instead, so the BLOSUM check applies to protein only.
         if self.dorp != Some(b'd')
             && self.scoremtx == 1
-            && !matches!(self.nblosum, 30 | 45 | 50 | 62 | 80 | 90 | 100)
+            && !matches!(self.nblosum, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1)
         {
-            bad.push("only the built-in BLOSUM tables are ported (-b 30/45/50/62/80/90/100)");
+            // -1 is --aamatrix, a table read from `_aamtx`. -2 is --text,
+            // which also switches the alphabet to 256 symbols.
+            bad.push("only the built-in BLOSUM tables and --aamatrix are ported");
         }
         if self.scoremtx == 2 {
             bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");

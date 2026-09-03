@@ -349,7 +349,8 @@ fn refuse(a: &TbArgs) -> Option<String> {
         bad.push("threads change the result; run with -C 0".into());
     }
     // -b is ignored for nucleotides, whose matrix comes from Kimura's model.
-    let known = |n: i32| matches!(n, 30 | 45 | 50 | 62 | 80 | 90 | 100);
+    // -1 is --aamatrix, a table read from `_aamtx`.
+    let known = |n: i32| matches!(n, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1);
     if a.dorp != Some(b'd')
         && ((a.scoremtx == 1 && !known(a.nblosum))
             || (a.pair_scoremtx == 1 && !known(a.pair_nblosum)))

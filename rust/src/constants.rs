@@ -365,6 +365,12 @@ impl Constants {
 
     /// `constants( nseq, seq )`.
     pub fn new_seq(args: &Args, dorp: u8, seq: &[Vec<u8>]) -> Constants {
+        // `if( nblosum < 0 ) dorp = 'p';` -- a user matrix (`--aamatrix`) or
+        // `--text` forces protein whatever the input looked like, and because
+        // the C's `dorp` is global this sticks for everything that runs after
+        // `constants()`: `seqcheck`, the tuple-size check, the lot. Read it
+        // back off `cn.dorp` there rather than off the input.
+        let dorp = if args.nblosum < 0 { b'p' } else { dorp };
         let trywarp = !(args.penalty_shift_factor >= 10.0);
 
         let mut amino = [0u8; NALPHABETS];
@@ -688,13 +694,15 @@ impl Constants {
 
             let mut n_distmp = [[0.0f64; 20]; 20];
             let mut freq = [0.0f64; 20];
-            blosum::blosum_mtx(
+            let rescale = blosum::blosum_mtx(
                 args.nblosum,
+                dorp,
                 &mut n_distmp,
                 &mut freq,
                 &mut amino,
                 &mut amino_grp,
             );
+            eprintln!("rescale = {}", rescale as i32);
 
             let datafreq;
             let freq1: &[f64; 20] = if args.fmodel == 1 {
@@ -717,10 +725,14 @@ impl Constants {
                     average += n_distmp[i][j] * freq1[i] * freq1[j];
                 }
             }
-            // rescale == 1 for the built-in tables.
-            for i in 0..20 {
-                for j in 0..20 {
-                    n_distmp[i][j] -= average;
+            // `rescale` is 1 for the built-in tables; only an `_aamtx` file
+            // with a `norescale` line turns it off, and then the matrix is
+            // scaled by a flat 600 instead of being recentred.
+            if rescale {
+                for i in 0..20 {
+                    for j in 0..20 {
+                        n_distmp[i][j] -= average;
+                    }
                 }
             }
 
@@ -728,9 +740,17 @@ impl Constants {
             for i in 0..20 {
                 average += n_distmp[i][i] * freq1[i];
             }
-            for i in 0..20 {
-                for j in 0..20 {
-                    n_distmp[i][j] *= 600.0 / average;
+            if rescale {
+                for i in 0..20 {
+                    for j in 0..20 {
+                        n_distmp[i][j] *= 600.0 / average;
+                    }
+                }
+            } else {
+                for i in 0..20 {
+                    for j in 0..20 {
+                        n_distmp[i][j] *= 600.0;
+                    }
                 }
             }
 

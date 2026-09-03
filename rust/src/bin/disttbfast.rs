@@ -156,11 +156,11 @@ fn main() {
         }
     }
 
-    if input.dorp == b'p' && args.tuplesize != 6 {
+    if cn.dorp == b'p' && args.tuplesize != 6 {
         eprintln!("tuplesize must be 6 for aa sequence");
         std::process::exit(1);
     }
-    if input.dorp == b'd' && args.tuplesize != 6 && args.tuplesize != 10 {
+    if cn.dorp == b'd' && args.tuplesize != 6 && args.tuplesize != 10 {
         eprintln!("tuplesize must be 6 or 10 for dna sequence");
         std::process::exit(1);
     }

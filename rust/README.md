@@ -9,7 +9,7 @@ same argument vector, same input, same output files:
 
 | binary | replaces | strategies |
 |---|---|---|
-| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift` (plain `mafft`, `fftns`, `nwns`) |
+| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix` (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
 
 Both handle protein and nucleotide input, which the reader tells apart the same
@@ -109,8 +109,7 @@ scores.
 Refused loudly rather than approximated, so an unsupported run fails instead of
 quietly returning a different alignment:
 
-- `--aamatrix` (a matrix read from a file) and `--text` (the 256-symbol
-  alphabet)
+- `--text` / `--textmatrix` (the 256-symbol alphabet)
 - sub-alignments (`--merge`), external anchors (`--anchors`)
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs

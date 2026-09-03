@@ -11,7 +11,7 @@ into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
 `--legacygapcost`, `-y`/`-T`/`-t`/`-^`/`-U`/`-q`, 10-mer nucleotide tuples,
-`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`.
+`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`.
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -30,11 +30,12 @@ divides the added sequences' weights by 100), which cost a day.
    So: a second tree function and a second `topol` representation, plus
    `readsubalignmentstable`.
 
-2. **`--text` (`nblosum == -2`)** and `--aamatrix` (a matrix from a file).
-   The 256-symbol alphabet: `nalphabets` and `charsize` become 0x100, so
-   `NALPHABETS` stops being a compile-time constant and every bound derived
-   from it follows. Mechanical, wide, and every site is a chance to break
-   bit-exactness -- but the harnesses would catch it.
+2. **`--text` / `--textmatrix` (`nblosum == -2`).** The 256-symbol alphabet:
+   `nalphabets` and `charsize` become 0x100, so `NALPHABETS` stops being a
+   compile-time constant and every bound derived from it follows. Mechanical,
+   wide, and every site is a chance to break bit-exactness -- but the
+   harnesses would catch it. (`--aamatrix`, `nblosum == -1`, is done: it keeps
+   the 26-letter alphabet and only swaps the table.)
 
 3. **`-r` (one iteration)**: `dooneiteration`, a second `treebase`.
 

@@ -157,6 +157,40 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --aamatrix (-b -1): the scoring matrix comes from `_aamtx`. Both phases get
+# it, so the pairwise stage and the progressive stage are both covered.
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  for variant in plain perm norescale permfreq; do
+    rm -rf "$work/c" "$work/r"
+    mkdir -p "$work/c" "$work/r"
+    python3 "$here/gen_aamtx.py" "$variant" > "$work/c/_aamtx" || continue
+    cp "$work/c/_aamtx" "$work/r/_aamtx"
+    MP="-u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L"
+    MT="-W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
+    ( cd "$work/c" && $CBIN _ $MP _ -+ 2 $MT < "$f" > /dev/null 2> err.log )
+    cst=$?
+    ( cd "$work/r" && $RBIN _ $MP _ -+ 2 $MT < "$f" > /dev/null 2> err.log )
+    rst=$?
+    label="$(basename "$f") [--aamatrix $variant]"
+    if [ $cst -ne $rst ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      continue
+    fi
+    bad=""
+    for o in pre order hat2 hat3; do
+      if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+        cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+      fi
+    done
+    if [ -n "$bad" ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+    else
+      pass=$((pass+1))
+    fi
+  done
+done
+
 # --add / --addprofile (-I n, -K) and --keeplength (-Y) with both --mapout
 # forms. Needs a real alignment to add to, so the C is run once to make one.
 # `disttbfast` builds it: tbfast writes `pre`, not stdout.

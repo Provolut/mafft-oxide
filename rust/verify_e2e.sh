@@ -101,14 +101,18 @@ done
 # part of the output and is compared too.
 # `--add <file>` takes its filename immediately, so every other option has to
 # come first. Each entry is "<mode>|<extra options>".
+# --addprofile is deliberately absent: it requires the added block to form a
+# monophyletic cluster in the guide tree, which an arbitrary split of an
+# alignment usually does not, so the C refuses most cases here. verify.sh and
+# verify_tbfast.sh cover it at the binary level instead.
 ADDSTRATS=(
   "add|"
   "add|--keeplength"
   "add|--keeplength --mapout"
   "add|--localpair --maxiterate 0"
-  "add|--allowshift"
-  "profile|"
-  "profile|--keeplength --mapout"
+  "add|--localpair --keeplength --mapout --maxiterate 0"
+  "add|--globalpair --maxiterate 0"
+  "add|--allowshift --globalpair --maxiterate 0"
 )
 for f in "${INPUTS[@]}"; do
   n=$(grep -c '^>' "$f")
@@ -116,7 +120,7 @@ for f in "${INPUTS[@]}"; do
   MAFFT_BINARIES="$LIBEXEC" "$MAFFT" --retree 2 --maxiterate 0 "$f" > "$work/aligned.fa" 2>/dev/null || continue
   [ -s "$work/aligned.fa" ] || continue
   nadd=$(( n / 2 ))
-  for mode in add profile; do
+  for mode in add; do
     python3 "$here/gen_add.py" "$work/aligned.fa" "$nadd" "$mode" > "$work/both.fa" || continue
     # Split it back into "the existing alignment" and "the sequences to add".
     python3 - "$work/both.fa" "$nadd" "$work/exist.fa" "$work/new.fa" <<'PYEOF'
@@ -141,7 +145,6 @@ PYEOF
       [ "${entry%%|*}" = "$mode" ] || continue
       extra="${entry#*|}"
       addopt="--add"
-      [ "$mode" = profile ] && addopt="--addprofile"
       rm -f "$work/new.fa.map"
       MAFFT_BINARIES="$LIBEXEC" "$MAFFT" $extra $addopt "$work/new.fa" "$work/exist.fa" > "$work/o.c" 2>/dev/null
       cst=$?

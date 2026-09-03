@@ -157,15 +157,233 @@ pub const TMPMTX100: [f64; 210] = [
     -7.0, -8.0, -3.0, -5.0, -5.0, -8.0, -7.0, 4.0, 0.0, -5.0, 0.0, -3.0, -6.0, -4.0, -1.0, -5.0,
     -5.0, 8.0,
 ];
+
+/// `loadaamtx()`: the user matrix `--aamatrix` puts in `_aamtx`.
+///
+/// Returns the 210-entry lower triangle in the canonical
+/// `ARNDCQEGHILKMFPSTWYV` order followed by 20 background frequencies (all
+/// `-1.0` unless the file carried a `frequency` line), and whether the caller
+/// should rescale -- the file can turn that off with a `norescale` line.
+///
+/// The file's own residue order comes from its first non-`#` line and may be
+/// anything; the matrix is permuted into ours. Only the lower triangle of the
+/// file is read, so a value is looked up at (max, min) of the two mapped
+/// indices.
+pub fn loadaamtx(dorp: u8) -> (Vec<f64>, bool) {
+    const AAORDER: &[u8; 20] = b"ARNDCQEGHILKMFPSTWYV";
+
+    if dorp != b'p' {
+        eprintln!("User-defined matrix is not supported for DNA");
+        std::process::exit(1);
+    }
+    let text = match std::fs::read("_aamtx") {
+        Ok(t) => t,
+        Err(_) => {
+            eprintln!("Cannot open the _aamtx file");
+            std::process::exit(1);
+        }
+    };
+    // `fgets` keeps the newline; splitting on it and dropping the trailing
+    // empty piece gives the same sequence of lines.
+    let mut lines: Vec<&[u8]> = text.split(|&c| c == b'\n').collect();
+    if lines.last().map(|l| l.is_empty()).unwrap_or(false) {
+        lines.pop();
+    }
+    let mut li = 0usize;
+
+    // The header: the first line that does not start with '#'.
+    let mut inorder: Vec<u8> = Vec::new();
+    while li < lines.len() {
+        let l = lines[li];
+        li += 1;
+        if l.first() != Some(&b'#') {
+            inorder = l
+                .iter()
+                .filter(|c| c.is_ascii_alphabetic())
+                .map(|c| c.to_ascii_uppercase())
+                .collect();
+            break;
+        }
+    }
+    inorder.truncate(20);
+
+    let mut map = [0usize; 20];
+    for i in 0..20 {
+        match inorder.iter().position(|&c| c == AAORDER[i]) {
+            Some(p) => map[i] = p,
+            None => {
+                eprintln!("{}: not found in the first 20 letters.", AAORDER[i] as char);
+                showaamtxexample();
+            }
+        }
+    }
+
+    // The lower triangle, in the file's own order.
+    let mut raw = [[0.0f64; 20]; 21];
+    let mut i = 0usize;
+    while li < lines.len() {
+        let line = lines[li];
+        li += 1;
+        if line.first() == Some(&b'#') {
+            continue;
+        }
+        let mut p = 0usize;
+        for j in 0..=i {
+            while p < line.len()
+                && !line[p].is_ascii_digit()
+                && line[p] != b'-'
+                && line[p] != b'.'
+            {
+                p += 1;
+            }
+            raw[i][j] = atof_at(line, p);
+            match line[p..].iter().position(|&c| c == b' ') {
+                Some(q) => p += q,
+                None => {
+                    if j < i {
+                        showaamtxexample();
+                    }
+                    p = line.len();
+                }
+            }
+        }
+        i += 1;
+        if i > 19 {
+            break;
+        }
+    }
+
+    // Trailing keywords. `norescale` turns the rescaling off; `frequency`
+    // overrides the background frequencies. Either ends the scan.
+    let mut rescale = true;
+    for v in raw[20].iter_mut() {
+        *v = -1.0;
+    }
+    while li < lines.len() {
+        let line = lines[li];
+        li += 1;
+        let key: &[u8] = line
+            .split(|c| c.is_ascii_whitespace())
+            .find(|t| !t.is_empty())
+            .unwrap_or(b"");
+        if key == b"norescale" {
+            eprintln!("no rescale");
+            rescale = false;
+            break;
+        } else if key == b"frequency" {
+            let mut p = 0usize;
+            for j in 0..20 {
+                while p < line.len()
+                    && !line[p].is_ascii_digit()
+                    && line[p] != b'-'
+                    && line[p] != b'.'
+                {
+                    p += 1;
+                }
+                raw[20][j] = atof_at(line, p);
+                match line[p..].iter().position(|&c| c == b' ') {
+                    Some(q) => p += q,
+                    None => {
+                        if j < 19 {
+                            showaamtxexample();
+                        }
+                        p = line.len();
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    let mut val = vec![0.0f64; 420];
+    let mut k = 0usize;
+    for i in 0..20 {
+        for j in 0..=i {
+            let (ii, jj) = if i != j {
+                (map[i].max(map[j]), map[i].min(map[j]))
+            } else {
+                (map[i], map[i])
+            };
+            val[k] = raw[ii][jj];
+            k += 1;
+        }
+    }
+    for i in 0..20 {
+        val[400 + i] = raw[20][map[i]];
+    }
+
+    eprintln!("inorder = {}", String::from_utf8_lossy(&inorder));
+    (val, rescale)
+}
+
+/// `atof()` starting at `p`, stopping wherever `strtod` would.
+fn atof_at(line: &[u8], p: usize) -> f64 {
+    if p >= line.len() {
+        return 0.0;
+    }
+    let rest = &line[p..];
+    let mut e = 0usize;
+    if rest[0] == b'-' || rest[0] == b'+' {
+        e = 1;
+    }
+    while e < rest.len() && rest[e].is_ascii_digit() {
+        e += 1;
+    }
+    if e < rest.len() && rest[e] == b'.' {
+        e += 1;
+        while e < rest.len() && rest[e].is_ascii_digit() {
+            e += 1;
+        }
+    }
+    if e < rest.len() && (rest[e] == b'e' || rest[e] == b'E') {
+        let mut t = e + 1;
+        if t < rest.len() && (rest[t] == b'-' || rest[t] == b'+') {
+            t += 1;
+        }
+        let ds = t;
+        while t < rest.len() && rest[t].is_ascii_digit() {
+            t += 1;
+        }
+        if t > ds {
+            e = t;
+        }
+    }
+    std::str::from_utf8(&rest[..e])
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.0)
+}
+
+/// `showaamtxexample()`: the C prints the expected file format and exits.
+fn showaamtxexample() -> ! {
+    eprintln!("Format error in aa matrix");
+    eprintln!("# Example:");
+    eprintln!("# comment");
+    eprintln!("   A  R  N  D  C  Q  E  G  H  I  L  K  M  F  P  S  T  W  Y  V");
+    eprintln!("A  4 -1 -2 -2  0 -1 -1  0 -2 -1 -1 -1 -1 -2 -1  1  0 -3 -2  0");
+    eprintln!("R -1  5  0 -2 -3  1  0 -2  0 -3 -2  2 -1 -3 -2 -1 -1 -3 -2 -3");
+    eprintln!("...");
+    eprintln!("V  0 -3 -3 -3 -1 -2 -2 -3 -3  3  1 -2  1 -1 -2 -2  0 -3 -1  4");
+    eprintln!("frequency 0.07 0.05 0.04 0.05 0.02 .. ");
+    eprintln!("# Example end");
+    eprintln!("Only the lower half is loaded");
+    eprintln!("The last line (frequency) is optional.");
+    std::process::exit(1);
+}
+
 pub fn blosum_mtx(
     n: i32,
+    dorp: u8,
     matrix: &mut [[f64; 20]; 20],
     freq: &mut [f64; 20],
     amino: &mut [u8; 26],
     amino_grp: &mut [i32; 0x100],
-) {
-    // `BLOSUMmtx()`'s dispatch. `n == -1` (`--aamatrix`) reads a user file and
-    // can also override the frequencies and `rescale`; it is refused upstream.
+) -> bool {
+    // `BLOSUMmtx()`'s dispatch. `n == -1` is `--aamatrix`: the table comes
+    // from `_aamtx`, which can also carry the background frequencies and turn
+    // the rescaling off.
+    let loaded;
+    let mut rescale = true;
     let tmpmtx: &[f64] = match n {
         30 => &TMPMTX30,
         45 => &TMPMTX45,
@@ -174,6 +392,12 @@ pub fn blosum_mtx(
         80 => &TMPMTX80,
         90 => &TMPMTX90,
         100 => &TMPMTX100,
+        -1 => {
+            let (v, r) = loadaamtx(dorp);
+            rescale = r;
+            loaded = v;
+            &loaded
+        }
         _ => {
             eprintln!("blosum {} ?", n);
             std::process::exit(1);
@@ -189,12 +413,136 @@ pub fn blosum_mtx(
             matrix[j][i] = v;
         }
     }
-    freq.copy_from_slice(&FREQD);
+    if n == -1 && tmpmtx[400] != -1.0 {
+        freq.copy_from_slice(&tmpmtx[400..420]);
+        let mut av = 0.0f64;
+        for v in freq.iter() {
+            av += *v;
+        }
+        for v in freq.iter_mut() {
+            *v /= av;
+        }
+    } else {
+        freq.copy_from_slice(&FREQD);
+    }
 
     for i in 0..26 {
         amino[i] = LOCAMINOD[i];
     }
     for i in 0..26 {
         amino_grp[amino[i] as usize] = LOCGRPD[i];
+    }
+    rescale
+}
+
+#[cfg(test)]
+mod aamtx_tests {
+    use super::*;
+    use std::io::Write as _;
+
+    /// `loadaamtx` reads `_aamtx` from the working directory, so each case
+    /// runs in its own temporary one.
+    fn in_dir<T>(name: &str, contents: &str, f: impl FnOnce() -> T) -> T {
+        // Serialise: the working directory is process-wide.
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("mafft-rs-aamtx-{}-{}", name, std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let mut fh = std::fs::File::create(dir.join("_aamtx")).unwrap();
+        fh.write_all(contents.as_bytes()).unwrap();
+        drop(fh);
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+        let r = f();
+        std::env::set_current_dir(old).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        r
+    }
+
+    const AA: &str = "ARNDCQEGHILKMFPSTWYV";
+
+    /// A file in the canonical order whose (i,j) entry is a known function of
+    /// i and j, so a permutation is easy to check for.
+    fn triangle(order: &str, extra: &str) -> String {
+        let idx = |c: char| AA.find(c).unwrap() as i32;
+        let mut s = String::from("# test\n   ");
+        s.push_str(&order.chars().map(|c| c.to_string()).collect::<Vec<_>>().join("  "));
+        s.push('\n');
+        for (i, a) in order.chars().enumerate() {
+            s.push(a);
+            for b in order.chars().take(i + 1) {
+                // Symmetric and distinct for every unordered pair.
+                s.push_str(&format!(" {:4}", idx(a) * idx(b) + idx(a) + idx(b)));
+            }
+            s.push('\n');
+        }
+        s.push_str(extra);
+        s
+    }
+
+    fn expect(i: usize, j: usize) -> f64 {
+        (i * j + i + j) as f64
+    }
+
+    #[test]
+    fn a_canonical_file_loads_in_order() {
+        let (val, rescale) = in_dir("plain", &triangle(AA, ""), || loadaamtx(b'p'));
+        assert!(rescale);
+        let mut k = 0;
+        for i in 0..20 {
+            for j in 0..=i {
+                assert_eq!(val[k], expect(i, j), "at {i},{j}");
+                k += 1;
+            }
+        }
+        // No `frequency` line: the sentinel stays.
+        assert!(val[400..420].iter().all(|&v| v == -1.0));
+    }
+
+    /// The file's own residue order is arbitrary; the matrix is permuted into
+    /// ours, so the values land in the same places as the canonical file's.
+    #[test]
+    fn a_permuted_file_gives_the_same_matrix() {
+        let permuted = "WYVARNDCQEGHILKMFPST";
+        let (val, _) = in_dir("perm", &triangle(permuted, ""), || loadaamtx(b'p'));
+        let mut k = 0;
+        for i in 0..20 {
+            for j in 0..=i {
+                assert_eq!(val[k], expect(i, j), "at {i},{j}");
+                k += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn a_frequency_line_is_read_in_the_files_order() {
+        let permuted = "WYVARNDCQEGHILKMFPST";
+        let freq: Vec<String> = (0..20).map(|i| format!("0.0{:02}", i + 1)).collect();
+        let extra = format!("frequency {}\n", freq.join(" "));
+        let (val, rescale) = in_dir("freq", &triangle(permuted, &extra), || loadaamtx(b'p'));
+        assert!(rescale);
+        // freq[k] belongs to permuted[k]; val[400+i] belongs to AA[i].
+        for (i, a) in AA.chars().enumerate() {
+            let p = permuted.find(a).unwrap();
+            let want: f64 = freq[p].parse().unwrap();
+            assert!((val[400 + i] - want).abs() < 1e-12, "{a}: {} vs {want}", val[400 + i]);
+        }
+    }
+
+    #[test]
+    fn norescale_is_picked_up() {
+        let (_, rescale) = in_dir("nores", &triangle(AA, "norescale\n"), || loadaamtx(b'p'));
+        assert!(!rescale);
+    }
+
+    #[test]
+    fn atof_at_stops_where_strtod_would() {
+        assert_eq!(atof_at(b"  -12.5 3", 2), -12.5);
+        assert_eq!(atof_at(b"7", 0), 7.0);
+        assert_eq!(atof_at(b".5x", 0), 0.5);
+        assert_eq!(atof_at(b"1e2 ", 0), 100.0);
+        // A stray 'e' with no exponent digits is not part of the number.
+        assert_eq!(atof_at(b"3e", 0), 3.0);
+        assert_eq!(atof_at(b"abc", 3), 0.0);
     }
 }
