@@ -21,3 +21,6 @@ pub mod score;
 pub mod tree;
 pub mod treebase;
 pub mod warp;
+
+#[cfg(test)]
+mod tests_unit;

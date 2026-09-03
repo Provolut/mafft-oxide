@@ -4,6 +4,9 @@
 # replaced by `disttbfast-rs` -- and require byte-identical output.
 #
 #   verify_e2e.sh <libexec-dir-with-C-binaries> <path-to-disttbfast-rs> [inputs...]
+#
+# Set TBFAST_RS=<path-to-tbfast-rs> to swap that binary in as well, which
+# brings the L-INS-i / G-INS-i strategies into the comparison.
 
 set -u
 LIBEXEC="${1:?usage: verify_e2e.sh <libexec-dir> <disttbfast-rs> [inputs...]}"
@@ -21,6 +24,10 @@ trap 'rm -rf "$work"' EXIT
 cp -r "$LIBEXEC" "$work/rs"
 cp "$RBIN" "$work/rs/disttbfast"
 chmod +x "$work/rs/disttbfast"
+if [ -n "${TBFAST_RS:-}" ]; then
+  cp "$TBFAST_RS" "$work/rs/tbfast"
+  chmod +x "$work/rs/tbfast"
+fi
 
 # Strategies whose alignment work goes through the ported disttbfast path.
 # NW-NS-i also runs dvtditr, which consumes disttbfast's output, so an
@@ -37,6 +44,16 @@ STRATS=(
   "--maxiterate 2 --thread 0"           # FFT-NS-i
   "--retree 2 --maxiterate 0 --reorder"
   "--retree 2 --maxiterate 0 --clustalout"
+  # Consistency-based strategies: these run tbfast, whose pairwise stage and
+  # constrained progressive stage are the other half of the port.
+  "--localpair --maxiterate 0"
+  "--localpair --maxiterate 2 --thread 0"
+  "--localpair --maxiterate 100 --thread 0"
+  "--globalpair --maxiterate 0"
+  "--globalpair --maxiterate 2 --thread 0"
+  "--globalpair --maxiterate 100 --thread 0"
+  "--allowshift --globalpair --maxiterate 100 --thread 0"
+  "--auto"
 )
 
 pass=0; fail=0; failed=""

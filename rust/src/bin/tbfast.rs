@@ -366,6 +366,10 @@ fn main() {
         a.pair_shift_factor,
         a.pair_unalignlevel,
     );
+    // `initFiles()` runs here in the C, before `seqcheck()`, so an aborted run
+    // still leaves an empty `pre` behind rather than no file at all.
+    std::fs::write("pre", b"").expect("Cannot open pre");
+
     for (i, s) in input.seq.iter().enumerate() {
         for (p, &c) in s.iter().enumerate() {
             if (c as usize) >= constants::CHARSIZE || pair_cn.amino_n[c as usize] == -1 {
@@ -411,10 +415,13 @@ fn main() {
         }
     }
 
+    // `hat2` is written whenever the pairwise stage ran: its argument parser
+    // sets `distout = 'h'` unconditionally and tbfast's never resets it, so
+    // the `else if( distout )` branch always fires. `hat3` only when asked.
     if a.iterate != 0 {
         write_hat3(njob, &table);
-        write_hat2(njob, &input.name, &iscore);
     }
+    write_hat2(njob, &input.name, &iscore);
 
     // --- progressive phase (its own scoring parameters) ---
     let cn = constants_for(

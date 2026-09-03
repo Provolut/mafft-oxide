@@ -550,6 +550,8 @@ impl LalignState {
             currentw[0] = initverticalw[i];
 
             let mut mi = previousw[0];
+            // The last row and the last column charge no extension (2018/May/11).
+            let fpenalty_ex_i = if i < lgth1 { fpenalty_ex } else { 0.0 };
             for j in 1..lastj {
                 wm = previousw[j - 1];
                 let g = mi + fpenalty;
@@ -559,7 +561,7 @@ impl LalignState {
                 if previousw[j - 1] > mi {
                     mi = previousw[j - 1];
                 }
-                mi += fpenalty_ex;
+                mi += fpenalty_ex_i;
 
                 let g = m[j] + fpenalty;
                 if g > wm {
@@ -568,7 +570,9 @@ impl LalignState {
                 if previousw[j - 1] > m[j] {
                     m[j] = previousw[j - 1];
                 }
-                m[j] += fpenalty_ex;
+                if j < lgth2 {
+                    m[j] += fpenalty_ex;
+                }
 
                 currentw[j] += wm;
             }
