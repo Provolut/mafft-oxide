@@ -313,7 +313,7 @@ pub fn upgma_treeout(
 /// Newick string: everything that is not alphanumeric or one of `/=-{}`
 /// becomes `_`, the leading `=` the reader added is dropped, and a
 /// `_numo_e`/`_oe_` marker moves the start of the name past itself.
-fn newick_name(name: &[u8], outnumber: bool) -> String {
+pub(crate) fn newick_name(name: &[u8], outnumber: bool) -> String {
     let mut nametmp: Vec<u8> = Vec::with_capacity(name.len());
     for &c in name.iter().take(999) {
         if c == 0 {

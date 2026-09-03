@@ -288,7 +288,8 @@ for f in "$CORPUS"/*; do
   np=4
   [ "$n" -lt 4 ] && np=$n
   for kw in "pileup" "shuffle" "shuffle 42" "shuffle 12345" "nodepair" "auto 0 $np" "test 1 $np" \
-            "compact 10GB" "compact 1gb" "compact 5m" "compact 100kb" "compact 3"; do
+            "compact 10GB" "compact 1gb" "compact 5m" "compact 100kb" "compact 3" \
+            "compact 100" "compact 1kb" "very compact" "stepadd" "youngestlinkage"; do
     for extra in "" "-t"; do
       rm -rf "$work/c" "$work/r"
       mkdir -p "$work/c" "$work/r"
@@ -303,10 +304,10 @@ for f in "$CORPUS"/*; do
       # The C aborting, or the port refusing the undefined varpairscore case,
       # is expected and counts as a pass -- but only for auto/test.
       case "$kw" in
-        compact*)
-          # Below the stated RAM budget the C falls back to the ordinary tree,
-          # which is the branch this port covers; above it the port refuses.
-          if [ $rst -eq 1 ] && grep -qa "compact-tree builder is not ported" "$work/r/err.log"; then
+        youngestlinkage)
+          # `compacttree == 4` is the one compact keyword whose builder is
+          # `compacttree_memsaveselectable`, which is not ported.
+          if [ $rst -eq 1 ] && grep -qa "compacttree_memsaveselectable" "$work/r/err.log"; then
             pass=$((pass+1)); continue
           fi
           ;;

@@ -295,6 +295,11 @@ fn main() {
     // `compact` can clear `treein` after the fact, putting the run back on the
     // ordinary distance-matrix path.
     let mut treein_cleared = false;
+    // `compacttree`: 1 = `compact`, 2 = `very compact` / `stepadd`,
+    // 4 = `youngestlinkage`. All of them clear `treein`, so the run still goes
+    // through "Making a distance matrix" -- but down its compact arm.
+    let mut compacttree: i32 = 0;
+    let mut maxdistmtxsize: f64 = 10.0 * 1000.0 * 1000.0 * 1000.0;
     if args.treein {
         let first = std::fs::read_to_string("_guidetree")
             .map(|t| {
@@ -361,35 +366,35 @@ fn main() {
                     .unwrap_or(t.len());
                 t[..end].parse().unwrap_or(0.0)
             };
-            let limitram = tmpd * tanni;
+            maxdistmtxsize = tmpd * tanni;
             eprintln!("sizestring = {}", sizestring);
-            eprintln!("Initial RAM usage = {:10.3}GB", limitram / 1e9);
-            // `compacttree = 1`, and then: if the full matrix would fit in the
-            // stated budget the C drops straight back to the ordinary tree.
-            // That is the only branch of `compact` this port covers; the
-            // `compacttree*` builders themselves are not ported.
-            if limitram > njob as f64 * (njob - 1) as f64 * 8.0 / 2.0 {
+            eprintln!("Initial RAM usage = {:10.3}GB", maxdistmtxsize / 1e9);
+            // `compacttree = 1; treein = 0;`, and then, once njob is known:
+            // if the full matrix would fit in the stated budget the C drops
+            // straight back to the ordinary builder.
+            compacttree = 1;
+            treekind = b'l';
+            treein_cleared = true;
+            if maxdistmtxsize > njob as f64 * (njob - 1) as f64 * 8.0 / 2.0 {
                 eprintln!("Use conventional tree.");
-                treekind = b'l';
-                treein_cleared = true;
-            } else {
-                eprintln!(
-                    "disttbfast-rs: the compact-tree builder is not ported; this input needs\n                       more than the {:.2}GB budget for its distance matrix",
-                    limitram / 1e9
-                );
-                std::process::exit(1);
+                compacttree = 0;
             }
+        } else if first.starts_with("very compact") {
+            eprintln!("very compact.");
+            compacttree = 2;
+            treekind = b'l';
+            treein_cleared = true;
+        } else if first.starts_with("stepadd") {
+            eprintln!("stepwise addition (disttbfast).");
+            compacttree = 2;
+            treekind = b'l';
+            treein_cleared = true;
+        } else if first.starts_with("youngestlinkage") {
+            eprintln!("youngest linkage (disttbfast).");
+            compacttree = 4;
+            treekind = b'l';
+            treein_cleared = true;
         } else {
-            for kw in [
-                "very compact",
-                "stepadd",
-                "youngestlinkage",
-            ] {
-                if first.starts_with(kw) {
-                    eprintln!("disttbfast-rs: '{}' guide trees are not ported", kw);
-                    std::process::exit(1);
-                }
-            }
             eprintln!("loadtree.");
         }
     }
@@ -431,9 +436,25 @@ fn main() {
         args.tbrweight
     };
 
-    // With a user tree there is no distance matrix at all.
+    // With a user tree there is no distance matrix at all; with a compact one
+    // there is no *full* matrix, only nearest neighbours.
+    let mut compact_mindist: Vec<f64> = Vec::new();
+    let mut compact_mindistfrom: Vec<i32> = Vec::new();
     let (mut mtx, nogaplen): (Vec<Vec<f64>>, Vec<usize>) = if treein {
         (Vec::new(), input.seq.iter().map(|s| s.len()).collect())
+    } else if compacttree != 0 {
+        eprintln!("\n\nMaking a distance matrix ..");
+        let (md, mdf, ngl, _partmtx, _selfscore) = mafft_rs::compacttree::compact_distances(
+            &cn,
+            &input.seq,
+            njob,
+            args.tuplesize as usize,
+            compacttree,
+            maxdistmtxsize,
+        );
+        compact_mindist = md;
+        compact_mindistfrom = mdf;
+        (Vec::new(), ngl)
     } else {
         dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize)
     };
@@ -500,6 +521,30 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+        } else if compacttree != 0 {
+            eprintln!("Constructing a tree ... ");
+            if compacttree == 4 {
+                // `compacttree_memsaveselectable( ..., howcompact 2, memsave 1 )`
+                eprintln!(
+                    "disttbfast-rs: --treein youngestlinkage needs compacttree_memsaveselectable\n  \
+                     (mltaln9.c:5491), which is not ported. The other compact keywords --\n  \
+                     compact, very compact, stepadd -- go through compacttreegivendist and\n  \
+                     are supported."
+                );
+                std::process::exit(1);
+            }
+            mafft_rs::compacttree::compacttreegivendist(
+                njob,
+                &compact_mindist,
+                &compact_mindistfrom,
+                if args.treeout != 0 {
+                    Some(&input.name[..])
+                } else {
+                    None
+                },
+                args.outnumber,
+                args.treeout != 0,
+            )
         } else if args.subalignment {
             eprintln!("Constructing a UPGMA tree ... ");
             let (t, f) = tree::upgma_treeout_constrained(
@@ -804,7 +849,18 @@ fn main() {
         lasteff = effarr;
         lasttree = Some(tr);
 
-        if calcpairdists {
+        if calcpairdists && compacttree != 0 {
+            let (md, mdf) = mafft_rs::compacttree::msa_compact_distances(
+                &cn,
+                &bseq,
+                &selfscore,
+                njob,
+                compacttree,
+                maxdistmtxsize,
+            );
+            compact_mindist = md;
+            compact_mindistfrom = mdf;
+        } else if calcpairdists {
             let skiptable: Vec<Vec<i32>> = bseq.iter().map(|s| score::makeskiptable(s)).collect();
             for i in 0..njob - 1 {
                 let ssi = selfscore[i] as f64;

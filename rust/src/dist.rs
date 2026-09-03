@@ -216,12 +216,21 @@ impl Sextet {
 /// The whole "Making a distance matrix .." block of `disttbfast()`.
 ///
 /// Returns the half matrix `mtx[i][j-i]` for `j >= i`, plus `nogaplen`.
-pub fn distance_matrix(
-    cn: &Constants,
-    seq: &[Vec<u8>],
-    njob: usize,
-    tuplesize: usize,
-) -> (Vec<Vec<f64>>, Vec<usize>) {
+/// The k-mer tables and length factors that every distance pass starts from:
+/// the "Making a distance matrix .." prologue of `disttbfast()`, shared by the
+/// full-matrix builder below and by the compact ones in `compacttree.rs`.
+pub struct Tuples {
+    pub pointt: Vec<Vec<i32>>,
+    pub nogaplen: Vec<usize>,
+    pub tsize: usize,
+    pub maxl: usize,
+    pub lenfaca: f64,
+    pub lenfacb: f64,
+    pub lenfacc: f64,
+    pub lenfacd: f64,
+}
+
+pub fn build_tuples(cn: &Constants, seq: &[Vec<u8>], njob: usize, tuplesize: usize) -> Tuples {
     let nuc = cn.dorp == b'd';
     // (int)pow( 4, tuplesize ) for nucleotides, (int)pow( 6, 6 ) for amino acids
     let tsize = if nuc {
@@ -259,6 +268,17 @@ pub fn distance_matrix(
             pointt.push(makepointtable(&grpseq));
         }
     }
+    Tuples { pointt, nogaplen, tsize, maxl, lenfaca, lenfacb, lenfacc, lenfacd }
+}
+
+pub fn distance_matrix(
+    cn: &Constants,
+    seq: &[Vec<u8>],
+    njob: usize,
+    tuplesize: usize,
+) -> (Vec<Vec<f64>>, Vec<usize>) {
+    let Tuples { pointt, nogaplen, tsize, maxl, lenfaca, lenfacb, lenfacc, lenfacd } =
+        build_tuples(cn, seq, njob, tuplesize);
 
     let mut sextet = Sextet::new(tsize, maxl);
     let mut mtx: Vec<Vec<f64>> = (0..njob).map(|i| vec![0.0; njob - i]).collect();
