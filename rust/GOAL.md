@@ -22,13 +22,12 @@ types can still be the default path, as item 3 turned out to be. Size the
 refusal too: `--allowshift` cost nothing, only a stale `exit(1)`. And check
 both copies: `tbfast`'s `--add` is not `disttbfast`'s.
 
-1. ~~**External anchors (`-l`)**~~ done: `anchors.rs` plus
-   `Falign_givenanchors`. 1376 comparisons. Two C quirks reproduced and one
+1. ~~**External anchors (`-l`)**~~ done: `anchors.rs`,
+   `Falign_givenanchors`. 1376 comparisons; two C quirks reproduced and one
    input refused, all in issue #4.
 
 2. ~~**The `compacttree*` builders**~~ done: `compacttree.rs`. All four
-   keywords -- `compact`, `very compact`, `stepadd`, `youngestlinkage` --
-   byte-identical over 3096 comparisons including `infile.tree`.
+   keywords byte-identical over 3096 comparisons, `infile.tree` included.
 
 3. **The `alg` values.** `-M` done: `msalign.rs`, `Falign_udpari_long` as a
    mode of `falign.rs`, and the C's 30000-column switch in `treebase`. 688
@@ -38,21 +37,22 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
    Left: **`-@` (`--sp`)**, `D__align`: the generalized-affine DP, which
    carries a per-column distribution of gap *lengths* instead of two running
    gap scores.
-   Half done. `dalign.rs` has the `Gaplen` layer -- `gaplencount`,
-   `fillgaplen`, the `compactx` copy/extend helpers and all three live
-   `calcpfac` functions -- bit-exact against the C over 203 fuzzed group
-   pairs (`verify_gaplen.sh` links a harness against a built `core/` and
-   compares f64 bit patterns).
+   Half done: `dalign.rs` has the `Gaplen` layer (`gaplencount`,
+   `fillgaplen`, the `compactx` helpers, all three live `calcpfac`), bit-exact
+   over 203 fuzzed group pairs -- `verify_gaplen.sh` links a harness against a
+   built `core/` and compares f64 bit patterns.
    Left: the DP (~640 live lines) plus `Dalignmm.c`'s `match_calc` and
-   `Atracking`. Two notes for it: columns never alias, the `(Gaplen *)1`
-   sentinel being a barrier that stops the partial free and duplicate loops;
-   and `copygaplencompactx` writes into an existing destination without
-   checking its length, so each call site must size it with
-   `duplicategaplencompactx` first.
+   `Atracking`. `gen_dharness.c` calls `D__align` directly for a fast oracle.
+   Three notes: columns never alias (`(Gaplen *)1` is a barrier stopping the
+   partial free and duplicate loops); `copygaplencompactx` writes into an
+   existing destination without checking its length, so each call site must
+   size it with `duplicategaplencompactx` first; and `WMCHECK` is **1**, so
+   the tail of `D__align` is live -- it recomputes the score naively and, on
+   a mismatch over 0.01, dumps both groups to *stdout* and `exit(1)`s.
 
-4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
-   `addsingle`, `makedirectionlist`. All work today on our byte-identical
-   output; porting them is scope growth, not parity.
+4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`),
+   `splittbfast`, `addsingle`, `makedirectionlist`. All work today on our
+   byte-identical output; porting them is scope growth, not parity.
 
 ## Threads
 
