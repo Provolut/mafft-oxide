@@ -46,6 +46,11 @@ ARGSETS=(
   "_ $PE _ -+ 0 $TE"
   "_ $PE _ -+ 2 $TE"
   "_ $PEO _ -+ 0 $TE"
+  # -t (tree output) and -T (noalign), whose exits sit either side of the
+  # pairwise stage
+  "_ $P -L _ -+ 0 $T -O -t"
+  "_ $P -L _ -+ 2 $T -O -t -T"
+  "_ $P -L _ -+ 0 $T -O -T"
   # --legacygapcost in the progressive stage
   "_ $P -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -L -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
   # --fmodel and JTT on both stages
@@ -79,7 +84,7 @@ for f in "$CORPUS"/*; do
       continue
     fi
     bad=""
-    for out in pre order hat2 hat3; do
+    for out in pre order hat2 hat3 infile.tree; do
       if [ -f "$work/c/$out" ] || [ -f "$work/r/$out" ]; then
         cmp -s "$work/c/$out" "$work/r/$out" || bad="$bad $out"
       fi

@@ -83,12 +83,8 @@ fn main() {
         eprintln!("tuplesize must be 6 or 10 for dna sequence");
         std::process::exit(1);
     }
-    if input.dorp == b'd' && args.tuplesize != 6 {
-        eprintln!("disttbfast-rs: only -F 6 (6-mer) is ported for nucleotides");
-        std::process::exit(1);
-    }
-
-    let (mut mtx, _nogaplen) = dist::distance_matrix(&cn, &input.seq, njob);
+    let (mut mtx, _nogaplen) =
+        dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize);
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
     let mut st = AlignState::new();
@@ -112,7 +108,17 @@ fn main() {
             }
         }
 
-        let mut tr = tree::upgma(njob, &mut mtx, args.sueff_global);
+        let mut tr = if args.treeout == 1 {
+            tree::upgma_treeout(
+                njob,
+                &mut mtx,
+                args.sueff_global,
+                Some(&input.name),
+                args.outnumber,
+            )
+        } else {
+            tree::upgma(njob, &mut mtx, args.sueff_global)
+        };
 
         // The `order` file the mafft wrapper uses for --reorder / clustal out.
         {

@@ -472,8 +472,8 @@ impl Args {
         if self.specificityconsideration != 0.0 {
             bad.push("-s > 0 (--allowshift/--unalignlevel) is not ported");
         }
-        if self.treeout != 0 {
-            bad.push("-t/-^ (tree output) is not ported");
+        if self.treeout == 2 {
+            bad.push("-^ (--nodeout) is not ported");
         }
 
         if bad.is_empty() {

@@ -16,6 +16,11 @@ const D6LENFACA: f64 = 0.01;
 const D6LENFACB: f64 = 2500.0;
 const D6LENFACC: f64 = 2500.0;
 const D6LENFACD: f64 = 0.1;
+// D10LENFAC*, for `--tuplesize 10`.
+const D10LENFACA: f64 = 0.01;
+const D10LENFACB: f64 = 1000000.0;
+const D10LENFACC: f64 = 1000000.0;
+const D10LENFACD: f64 = 0.0;
 
 /// `seq_grp()`: map residues to their 6 groups, dropping unscored characters.
 ///
@@ -84,6 +89,33 @@ pub fn makepointtable_nuc(grp: &[i32]) -> Vec<i32> {
 
     while grp[n] != END_OF_VEC {
         point -= grp[p] * 1024;
+        p += 1;
+        point *= 4;
+        point += grp[n];
+        n += 1;
+        pointt.push(point);
+    }
+    pointt.push(END_OF_VEC);
+    pointt
+}
+
+/// `makepointtable_nuc_dectet()`: rolling base-4 code of every 10-mer.
+pub fn makepointtable_nuc_dectet(grp: &[i32]) -> Vec<i32> {
+    if grp[0] == -1 {
+        return vec![-1];
+    }
+    let mut pointt = Vec::with_capacity(grp.len());
+    let mut p = 0usize;
+    let mut n = 0usize;
+    let mut point = 0i32;
+    for w in [262144, 65536, 16384, 4096, 1024, 256, 64, 16, 4, 1] {
+        point += grp[n] * w;
+        n += 1;
+    }
+    pointt.push(point);
+
+    while grp[n] != END_OF_VEC {
+        point -= grp[p] * 262144;
         p += 1;
         point *= 4;
         point += grp[n];
@@ -188,11 +220,18 @@ pub fn distance_matrix(
     cn: &Constants,
     seq: &[Vec<u8>],
     njob: usize,
+    tuplesize: usize,
 ) -> (Vec<Vec<f64>>, Vec<usize>) {
     let nuc = cn.dorp == b'd';
     // (int)pow( 4, tuplesize ) for nucleotides, (int)pow( 6, 6 ) for amino acids
-    let tsize = if nuc { 4usize.pow(6) } else { 6usize.pow(6) };
-    let (lenfaca, lenfacb, lenfacc, lenfacd) = if nuc {
+    let tsize = if nuc {
+        4usize.pow(tuplesize as u32)
+    } else {
+        6usize.pow(6)
+    };
+    let (lenfaca, lenfacb, lenfacc, lenfacd) = if nuc && tuplesize == 10 {
+        (D10LENFACA, D10LENFACB, D10LENFACC, D10LENFACD)
+    } else if nuc {
         (D6LENFACA, D6LENFACB, D6LENFACC, D6LENFACD)
     } else {
         (PLENFACA, PLENFACB, PLENFACC, PLENFACD)
@@ -209,8 +248,12 @@ pub fn distance_matrix(
             maxl = nogaplen[i];
         }
         if nuc {
-            let grpseq = seq_grp_nuc(cn, &tmpseq, &mut nunknown, 6);
-            pointt.push(makepointtable_nuc(&grpseq));
+            let grpseq = seq_grp_nuc(cn, &tmpseq, &mut nunknown, tuplesize);
+            pointt.push(if tuplesize == 10 {
+                makepointtable_nuc_dectet(&grpseq)
+            } else {
+                makepointtable_nuc(&grpseq)
+            });
         } else {
             let grpseq = seq_grp(cn, &tmpseq, &mut nunknown);
             pointt.push(makepointtable(&grpseq));

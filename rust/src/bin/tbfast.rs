@@ -42,6 +42,14 @@ struct TbArgs {
     fmodel: i32,
     /// `-L` (`--legacygapcost`) in the progressive stage.
     legacygapcost: bool,
+    /// `-t` / `-^`: write the guide tree.
+    treeout: i32,
+    /// `-T`: stop before aligning.
+    noalign: bool,
+    /// `-y` in *tbfast's own* parser. Distinct from the `distout` the pairwise
+    /// parser sets to 'h' unconditionally: that one is set later, so the exit
+    /// below sees only this.
+    distout: u8,
     pair_poffset: i32,
     pair_shift_factor: f64,
     pair_nblosum: i32,
@@ -80,6 +88,9 @@ impl Default for TbArgs {
             usenaivescore: false,
             fmodel: 0,
             legacygapcost: false,
+            treeout: 0,
+            noalign: false,
+            distout: 0,
             pair_poffset: NOTSPECIFIED,
             pair_shift_factor: 1000.0,
             pair_nblosum: 62,
@@ -229,6 +240,18 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'F' => a.use_fft = true,
             'O' => a.outgap = false,
             'L' => a.legacygapcost = true,
+            't' => a.treeout = 1,
+            '^' => a.treeout = 2,
+            'T' => a.noalign = true,
+            'y' => {
+                let v = take().ok_or("-y needs a value")?;
+                let c = v.as_bytes().first().copied().unwrap_or(0);
+                if c != b'c' && c != b'h' {
+                    eprintln!("Set -y c or -y h in v>=7.521.");
+                    std::process::exit(1);
+                }
+                a.distout = c;
+            }
             'n' => a.outnumber = true,
             'D' => a.dorp = Some(b'd'),
             'P' => a.dorp = Some(b'p'),
@@ -251,6 +274,9 @@ fn refuse(a: &TbArgs) -> Option<String> {
     }
     if a.fastathreshold < 0.0001 {
         bad.push("this port only covers the constrained (-l) progressive stage".into());
+    }
+    if a.treeout == 2 {
+        bad.push("-^ (--nodeout) is not ported".into());
     }
     if a.nthread > 0 || a.nthreadtb > 0 || a.pair_nthread > 0 {
         bad.push("threads change the result; run with -C 0".into());
@@ -430,10 +456,26 @@ fn main() {
     // `hat2` is written whenever the pairwise stage ran: its argument parser
     // sets `distout = 'h'` unconditionally and tbfast's never resets it, so
     // the `else if( distout )` branch always fires. `hat3` only when asked.
+    // The C opens `hat3` unconditionally in the pairwise stage and only fills
+    // it when constraints were stored, so an empty file is the normal result
+    // of a `-+ 0` run.
     if a.iterate != 0 {
         write_hat3(njob, &table);
+    } else {
+        std::fs::write("hat3", b"").expect("Cannot open hat3.");
     }
     io::write_hat2(njob, &input.name, &iscore);
+
+    // `pairlocalalign()` runs before this test in the C and sets `distout` to
+    // 'h' unconditionally, so with `-T` and no `-t` the run stops here -- after
+    // `hat2` and `hat3`, but before the tree and `order`.
+    if a.treeout == 0 && a.noalign {
+        let mut out = Vec::new();
+        io::write_data(&mut out, &input.name, &input.seq);
+        std::fs::write("pre", &out).expect("write pre");
+        eprintln!();
+        return;
+    }
 
     // --- progressive phase (its own scoring parameters) ---
     let cn = constants_for(
@@ -451,7 +493,17 @@ fn main() {
         a.legacygapcost,
     );
 
-    let mut tr = tree::upgma(njob, &mut iscore, a.sueff_global);
+    let mut tr = if a.treeout == 1 {
+        tree::upgma_treeout(
+            njob,
+            &mut iscore,
+            a.sueff_global,
+            Some(&input.name),
+            a.outnumber,
+        )
+    } else {
+        tree::upgma(njob, &mut iscore, a.sueff_global)
+    };
     {
         let order = tree::topolorderz(&tr.topol, &tr.dep, njob - 2, 2);
         let mut s = String::new();
@@ -462,6 +514,14 @@ fn main() {
             eprintln!("Cannot open 'order': {}", e);
             std::process::exit(1);
         }
+    }
+
+    if a.treeout != 0 && a.noalign {
+        let mut out = Vec::new();
+        io::write_data(&mut out, &input.name, &input.seq);
+        std::fs::write("pre", &out).expect("write pre");
+        eprintln!();
+        return;
     }
     let eff = tree::counteff_simple(njob, &mut tr);
 

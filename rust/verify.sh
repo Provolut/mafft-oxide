@@ -62,6 +62,11 @@ ARGSETS=(
   # stops before `order` is written
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -y h -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -y h -T -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # 10-mer nucleotide tuples (--tuplesize 10); protein refuses it, as in the C
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 10 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # -t (--treeout): the Newick file, including the -n name rewriting
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -T -n -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
 )
 
 gen_corpus() {
@@ -100,7 +105,7 @@ for f in "$CORPUS"/*; do
       continue
     fi
     bad=""
-    for out in order hat2; do
+    for out in order hat2 infile.tree; do
       if [ -f "$work/c/$out" ] || [ -f "$work/r/$out" ]; then
         cmp -s "$work/c/$out" "$work/r/$out" || bad="$bad $out"
       fi

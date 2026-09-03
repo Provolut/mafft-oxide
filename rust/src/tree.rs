@@ -86,6 +86,24 @@ fn setnearest(ac: &Chain, eff: &[Vec<f64>], pos: usize) -> (f64, i32) {
 /// `eff` is the half distance matrix and is consumed (the C frees rows as it
 /// goes, and overwrites surviving ones in place).
 pub fn upgma(nseq: usize, eff: &mut Vec<Vec<f64>>, sueff_global: f64) -> Tree {
+    upgma_treeout(nseq, eff, sueff_global, None, false)
+}
+
+/// `..._treeout_memsave()`: the same UPGMA, plus a Newick string per live
+/// cluster, written to `infile.tree` when `names` is given.
+///
+/// The C keeps this as a separate copy of the function rather than a flag, and
+/// the copies differ in one thing besides the output: `im` starts at 1 there
+/// and -1 here. It is only read before being assigned if no live element beats
+/// the 999.9 seed on the very first step, which needs a degenerate distance
+/// matrix -- but the seed is reproduced anyway.
+pub fn upgma_treeout(
+    nseq: usize,
+    eff: &mut Vec<Vec<f64>>,
+    sueff_global: f64,
+    names: Option<&[Vec<u8>]>,
+    outnumber: bool,
+) -> Tree {
     let sueff1 = 1.0 - sueff_global;
     let sueff05 = sueff_global * 0.5;
     let clusterfunc = |d1: f64, d2: f64| -> f64 {
@@ -112,7 +130,15 @@ pub fn upgma(nseq: usize, eff: &mut Vec<Vec<f64>>, sueff_global: f64) -> Tree {
 
     // The C keeps `im` across iterations, so a step in which nothing beats the
     // 999.9 seed reuses the previous pick.  Kept identical.
-    let mut im_g: i32 = -1;
+    let mut im_g: i32 = if names.is_some() { 1 } else { -1 };
+
+    // One Newick fragment per live cluster; `tree[im]` grows as clusters merge.
+    let mut tree: Vec<String> = Vec::new();
+    if let Some(name) = names {
+        tree = (0..nseq)
+            .map(|i| format!("\n{}_{}\n", i + 1, newick_name(&name[i], outnumber)))
+            .collect();
+    }
 
     for k in 0..nseq - 1 {
         let mut minscore = 999.9f64;
@@ -158,6 +184,15 @@ pub fn upgma(nseq: usize, eff: &mut Vec<Vec<f64>>, sueff_global: f64) -> Tree {
         len[k][1] = minscore - tmptmplen[jm];
         dep[k].distfromtip = minscore;
         tmptmplen[im] = minscore;
+
+        if names.is_some() {
+            let merged = format!(
+                "({}:{:7.5},{}:{:7.5})",
+                tree[im], len[k][0], tree[jm], len[k][1]
+            );
+            tree[im] = merged;
+            tree[jm] = String::new();
+        }
 
         hist[im] = k as i32;
         nmemar[im] = nmemim + nmemjm;
@@ -217,7 +252,51 @@ pub fn upgma(nseq: usize, eff: &mut Vec<Vec<f64>>, sueff_global: f64) -> Tree {
         }
     }
 
+    if names.is_some() {
+        // `treetmp` -- the last merge -- is what gets written, not `tree[0]`.
+        let last = tree
+            .iter()
+            .find(|t| !t.is_empty())
+            .cloned()
+            .unwrap_or_default();
+        std::fs::write("infile.tree", format!("{};\n", last)).expect("write infile.tree");
+    }
+
     Tree { topol, len, dep }
+}
+
+/// The name sanitisation `..._treeout_memsave()` does before building the
+/// Newick string: everything that is not alphanumeric or one of `/=-{}`
+/// becomes `_`, the leading `=` the reader added is dropped, and a
+/// `_numo_e`/`_oe_` marker moves the start of the name past itself.
+fn newick_name(name: &[u8], outnumber: bool) -> String {
+    let mut nametmp: Vec<u8> = Vec::with_capacity(name.len());
+    for &c in name.iter().take(999) {
+        if c == 0 {
+            break;
+        }
+        if c.is_ascii_alphanumeric() || matches!(c, b'/' | b'=' | b'-' | b'{' | b'}') {
+            nametmp.push(c);
+        } else {
+            nametmp.push(b'_');
+        }
+    }
+    let find = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).position(|w| w == needle);
+    let mut start = if outnumber {
+        match find(&nametmp, b"_numo_e") {
+            Some(p) => p + 8,
+            // `strstr` returning NULL and then + 8 is undefined in the C; it
+            // cannot happen, because -n always writes the marker.
+            None => 1,
+        }
+    } else {
+        1
+    };
+    if let Some(p) = find(&nametmp[start.min(nametmp.len())..], b"_oe_") {
+        start += p + 4;
+    }
+    let tail = &nametmp[start.min(nametmp.len())..];
+    String::from_utf8_lossy(&tail[..tail.len().min(900)]).into_owned()
 }
 
 /// `topolorder_lessargs()`: in-order list of the leaves under `pos`.
