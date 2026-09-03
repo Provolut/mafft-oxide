@@ -23,28 +23,28 @@ refusal too: `--allowshift` cost nothing, only a stale `exit(1)`. And check
 both copies: `tbfast`'s `--add` is not `disttbfast`'s.
 
 1. ~~**External anchors (`-l`)**~~ done: `anchors.rs` plus
-   `Falign_givenanchors`. 1376 comparisons byte-identical; `verify.sh` block,
-   files from `gen_anchors.py`. Two C quirks reproduced and one input refused,
-   all in issue #4.
+   `Falign_givenanchors`. 1376 comparisons byte-identical. Two C quirks
+   reproduced and one input refused, all in issue #4.
 
-2. ~~**The `compacttree*` builders**~~ done: `compacttree.rs` has
-   `preparepartmtx`, the two nearest-neighbour distance passes (k-mer and
-   MSA), `compacttreegivendist` with `reformattree`, and
-   `compacttree_memsaveselectable` for `youngestlinkage`. All four keywords --
-   `compact`, `very compact`, `stepadd`, `youngestlinkage` -- byte-identical
-   over 3096 comparisons including `infile.tree`.
+2. ~~**The `compacttree*` builders**~~ done: `compacttree.rs`. All four
+   keywords -- `compact`, `very compact`, `stepadd`, `youngestlinkage` --
+   byte-identical over 3096 comparisons including `infile.tree`.
 
-3. **`-M` (memsave)**, done. `msalign.rs` has `MSalignmm` with its Hirschberg
-   recursion; `falign.rs` gains `Falign_udpari_long` as a mode, which differs
-   from `Falign` in exactly three ways (500 candidate lags not 20, no `break`
-   on a lag with no segment, every block through `MSalignmm` with no 1x1
-   shortcut). `treebase` makes the C's own 30000-column switch. 688
-   comparisons byte-identical, plus `mafft --memsave` end to end; peak RSS on
-   four 31000-column sequences went from 6.4GB to 55.9MB against the C's
-   32.7MB. Two upstream defects reproduced here, both in issue #4.
-   `-&` (`Aalign`) is done too: 344 comparisons byte-identical, including
-   the `Falign` block-aligner case. Left in this item: `-@` (`--sp`,
-   `D__align`, 1801 lines plus the `Gaplen` machinery), reachable, refused.
+3. **The `alg` values.** `-M` (memsave) done: `msalign.rs` has `MSalignmm`,
+   `falign.rs` has `Falign_udpari_long` as a mode, `treebase` makes the C's
+   own 30000-column switch. 688 comparisons plus `mafft --memsave` end to end;
+   peak RSS on four 31000-column sequences 6.4GB -> 55.9MB (C: 32.7MB).
+   `-&` (`Aalign`) done: 344 comparisons. Two upstream defects found and
+   reproduced here, both in issue #4.
+   Left: **`-@` (`--sp`)**, `D__align`. Measured, not guessed: 734 live
+   non-comment lines in the DP, of which 232 touch the `Gaplen` structure,
+   plus ~700 lines of `Gaplen` helpers it actually calls
+   (`extendgaplencompactx`, `copygaplenrestricted`, `duplicategaplencompactx`
+   and friends). The hard part is not the size but the representation: the C
+   carries six `Gaplen***` cubes through the DP with raw-pointer *aliasing*
+   and a `(Gaplen *)1` sentinel, and `freegaplenpartly`/`duplicate...` make
+   the sharing load-bearing. Port it as an arena with indices, not as clones,
+   or the aliasing will not reproduce.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
