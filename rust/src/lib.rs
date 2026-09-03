@@ -14,6 +14,7 @@ pub mod constants;
 pub mod compacttree;
 pub mod msalign;
 pub mod saalign;
+pub mod dalign;
 pub mod dist;
 pub mod falign;
 pub mod fft;

@@ -30,24 +30,25 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
    keywords -- `compact`, `very compact`, `stepadd`, `youngestlinkage` --
    byte-identical over 3096 comparisons including `infile.tree`.
 
-3. **The `alg` values.** `-M` (memsave) done: `msalign.rs`, plus
-   `Falign_udpari_long` as a mode of `falign.rs`, plus the C's own
-   30000-column switch in `treebase`. 688 comparisons and `mafft --memsave`
-   end to end; peak RSS on four 31000-column sequences 6.4GB -> 55.9MB (C:
-   32.7MB). `-&` (`Aalign`) done: 344 comparisons. Two upstream defects found
-   here, both in issue #4.
+3. **The `alg` values.** `-M` done: `msalign.rs`, `Falign_udpari_long` as a
+   mode of `falign.rs`, and the C's 30000-column switch in `treebase`. 688
+   comparisons and `mafft --memsave` end to end; peak RSS on four
+   31000-column sequences 6.4GB -> 55.9MB (C: 32.7MB). `-&` (`Aalign`) done:
+   344 comparisons. Two upstream defects found here, both in issue #4.
    Left: **`-@` (`--sp`)**, `D__align`: the generalized-affine DP, which
-   carries a per-column distribution of gap *lengths* through the DP instead
-   of two running gap scores. ~730 live lines in the DP plus ~700 in the
-   `Gaplen` helpers it calls (`extendgaplencompactx`, `copygaplenrestricted`,
-   `duplicategaplencompactx` and friends).
-   Representation, checked not assumed: columns never alias. A `Gaplen*` is
-   NULL, an owned array terminated by `idatnext == -1` with `[0].npat` as its
-   count, or the `(Gaplen *)1` sentinel -- a *barrier* stopping the partial
-   free and duplicate loops, not a shared pointer. So
-   `enum Col { Null, Barrier, Data(Vec<Gaplen>) }` reproduces it and no arena
-   is needed. Watch `copygaplencompactx` instead: it writes into an existing
-   destination without checking its length.
+   carries a per-column distribution of gap *lengths* instead of two running
+   gap scores.
+   Half done. `dalign.rs` has the `Gaplen` layer -- `gaplencount`,
+   `fillgaplen`, the `compactx` copy/extend helpers and all three live
+   `calcpfac` functions -- bit-exact against the C over 203 fuzzed group
+   pairs (`verify_gaplen.sh` links a harness against a built `core/` and
+   compares f64 bit patterns).
+   Left: the DP (~640 live lines) plus `Dalignmm.c`'s `match_calc` and
+   `Atracking`. Two notes for it: columns never alias, the `(Gaplen *)1`
+   sentinel being a barrier that stops the partial free and duplicate loops;
+   and `copygaplencompactx` writes into an existing destination without
+   checking its length, so each call site must size it with
+   `duplicategaplencompactx` first.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
