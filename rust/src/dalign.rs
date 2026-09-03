@@ -594,3 +594,83 @@ mod tests {
         assert!(dst[9].is_null(), "nothing past the barrier is copied");
     }
 }
+
+/// `freegaplenpartly()`: clear `mtx[startpos..=endpos]`, stopping at a barrier.
+///
+/// The C clamps a negative start to 0 and lets a negative end make the loop
+/// run zero times, which the DP relies on for the first couple of rows.
+pub fn freegaplenpartly(mtx: &mut [Col], startpos: i32, endpos: i32) {
+    let start = startpos.max(0);
+    if endpos < start {
+        return;
+    }
+    for i in start as usize..=(endpos as usize).min(mtx.len() - 1) {
+        if matches!(mtx[i], Col::Barrier) {
+            break;
+        }
+        mtx[i] = Col::Null;
+    }
+}
+
+/// One of the six `Gaplen ***` cubes: a row per position, each row a column
+/// list ending in a `Col::Barrier`. See the table in the module docs for which
+/// rows are stored relative to their index.
+pub struct Cube {
+    pub rows: Vec<Vec<Col>>,
+}
+
+impl Cube {
+    /// `width(i)` columns in row `i`, plus the barrier one past the end.
+    pub fn new(nrows: usize, width: impl Fn(usize) -> usize) -> Cube {
+        let mut rows = Vec::with_capacity(nrows);
+        for i in 0..nrows {
+            let w = width(i);
+            let mut r = vec![Col::Null; w + 1];
+            r[w] = Col::Barrier;
+            rows.push(r);
+        }
+        Cube { rows }
+    }
+}
+
+#[cfg(test)]
+mod cube_tests {
+    use super::*;
+
+    #[test]
+    fn a_row_ends_in_a_barrier_one_past_its_last_column() {
+        // The half cubes shrink with the row index; the full ones do not.
+        let half = Cube::new(4, |i| 6 - i);
+        assert_eq!(half.rows[0].len(), 7);
+        assert_eq!(half.rows[0][6], Col::Barrier);
+        assert_eq!(half.rows[3].len(), 4);
+        assert_eq!(half.rows[3][3], Col::Barrier);
+        let full = Cube::new(4, |_| 6);
+        for r in &full.rows {
+            assert_eq!(r.len(), 7);
+            assert_eq!(r[6], Col::Barrier);
+        }
+    }
+
+    #[test]
+    fn freegaplenpartly_clamps_a_negative_start_and_ignores_a_negative_end() {
+        // The DP calls this with `i-3, i-2`, so both bounds go negative on
+        // the first rows and the call must be a no-op rather than a panic.
+        let mut m = vec![Col::Data(vec![Gaplen::terminator()]); 5];
+        freegaplenpartly(&mut m, -3, -2);
+        assert!(m.iter().all(|c| !c.is_null()), "nothing should be cleared");
+        freegaplenpartly(&mut m, -3, 1);
+        assert!(m[0].is_null() && m[1].is_null());
+        assert!(!m[2].is_null());
+    }
+
+    #[test]
+    fn freegaplenpartly_stops_at_the_row_end_barrier() {
+        let mut m = vec![Col::Data(vec![Gaplen::terminator()]); 5];
+        m[2] = Col::Barrier;
+        freegaplenpartly(&mut m, 0, 4);
+        assert!(m[0].is_null() && m[1].is_null());
+        assert_eq!(m[2], Col::Barrier);
+        assert!(!m[3].is_null(), "past the barrier is untouched");
+    }
+}
