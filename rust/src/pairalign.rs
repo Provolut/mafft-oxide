@@ -76,12 +76,14 @@ pub fn pairalign(
     usenaivescore: bool,
 ) {
     // `dseq`: the X-free copy used for the score-only variants. `X` is only
-    // stripped for protein against a real matrix -- for nucleotides the C
-    // copies the sequence through and sets `thereisx` to zero.
+    // stripped for protein against a built-in BLOSUM table -- for nucleotides,
+    // for JTT/TM (`-j`/`-m`, which set `scoremtx = 0`) and for `--text`
+    // (`nblosum < 0`) the C copies the sequence through and sets `thereisx` to
+    // zero, so those runs score the `X` columns like any other.
     let mut dseq: Vec<Vec<u8>> = Vec::with_capacity(njob);
     let mut thereisxineachseq = vec![0i32; njob];
     for i in 0..njob {
-        if cn.dorp == b'p' {
+        if cn.dorp == b'p' && cn.scoremtx == 1 && cn.nblosum > 0 {
             let (d, n) = removex(&seq[i]);
             dseq.push(d);
             thereisxineachseq[i] = n;

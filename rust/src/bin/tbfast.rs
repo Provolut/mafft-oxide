@@ -40,6 +40,10 @@ struct TbArgs {
     usenaivescore: bool,
     /// `-a` (`--fmodel`): take residue frequencies from the input.
     fmodel: i32,
+    /// `-:` (`--anysymbol`): score the nucleotide wildcards. Both parsers set
+    /// it, and it reaches `constants()` in both phases.
+    pair_nwildcard: bool,
+    nwildcard: bool,
     /// `-L` (`--legacygapcost`) in the progressive stage.
     legacygapcost: bool,
     /// `-t` / `-^`: write the guide tree.
@@ -55,6 +59,10 @@ struct TbArgs {
     pair_poffset: i32,
     pair_shift_factor: f64,
     pair_nblosum: i32,
+    /// `-j` / `-m`: JTT or transmembrane instead of BLOSUM, at `pam_n` PAM.
+    pair_scoremtx: i32,
+    pair_pam_n: i32,
+    pair_tm_or_jtt: i32,
     pair_nthread: i32,
     pair_unalignlevel: f64,
     pair_fastathreshold: f64,
@@ -66,6 +74,9 @@ struct TbArgs {
     poffset: i32,
     shift_factor: f64,
     nblosum: i32,
+    scoremtx: i32,
+    pam_n: i32,
+    tm_or_jtt: i32,
     nthread: i32,
     nthreadtb: i32,
     outgap: bool,
@@ -89,6 +100,8 @@ impl Default for TbArgs {
             pair_ppenalty_ex2: NOTSPECIFIED,
             usenaivescore: false,
             fmodel: 0,
+            pair_nwildcard: false,
+            nwildcard: false,
             legacygapcost: false,
             treeout: 0,
             treein: false,
@@ -97,6 +110,9 @@ impl Default for TbArgs {
             pair_poffset: NOTSPECIFIED,
             pair_shift_factor: 1000.0,
             pair_nblosum: 62,
+            pair_scoremtx: 1,
+            pair_pam_n: NOTSPECIFIED,
+            pair_tm_or_jtt: mafft_rs::params::JTT,
             pair_nthread: 1,
             pair_unalignlevel: 0.0,
             pair_fastathreshold: 2.7,
@@ -107,6 +123,9 @@ impl Default for TbArgs {
             poffset: NOTSPECIFIED,
             shift_factor: 1000.0,
             nblosum: 62,
+            scoremtx: 1,
+            pam_n: NOTSPECIFIED,
+            tm_or_jtt: mafft_rs::params::JTT,
             nthread: 1,
             nthreadtb: 1,
             outgap: true,
@@ -196,6 +215,16 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
                 a.pair_nthread = atoi(&v);
             }
             'b' => a.pair_nblosum = atoi(&take().ok_or("-b needs a value")?),
+            'j' => {
+                a.pair_pam_n = atoi(&take().ok_or("-j needs a value")?);
+                a.pair_scoremtx = 0;
+                a.pair_tm_or_jtt = mafft_rs::params::JTT;
+            }
+            'm' => {
+                a.pair_pam_n = atoi(&take().ok_or("-m needs a value")?);
+                a.pair_scoremtx = 0;
+                a.pair_tm_or_jtt = mafft_rs::params::TM;
+            }
             'g' => a.pair_ppenalty_ex = (atof(&take().ok_or("-g")?) * 1000.0 - 0.5) as i32,
             'f' => a.pair_ppenalty = (atof(&take().ok_or("-f")?) * 1000.0 - 0.5) as i32,
             'Q' => a.pair_shift_factor = atof(&take().ok_or("-Q")?),
@@ -212,7 +241,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             // `--anysymbol`; only affects the nucleotide score matrix, so it
             // is a no-op for protein input.
             'a' => a.fmodel = 1,
-            ':' => {}
+            ':' => a.pair_nwildcard = true,
             other => a.unsupported.push(format!("pair option -{}", other)),
         }
         Ok(())
@@ -234,6 +263,16 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
                 };
             }
             'b' => a.nblosum = atoi(&take().ok_or("-b")?),
+            'j' => {
+                a.pam_n = atoi(&take().ok_or("-j")?);
+                a.scoremtx = 0;
+                a.tm_or_jtt = mafft_rs::params::JTT;
+            }
+            'm' => {
+                a.pam_n = atoi(&take().ok_or("-m")?);
+                a.scoremtx = 0;
+                a.tm_or_jtt = mafft_rs::params::TM;
+            }
             'f' => a.ppenalty = (atof(&take().ok_or("-f")?) * 1000.0 - 0.5) as i32,
             'g' => a.ppenalty_ex = (atof(&take().ok_or("-g")?) * 1000.0 - 0.5) as i32,
             'Q' => a.shift_factor = atof(&take().ok_or("-Q")?),
@@ -260,7 +299,8 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'D' => a.dorp = Some(b'd'),
             'P' => a.dorp = Some(b'p'),
             'a' => a.fmodel = 1,
-            'v' | 'B' | 'N' | ':' => {}
+            ':' => a.nwildcard = true,
+            'v' | 'B' | 'N' => {}
             other => a.unsupported.push(format!("option -{}", other)),
         }
         Ok(())
@@ -288,7 +328,10 @@ fn refuse(a: &TbArgs) -> Option<String> {
     }
     // -b is ignored for nucleotides, whose matrix comes from Kimura's model.
     let known = |n: i32| matches!(n, 30 | 45 | 50 | 62 | 80 | 90 | 100);
-    if a.dorp != Some(b'd') && (!known(a.nblosum) || !known(a.pair_nblosum)) {
+    if a.dorp != Some(b'd')
+        && ((a.scoremtx == 1 && !known(a.nblosum))
+            || (a.pair_scoremtx == 1 && !known(a.pair_nblosum)))
+    {
         bad.push("only the built-in BLOSUM tables are ported".into());
     }
     if bad.is_empty() {
@@ -315,6 +358,10 @@ fn constants_for(
     specificityconsideration: f64,
     fmodel: i32,
     legacygapcost: bool,
+    scoremtx: i32,
+    pam_n: i32,
+    tm_or_jtt: i32,
+    nwildcard: bool,
 ) -> Constants {
     let mut ca = mafft_rs::params::Args {
         nblosum,
@@ -327,9 +374,12 @@ fn constants_for(
         specificityconsideration,
         fmodel,
         legacygapcost,
+        pam_n,
+        tm_or_jtt,
+        nwildcard,
         ..Default::default()
     };
-    ca.scoremtx = 1;
+    ca.scoremtx = scoremtx;
     Constants::new_seq(&ca, dorp, seq)
 }
 
@@ -405,6 +455,10 @@ fn main() {
         a.pair_unalignlevel,
         a.fmodel,
         false,
+        a.pair_scoremtx,
+        a.pair_pam_n,
+        a.pair_tm_or_jtt,
+        a.pair_nwildcard,
     );
     // `initFiles()` runs here in the C, before `seqcheck()`, so an aborted run
     // still leaves an empty `pre` behind rather than no file at all.
@@ -496,6 +550,10 @@ fn main() {
         a.unalignlevel,
         a.fmodel,
         a.legacygapcost,
+        a.scoremtx,
+        a.pam_n,
+        a.tm_or_jtt,
+        a.nwildcard,
     );
 
     let mut tr = if a.treein {

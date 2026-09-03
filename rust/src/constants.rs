@@ -321,6 +321,12 @@ pub struct Constants {
     pub fft_threshold: i32,
     /// `'p'` or `'d'`: which branch of `constants()` built this.
     pub dorp: u8,
+    /// `scoremtx` / `nblosum` as `constants()` saw them. `pairalign()` gates
+    /// its `X`-stripping on both: `removex` runs only for protein against a
+    /// built-in BLOSUM table, not for JTT/TM (`-j`/`-m`, which set
+    /// `scoremtx = 0`) and not for `--text` (`nblosum < 0`).
+    pub scoremtx: i32,
+    pub nblosum: i32,
     /// `-L` (`--legacygapcost`): drop the gap-frequency weighting in
     /// `A__align`. Read only there, and only on its non-cpmxhist branch.
     pub legacygapcost: bool,
@@ -793,6 +799,8 @@ impl Constants {
             fft_threshold,
             specificityconsideration: args.specificityconsideration,
             dorp,
+            scoremtx: args.scoremtx,
+            nblosum: args.nblosum,
             legacygapcost: args.legacygapcost,
             amino,
             amino_n,

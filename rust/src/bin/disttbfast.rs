@@ -91,9 +91,12 @@ fn samemembern(mem: &[i32], cand: &[i32]) -> bool {
     mem.len() == cand.len() && mem.iter().all(|m| cand.contains(m))
 }
 
-/// `samemember()`: same members, in the same order.
+/// `samemember()`: the same members, in any order. (The C has two definitions
+/// of this; the one under `#if 0` compares position by position, the live one
+/// compares as sets, and `topolorderz` does not hand them out in `addmem`'s
+/// order.)
 fn samemember(mem: &[i32], cand: &[i32]) -> bool {
-    mem == cand
+    mem.len() == cand.len() && mem.iter().all(|m| cand.contains(m))
 }
 
 fn main() {
@@ -373,6 +376,16 @@ fn main() {
         bseq = input.seq.iter().map(|s| io::gappick0(s)).collect();
         if args.nadd != 0 {
             let nadd = args.nadd as usize;
+            // `--addprofile` keeps the added block's own columns: the C
+            // collapses only its all-gap ones and copies it across verbatim,
+            // where plain `--add` ungaps each added sequence (done above).
+            if args.addprofile {
+                let mut tail: Vec<Vec<u8>> = input.seq[njob - nadd..].to_vec();
+                addfunctions::commongappick(&mut tail);
+                for (i, s) in tail.into_iter().enumerate() {
+                    bseq[njob - nadd + i] = s;
+                }
+            }
             let mut head: Vec<Vec<u8>> = input.seq[..njob - nadd].to_vec();
             addfunctions::commongappick(&mut head);
             for (i, s) in head.into_iter().enumerate() {
