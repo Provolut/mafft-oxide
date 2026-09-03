@@ -55,3 +55,20 @@ Things that did *not* help, so nobody repeats them: `-O3 -march=native`
 clang 18 (9% slower than gcc), and branchless-scalar (6% slower; branches were
 already predicted at 3.5% miss rate). The win came only once the loop was both
 straight-line *and* explicitly vectorised.
+
+## A Rust port of the progressive aligner
+
+`rust/` holds `disttbfast-rs`, a transliteration of MAFFT's progressive MSA
+algorithm into Rust, written for bit-exactness rather than speed. It is a
+drop-in replacement for `libexec/mafft/disttbfast` on the `--nofft` path
+(NW-NS-1 / NW-NS-2, and NW-NS-i via the unmodified `dvtditr`), covering FASTA
+I/O, the BLOSUM62 score matrix, the 6-mer distance matrix, the UPGMA guide tree
+and weights, and the group-to-group DP (`A__align`) with its profile-history
+cache.
+
+The same rule as the rest of this directory applies: output must not change,
+and it is verified, never argued. `rust/verify.sh` diffs it against the C
+binary over a generated corpus (504/504 byte-identical), `rust/verify_e2e.sh`
+does the same through the real `mafft` wrapper (24/24), and configurations
+outside the ported path — FFT anchoring above all — are refused rather than
+approximated. See `rust/README.md`.

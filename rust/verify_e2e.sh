@@ -1,0 +1,60 @@
+#!/bin/bash
+# End-to-end check: run the real `mafft` wrapper twice -- once against the
+# stock libexec directory, once against a copy in which `disttbfast` has been
+# replaced by `disttbfast-rs` -- and require byte-identical output.
+#
+#   verify_e2e.sh <libexec-dir-with-C-binaries> <path-to-disttbfast-rs> [inputs...]
+
+set -u
+LIBEXEC="${1:?usage: verify_e2e.sh <libexec-dir> <disttbfast-rs> [inputs...]}"
+RBIN="${2:?usage: verify_e2e.sh <libexec-dir> <disttbfast-rs> [inputs...]}"
+shift 2
+
+here=$(cd "$(dirname "$0")" && pwd)
+INPUTS=("$@")
+if [ ${#INPUTS[@]} -eq 0 ]; then
+  INPUTS=("$here/../test/sample")
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+cp -r "$LIBEXEC" "$work/rs"
+cp "$RBIN" "$work/rs/disttbfast"
+chmod +x "$work/rs/disttbfast"
+
+# Strategies whose alignment work goes through the ported disttbfast path.
+# NW-NS-i also runs dvtditr, which consumes disttbfast's output, so an
+# identical result there exercises the port through the refinement stage too.
+STRATS=(
+  "--nofft --retree 2 --maxiterate 0"
+  "--nofft --retree 1 --maxiterate 0"
+  "--nofft --retree 2 --maxiterate 2 --thread 0"
+  "--nofft --retree 2 --maxiterate 0 --reorder"
+  "--nofft --retree 2 --maxiterate 0 --clustalout"
+  "--nofft --retree 2 --maxiterate 0 --inputorder"
+)
+
+pass=0; fail=0; failed=""
+for f in "${INPUTS[@]}"; do
+  for i in "${!STRATS[@]}"; do
+    s="${STRATS[$i]}"
+    MAFFT_BINARIES="$LIBEXEC" mafft $s "$f" > "$work/o.c" 2>/dev/null
+    cst=$?
+    MAFFT_BINARIES="$work/rs" mafft $s "$f" > "$work/o.r" 2>/dev/null
+    rst=$?
+    label="$(basename "$f") [$s]"
+    if [ $cst -ne $rst ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+    elif ! cmp -s "$work/o.c" "$work/o.r"; then
+      fail=$((fail+1)); failed="$failed\n  $label (output differs)"
+    else
+      pass=$((pass+1))
+    fi
+  done
+done
+
+echo "pass=$pass fail=$fail"
+if [ $fail -ne 0 ]; then
+  printf 'FAILED:%b\n' "$failed"
+  exit 1
+fi

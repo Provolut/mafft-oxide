@@ -1,0 +1,14 @@
+[package]
+name = "mafft-rs"
+version = "0.1.0"
+edition = "2021"
+description = "Bit-exact Rust port of the MAFFT progressive multiple-sequence-alignment algorithm (disttbfast, non-FFT path)"
+license = "BSD-3-Clause"
+
+[[bin]]
+name = "disttbfast-rs"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2
+debug = false
