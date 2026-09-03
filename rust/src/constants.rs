@@ -302,7 +302,6 @@ pub struct Constants {
     pub penalty_op: i32,
     /// Only read by the shift ("warp") DP, which this port refuses to run;
     /// kept because `constants()` computes it and it gates `trywarp`.
-    #[allow(dead_code)]
     pub penalty_shift: i32,
     /// Folded into the score matrix above; kept for parity with the C global.
     #[allow(dead_code)]

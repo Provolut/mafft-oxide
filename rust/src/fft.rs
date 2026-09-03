@@ -18,8 +18,10 @@ pub struct Cpx {
     pub i: f64,
 }
 
-/// `PI` from `fft.h`.
-pub const PI: f64 = 3.14159265358979323846;
+/// `PI` from `fft.h`. The C's literal `3.14159265358979323846` rounds to the
+/// same `f64` as `std::f64::consts::PI` (both `0x400921fb54442d18`), so this
+/// is the same number, written the way Rust writes it.
+pub const PI: f64 = std::f64::consts::PI;
 
 /// `make_sintbl()`.
 fn make_sintbl(n: usize, sintbl: &mut [f64]) {
