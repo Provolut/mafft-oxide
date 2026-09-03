@@ -23,10 +23,27 @@ pub struct TreebaseOpts<'a> {
     pub constraint: Option<&'a LocalHomTable>,
     /// `-l`: how strongly the constraints pull.
     pub fastathreshold: f64,
+    /// `--add`: what to do at each tree node -- `'a'` align, `'n'` skip,
+    /// `'1'`/`'2'` merge into the group on that side, `'w'` align but both
+    /// sides already contain added sequences.
+    pub mergeoralign: Option<&'a [u8]>,
+    /// The number of sequences appended by `--add`; the first
+    /// `njob - nadd` are the existing alignment.
+    pub nadd: usize,
     /// Rebuild the score matrix per tree node from its distance from the tips
     /// (`makedynamicmtx`). A no-op unless `--allowshift` is on, but `tbfast`
     /// calls it unconditionally and `disttbfast` only when it matters.
     pub use_dynamic_mtx: bool,
+}
+
+/// `eq2dashmatometehayaku()`: the `'='` markers become ordinary gaps once the
+/// step that inserted them is finished with.
+fn eq2dash(s: &mut [u8]) {
+    for c in s.iter_mut() {
+        if *c == b'=' {
+            *c = b'-';
+        }
+    }
 }
 
 /// `fastconjuction_noname()`: gather a group's members and normalise their
@@ -68,8 +85,10 @@ pub fn treebase(
     st: &mut AlignState,
     fs: &mut FalignState,
 ) {
-    let newgapstr = b'-';
     let outgap = opts.outgap;
+
+    let mut alreadyaligned: Vec<bool> = (0..njob).map(|i| i < njob - opts.nadd).collect();
+    let mut gapmap: Vec<i32> = Vec::new();
 
     let mut memhist: Vec<Option<Vec<i32>>> = vec![None; njob.saturating_sub(1)];
     let mut cpmxhist: Vec<Option<CpmxHist>> = (0..njob.saturating_sub(1)).map(|_| None).collect();
@@ -79,6 +98,7 @@ pub fn treebase(
     let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];
 
     for l in 0..njob - 1 {
+        let moa = opts.mergeoralign.map(|m| m[l]).unwrap_or(b'a');
         let m1 = tree.topol[l][0] as usize;
         let m2 = tree.topol[l][1] as usize;
 
@@ -111,6 +131,12 @@ pub fn treebase(
             memhist[l] = Some(merged);
         }
 
+        // `'n'`: this node is entirely inside a group that is already aligned,
+        // so there is nothing to do.
+        if moa == b'n' {
+            continue;
+        }
+
         if opts.use_dynamic_mtx {
             makedynamicmtx(
                 &mut dynmtx,
@@ -133,6 +159,20 @@ pub fn treebase(
         // Gather the group members (mseq1 / mseq2 alias rows of aseq in C).
         let mut group1: Vec<Vec<u8>> = mem0.iter().map(|&m| aseq[m as usize].clone()).collect();
         let mut group2: Vec<Vec<u8>> = mem1.iter().map(|&m| aseq[m as usize].clone()).collect();
+
+        // A merge marks the columns it inserts with `'='` so they can be told
+        // from the alignment's own gaps and propagated afterwards.
+        let newgapstr = if moa == b'1' || moa == b'2' { b'=' } else { b'-' };
+
+        // Collapse the all-gap columns of the side being merged *into*, so the
+        // DP does not have to reproduce them, and remember where they were.
+        if moa == b'1' {
+            gapmap = crate::addfunctions::findcommongaps(&group2);
+            crate::addfunctions::commongappick(&mut group2);
+        } else if moa == b'2' {
+            gapmap = crate::addfunctions::findcommongaps(&group1);
+            crate::addfunctions::commongappick(&mut group1);
+        }
 
         if let Some(table) = opts.constraint {
             // imp_match_init_strict() -> fillimp(): paint the constraint
@@ -254,6 +294,40 @@ pub fn treebase(
         }
         for (k, &m) in mem1.iter().enumerate() {
             aseq[m as usize] = std::mem::take(&mut group2[k]);
+        }
+
+        if moa == b'1' {
+            // "jissainiha nai": the added sequences are always last, so the
+            // merged side is never group 1.
+            eprintln!("Check source!!!");
+            std::process::exit(1);
+        }
+        if moa == b'2' {
+            let newlen = aseq[mem0[0] as usize].len();
+            crate::addfunctions::adjustgapmap(newlen, &mut gapmap, &aseq[mem0[0] as usize].clone());
+            let mut allmem = mem0.clone();
+            allmem.extend_from_slice(&mem1);
+            crate::addfunctions::restorecommongaps(aseq, &allmem, &mut gapmap, b'-');
+            let g1: Vec<Vec<u8>> = mem0.iter().map(|&m| aseq[m as usize].clone()).collect();
+            let gaplen = crate::addfunctions::findnewgaps(&g1, 0);
+            crate::addfunctions::insertnewgaps(
+                cn,
+                st,
+                njob,
+                &alreadyaligned,
+                aseq,
+                &mem0,
+                &mem1,
+                &gaplen,
+                &gapmap,
+                b'-',
+            );
+            for m in mem0.iter().chain(mem1.iter()) {
+                eq2dash(&mut aseq[*m as usize]);
+            }
+            for &m in mem1.iter() {
+                alreadyaligned[m as usize] = true;
+            }
         }
 
         // `nlen[m1] = 0.5 * ( nlen[m1] + nlen[m2] )` -- assigned to an int.

@@ -5,6 +5,7 @@
 //! buffers and its edge-case behaviour are reproduced exactly, because the
 //! output has to match byte for byte -- not because any of it is good style.
 
+pub mod addfunctions;
 pub mod align;
 pub mod blosum;
 pub mod constants;

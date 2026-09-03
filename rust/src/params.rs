@@ -440,9 +440,6 @@ impl Args {
         if self.alg != b'A' {
             bad.push("only alg 'A' (-A) is ported; -M/-&/-@ are not");
         }
-        if self.nadd != 0 {
-            bad.push("-I (--add) is not ported");
-        }
         if self.subalignment {
             bad.push("-H (sub-alignments) is not ported");
         }

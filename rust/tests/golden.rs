@@ -65,13 +65,13 @@ fn fftns2_matches_golden() {
 
 #[test]
 fn unsupported_configuration_is_refused() {
-    // -L (--legacygapcost) is not ported: it must fail loudly rather than
+    // -Y (--keeplength) is not ported: it must fail loudly rather than
     // quietly returning a different alignment.
     let d = tempdir("unsupported");
     let input = concat!(env!("CARGO_MANIFEST_DIR"), "/../test/sample");
     let f = std::fs::File::open(input).unwrap();
     let mut args: Vec<&str> = ARGS_NWNS2.to_vec();
-    args.push("-L");
+    args.push("-Y");
     let out = Command::new(env!("CARGO_BIN_EXE_disttbfast-rs"))
         .args(&args)
         .current_dir(&d)
@@ -79,6 +79,6 @@ fn unsupported_configuration_is_refused() {
         .output()
         .unwrap();
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("legacygapcost"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("keeplength"));
     let _ = std::fs::remove_dir_all(&d);
 }

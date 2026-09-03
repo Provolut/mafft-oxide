@@ -553,6 +553,8 @@ fn main() {
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
     let mut fs = FalignState::new();
     let opts = TreebaseOpts {
+        mergeoralign: None,
+        nadd: 0,
         outgap: a.outgap,
         use_fft: a.use_fft,
         force_fft: false,

@@ -12,7 +12,7 @@ use mafft_rs::align::AlignState;
 use mafft_rs::constants::{self, Constants};
 use mafft_rs::params::Args;
 use mafft_rs::treebase::TreebaseOpts;
-use mafft_rs::{dist, falign, io, score, tree, treebase};
+use mafft_rs::{addfunctions, dist, falign, io, score, tree, treebase};
 
 /// `pickup()`: keep the longest sequence on each side of the last few tree
 /// nodes and write the rest to `notused`.
@@ -78,6 +78,22 @@ fn pickup(
     let keepn = (n - m as usize).min(namenot.len());
     io::write_data(&mut nu, &namenot[..keepn], &seqnot[..keepn]);
     std::fs::write("notused", nu).expect("write notused");
+}
+
+/// `includemember()`: is every member of `mem` also in `cand`?
+fn includemember(mem: &[i32], cand: &[i32]) -> bool {
+    mem.iter().all(|m| cand.contains(m))
+}
+
+/// `samemembern()`: `mem` has exactly `cand.len()` members and they are the
+/// same set.
+fn samemembern(mem: &[i32], cand: &[i32]) -> bool {
+    mem.len() == cand.len() && mem.iter().all(|m| cand.contains(m))
+}
+
+/// `samemember()`: same members, in the same order.
+fn samemember(mem: &[i32], cand: &[i32]) -> bool {
+    mem == cand
 }
 
 fn main() {
@@ -279,7 +295,90 @@ fn main() {
             vec![1.0; njob]
         };
 
+        // `--add`: the first `njob - nadd` sequences are an existing alignment
+        // and keep their columns; only the added ones are ungapped. Everything
+        // else takes the plain path.
+        let mut mergeoralign: Vec<u8> = vec![b'a'; njob.saturating_sub(1)];
+        if args.nadd != 0 {
+            let nadd = args.nadd as usize;
+            let alignmentlength = input.seq[0].len();
+            for i in 0..njob - nadd {
+                if input.seq[i].len() != alignmentlength {
+                    eprintln!("# The original {} sequences must be aligned", njob - nadd);
+                    std::process::exit(1);
+                }
+            }
+            let addmem: Vec<i32> = ((njob - nadd)..njob).map(|i| i as i32).collect();
+            if args.addprofile {
+                let alignmentlength = input.seq[njob - nadd].len();
+                for i in (njob - nadd)..njob {
+                    if input.seq[i].len() != alignmentlength {
+                        eprintln!("# The {} additional sequences must be aligned", nadd);
+                        std::process::exit(1);
+                    }
+                }
+                let mut found = false;
+                for i in 0..njob - 1 {
+                    let m0 = tree::topolorderz(&tr.topol, &tr.dep, i, 0);
+                    let m1 = tree::topolorderz(&tr.topol, &tr.dep, i, 1);
+                    if samemember(&m0, &addmem) {
+                        mergeoralign[i] = b'1';
+                        found = true;
+                    } else if samemember(&m1, &addmem) {
+                        mergeoralign[i] = b'2';
+                        found = true;
+                    } else {
+                        mergeoralign[i] = b'n';
+                    }
+                }
+                if !found {
+                    eprintln!("Not found the accurate branch.");
+                    std::process::exit(1);
+                }
+            } else {
+                // Plain `--add` starts every node at 'n' -- nodes inside the
+                // existing alignment are already done -- and then two passes
+                // mark the ones that touch an added sequence.
+                for v in mergeoralign.iter_mut() {
+                    *v = b'n';
+                }
+                for j in (njob - nadd)..njob {
+                    let one = [j as i32];
+                    for i in 0..njob - 1 {
+                        let m0 = tree::topolorderz(&tr.topol, &tr.dep, i, 0);
+                        let m1 = tree::topolorderz(&tr.topol, &tr.dep, i, 1);
+                        if samemembern(&m0, &one) {
+                            mergeoralign[i] = if mergeoralign[i] != b'n' { b'w' } else { b'1' };
+                        } else if samemembern(&m1, &one) {
+                            mergeoralign[i] = if mergeoralign[i] != b'n' { b'w' } else { b'2' };
+                        }
+                    }
+                }
+                for i in 0..njob - 1 {
+                    let m0 = tree::topolorderz(&tr.topol, &tr.dep, i, 0);
+                    let m1 = tree::topolorderz(&tr.topol, &tr.dep, i, 1);
+                    let in0 = includemember(&m0, &addmem);
+                    let in1 = includemember(&m1, &addmem);
+                    if in0 && in1 {
+                        mergeoralign[i] = b'w';
+                    } else if in0 {
+                        mergeoralign[i] = b'1';
+                    } else if in1 {
+                        mergeoralign[i] = b'2';
+                    }
+                }
+            }
+        }
+
         bseq = input.seq.iter().map(|s| io::gappick0(s)).collect();
+        if args.nadd != 0 {
+            let nadd = args.nadd as usize;
+            let mut head: Vec<Vec<u8>> = input.seq[..njob - nadd].to_vec();
+            addfunctions::commongappick(&mut head);
+            for (i, s) in head.into_iter().enumerate() {
+                bseq[i] = s;
+            }
+        }
 
         let selfscore: Vec<i32> = if calcpairdists {
             input
@@ -297,6 +396,12 @@ fn main() {
             nguidetree
         );
         let opts = TreebaseOpts {
+            mergeoralign: if args.nadd != 0 {
+                Some(&mergeoralign)
+            } else {
+                None
+            },
+            nadd: args.nadd as usize,
             outgap: args.outgap,
             use_fft: args.use_fft,
             force_fft: args.force_fft,
