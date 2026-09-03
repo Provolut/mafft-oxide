@@ -199,6 +199,10 @@ fn main() {
     };
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
+    // `-r` runs after the guide-tree loop, on whatever the last iteration
+    // left, so the tree and the weights outlive it.
+    let mut lasttree: Option<tree::Tree> = None;
+    let mut lasteff: Vec<f64> = Vec::new();
     let mut st = AlignState::new();
     let mut fs = falign::FalignState::new();
     let mut bseq: Vec<Vec<u8>> = Vec::new();
@@ -446,6 +450,9 @@ fn main() {
             &cn, &opts, njob, &mut bseq, &mut nlen, &tr, &effarr, &mut st, &mut fs,
         );
 
+        lasteff = effarr;
+        lasttree = Some(tr);
+
         if calcpairdists {
             let skiptable: Vec<Vec<i32>> = bseq.iter().map(|s| score::makeskiptable(s)).collect();
             for i in 0..njob - 1 {
@@ -478,6 +485,32 @@ fn main() {
                 }
             }
         }
+    }
+
+    if args.oneiteration {
+        eprintln!("Iterative refinement (one vs others)");
+        let opts = TreebaseOpts {
+            mergeoralign: None,
+            nadd: 0,
+            outgap: args.outgap,
+            use_fft: args.use_fft,
+            force_fft: args.force_fft,
+            minimumweight: 0.0,
+            constraint: None,
+            fastathreshold: 0.0,
+            use_dynamic_mtx: cn.specificityconsideration != 0.0,
+        };
+        treebase::dooneiteration(
+            &cn,
+            &opts,
+            njob,
+            &mut bseq,
+            &mut nlen,
+            lasttree.as_ref().unwrap(),
+            &lasteff,
+            &mut st,
+            &mut fs,
+        );
     }
 
     // `--keeplength`: cut the columns the alignment added to the reference

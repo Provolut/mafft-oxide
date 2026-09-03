@@ -443,9 +443,6 @@ impl Args {
         if self.subalignment {
             bad.push("-H (sub-alignments) is not ported");
         }
-        if self.oneiteration {
-            bad.push("-r (one iteration) is not ported");
-        }
         if self.keeplength && self.nadd == 0 {
             // The C reaches `restoreoriginalgaps( njob, bseq, NULL )` and
             // segfaults; there is no output to be identical to.

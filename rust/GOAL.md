@@ -11,7 +11,7 @@ into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
 `--legacygapcost`, `-y`/`-T`/`-t`/`-^`/`-U`/`-q`, 10-mer nucleotide tuples,
-`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`.
+`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`.
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -37,20 +37,18 @@ divides the added sequences' weights by 100), which cost a day.
    harnesses would catch it. (`--aamatrix`, `nblosum == -1`, is done: it keeps
    the 26-letter alphabet and only swaps the table.)
 
-3. **`-r` (one iteration)**: `dooneiteration`, a second `treebase`.
-
-4. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
+3. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
    `Falign_givenanchors`. The C's `case 'l'` falls through into `case 'G'`, so
    `-l` also forces the FFT on.
 
-5. **The generated guide trees `--treein` can ask for** -- `shuffle`,
+4. **The generated guide trees `--treein` can ask for** -- `shuffle`,
    `pileup`, `auto`, `compact`, `stepadd`, `youngestlinkage`, `nodepair`, each
    a separate construction. Refused by name today.
 
-6. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
+5. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Largest, lowest demand.
 
-7. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
+6. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
    output; porting them is scope growth, not parity.
 

@@ -340,3 +340,171 @@ pub fn treebase(
         nlen[m1] = (0.5 * (nlen[m1] + nlen[m2]) as f64) as i32;
     }
 }
+
+/// `dooneiteration()`: `-r` (`--oneiteration`), run after `treebase`.
+///
+/// Not the tree again -- this is leave-one-out. For each sequence in turn
+/// (twice over, `ITERATIVECYCLE` is 2), it is pulled out, realigned against
+/// all the others, and the result kept only if it scores at least as well as
+/// what was there. So the alignment can only improve, by `intergroup_score`'s
+/// reckoning.
+#[allow(clippy::too_many_arguments)]
+pub fn dooneiteration(
+    cn: &Constants,
+    opts: &TreebaseOpts,
+    njob: usize,
+    aseq: &mut [Vec<u8>],
+    nlen: &mut [i32],
+    tree: &Tree,
+    effarr: &[f64],
+    st: &mut AlignState,
+    fs: &mut FalignState,
+) {
+    const ITERATIVECYCLE: usize = 2;
+    let outgap = opts.outgap;
+    let mut fftlog = vec![1i32; njob];
+    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];
+
+    for ll in 0..njob * ITERATIVECYCLE {
+        let l = ll % njob;
+        let mem0: Vec<i32> = vec![l as i32];
+        let mem1: Vec<i32> = (0..njob).filter(|&i| i != l).map(|i| i as i32).collect();
+        let m1 = l;
+        let m2 = mem1[0] as usize;
+
+        if opts.use_dynamic_mtx {
+            makedynamicmtx(
+                &mut dynmtx,
+                &cn.n_dis_consweight_multi,
+                tree.dep[l].distfromtip,
+                &cn.amino,
+                cn.specificityconsideration,
+            );
+        } else {
+            for (i, row) in dynmtx.iter_mut().enumerate() {
+                row.copy_from_slice(&cn.n_dis_consweight_multi[i]);
+            }
+        }
+
+        // Weights are *not* clamped here: the C passes 0.0 for `minimumweight`.
+        let (effarr1, _orieff1) = fastconjuction_noname(&mem0, effarr, 0.0);
+        let (effarr2, _orieff2) = fastconjuction_noname(&mem1, effarr, 0.0);
+        let clus1 = mem0.len();
+        let clus2 = mem1.len();
+
+        let mut group1: Vec<Vec<u8>> = mem0.iter().map(|&m| aseq[m as usize].clone()).collect();
+        let mut group2: Vec<Vec<u8>> = mem1.iter().map(|&m| aseq[m as usize].clone()).collect();
+
+        let oscore = crate::score::intergroup_score(
+            cn,
+            &group1,
+            &group2,
+            &effarr1,
+            &effarr2,
+            clus1,
+            clus2,
+            group1[0].len(),
+        );
+        let oseq1 = group1.clone();
+        let oseq2 = group2.clone();
+
+        crate::addfunctions::commongappick(&mut group2);
+        crate::addfunctions::commongappick(&mut group1);
+
+        // `ffttry` has no `fftlog` guard here, unlike `treebase`'s.
+        let ffttry = nlen[m1] > clus1 as i32 && nlen[m2] > clus2 as i32;
+        if opts.force_fft || (opts.use_fft && ffttry) {
+            falign(
+                fs,
+                st,
+                cn,
+                &dynmtx,
+                &mut group1,
+                &mut group2,
+                &effarr1,
+                &effarr2,
+                outgap,
+                &mut fftlog[m1],
+                b'-',
+            );
+        } else {
+            fftlog[m1] = 0;
+            if clus1 == 1 && clus2 == 1 {
+                let mut s1 = std::mem::take(&mut group1[0]);
+                let mut s2 = std::mem::take(&mut group2[0]);
+                st.g_align11(
+                    cn, &dynmtx, cn.penalty, cn.penalty_ex, &mut s1, &mut s2, outgap, outgap, b'-',
+                );
+                group1[0] = s1;
+                group2[0] = s2;
+            } else {
+                // The C segfaults here for l != 0, and this is the only
+                // branch that reaches it: `disttbfast()` frees `cpmxhist` and
+                // sets it to NULL at the end of the guide-tree loop
+                // (disttbfast.c:4589), then hands that NULL to
+                // `dooneiteration`, which passes `cpmxhist + l` to `A__align`
+                // as `cpmxresult`. `A__align` guards on `if( cpmxresult )`, so
+                // l == 0 is skipped -- but for l != 0 the pointer is a small
+                // non-null offset from NULL and writing through it dies
+                // (Salignmm.c:2142). The FFT branch and the 1-vs-1 branch pass
+                // no `cpmxresult`, which is why most inputs survive `-r`.
+                //
+                // There is no output to be byte-identical to, so refuse rather
+                // than quietly producing an alignment the C cannot.
+                if l != 0 {
+                    eprintln!(
+                        "disttbfast-rs: -r reaches A__align at node {}, where the C \n                           dereferences a freed cpmxhist and segfaults (disttbfast.c:2444).",
+                        l
+                    );
+                    std::process::exit(1);
+                }
+                st.a_align(
+                    cn,
+                    &dynmtx,
+                    cn.penalty,
+                    cn.penalty_ex,
+                    &mut group1,
+                    &mut group2,
+                    &effarr1,
+                    &effarr2,
+                    outgap,
+                    outgap,
+                    None,
+                    None,
+                    mem0[0],
+                    1,
+                    None,
+                    None,
+                    0.0,
+                    0.0,
+                    true,
+                    b'-',
+                );
+            }
+        }
+
+        let nscore = crate::score::intergroup_score(
+            cn,
+            &group1,
+            &group2,
+            &effarr1,
+            &effarr2,
+            clus1,
+            clus2,
+            group1[0].len(),
+        );
+        if nscore < oscore {
+            group1 = oseq1;
+            group2 = oseq2;
+        }
+
+        for (k, &m) in mem0.iter().enumerate() {
+            aseq[m as usize] = std::mem::take(&mut group1[k]);
+        }
+        for (k, &m) in mem1.iter().enumerate() {
+            aseq[m as usize] = std::mem::take(&mut group2[k]);
+        }
+
+        nlen[m1] = (0.5 * (nlen[m1] + nlen[m2]) as f64) as i32;
+    }
+}

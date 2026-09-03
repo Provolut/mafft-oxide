@@ -187,6 +187,45 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# -r (--oneiteration): leave-one-out refinement after the progressive pass.
+#
+# The C segfaults on part of this: `disttbfast()` frees `cpmxhist` and NULLs
+# it before calling `dooneiteration`, which still passes `cpmxhist + l` to
+# `A__align`, so any node past the first that reaches `A__align` writes
+# through a small non-null offset from NULL. The port refuses exactly there,
+# so a C crash paired with a Rust exit 1 is the expected outcome and counts as
+# a pass; every other combination fails.
+RARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -r"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  rm -rf "$work/c" "$work/r"
+  mkdir -p "$work/c" "$work/r"
+  ( cd "$work/c" && $CBIN $RARGS < "$f" > out.fa 2> err.log )
+  cst=$?
+  ( cd "$work/r" && $RBIN $RARGS < "$f" > out.fa 2> err.log )
+  rst=$?
+  label="$(basename "$f") [-r]"
+  if [ $cst -ge 128 ] && [ $rst -eq 1 ]; then
+    pass=$((pass+1))
+    continue
+  fi
+  if [ $cst -ne $rst ]; then
+    fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+    continue
+  fi
+  bad=""
+  for o in out.fa order hat2; do
+    if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+      cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+    fi
+  done
+  if [ -n "$bad" ]; then
+    fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+  else
+    pass=$((pass+1))
+  fi
+done
+
 # --aamatrix (-b -1): the scoring matrix is read from `_aamtx` rather than
 # built in. The variants cover a permuted residue order, a `frequency` line
 # and `norescale` -- and, since `constants()` starts with

@@ -1575,3 +1575,57 @@ fn generalized_pair_opening_penalty_decides_whether_both_flanks_align() {
     // The cheap one reaches past the first flank into the second.
     assert!(ungap(&wide.a1).len() > left.len() + 10);
 }
+
+// --- intergroup_score -------------------------------------------------
+
+/// A gap-free column pair scores exactly the matrix entry, weighted.
+#[test]
+fn intergroup_score_of_identical_columns_is_the_diagonal() {
+    let cn = pair_constants();
+    let g1 = vec![b"AC".to_vec()];
+    let g2 = vec![b"AC".to_vec()];
+    let got = crate::score::intergroup_score(&cn, &g1, &g2, &[1.0], &[1.0], 1, 1, 2);
+    let a = cn.amino_dis_consweight_multi[b'A' as usize][b'A' as usize];
+    let c = cn.amino_dis_consweight_multi[b'C' as usize][b'C' as usize];
+    assert!((got - (a + c)).abs() < 1e-9, "{got} vs {}", a + c);
+}
+
+/// Weights multiply out: doubling one side's weight doubles the score.
+#[test]
+fn intergroup_score_is_linear_in_the_weights() {
+    let cn = pair_constants();
+    let g1 = vec![b"ACDE".to_vec()];
+    let g2 = vec![b"AKDE".to_vec()];
+    let one = crate::score::intergroup_score(&cn, &g1, &g2, &[1.0], &[1.0], 1, 1, 4);
+    let two = crate::score::intergroup_score(&cn, &g1, &g2, &[2.0], &[1.0], 1, 1, 4);
+    assert!((two - 2.0 * one).abs() < 1e-9);
+}
+
+/// A column that is a gap on both sides is skipped entirely -- it costs
+/// nothing and does not open a gap.
+#[test]
+fn intergroup_score_ignores_gap_gap_columns() {
+    let cn = pair_constants();
+    let plain = vec![b"AC".to_vec()];
+    let padded = vec![b"A-C".to_vec()];
+    let a = crate::score::intergroup_score(&cn, &plain, &plain, &[1.0], &[1.0], 1, 1, 2);
+    let b = crate::score::intergroup_score(&cn, &padded, &padded, &[1.0], &[1.0], 1, 1, 3);
+    assert!((a - b).abs() < 1e-9, "{a} vs {b}");
+}
+
+/// A run of gaps is charged `penalty` once, however long it is.
+#[test]
+fn intergroup_score_charges_a_gap_run_once() {
+    let cn = pair_constants();
+    let res = vec![b"AKKKC".to_vec()];
+    let one = vec![b"A-KKC".to_vec()];
+    let three = vec![b"A---C".to_vec()];
+    let s1 = crate::score::intergroup_score(&cn, &res, &one, &[1.0], &[1.0], 1, 1, 5);
+    let s3 = crate::score::intergroup_score(&cn, &res, &three, &[1.0], &[1.0], 1, 1, 5);
+    // Both opened exactly one gap, so the difference is only the residues
+    // that the longer run replaced -- no second `penalty`.
+    let m = &cn.amino_dis_consweight_multi;
+    let gapk = m[b'-' as usize][b'K' as usize];
+    let kk = m[b'K' as usize][b'K' as usize];
+    assert!((s3 - (s1 - 2.0 * kk + 2.0 * gapk)).abs() < 1e-9, "{s1} {s3}");
+}

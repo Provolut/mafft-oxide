@@ -9,7 +9,7 @@ same argument vector, same input, same output files:
 
 | binary | replaces | strategies |
 |---|---|---|
-| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix` (plain `mafft`, `fftns`, `nwns`) |
+| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--oneiteration` (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
 
 Both handle protein and nucleotide input, which the reader tells apart the same
@@ -111,6 +111,10 @@ quietly returning a different alignment:
 
 - `--text` / `--textmatrix` (the 256-symbol alphabet)
 - sub-alignments (`--merge`), external anchors (`--anchors`)
+- `--oneiteration` past the first node where the C would reach `A__align`:
+  there the C segfaults (it hands `dooneiteration` a freed, NULL `cpmxhist`
+  and then writes through `cpmxhist + l`), so there is no output to match and
+  the port refuses instead. 78 of the 88 corpus inputs never reach it.
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
 - the memory-saving aligner (`-M`) and the other `alg` values

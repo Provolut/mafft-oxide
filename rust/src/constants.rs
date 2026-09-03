@@ -319,6 +319,10 @@ pub struct Constants {
     pub volume: [f64; 0x100],
     pub fft_win_size: i32,
     pub fft_threshold: i32,
+    /// `amino_dis_consweight_multi`: the same numbers as
+    /// `n_dis_consweight_multi` but indexed by character rather than by
+    /// alphabet position. Only `intergroup_score` reads it.
+    pub amino_dis_consweight_multi: Vec<Vec<f64>>,
     /// `'p'` or `'d'`: which branch of `constants()` built this.
     pub dorp: u8,
     /// `scoremtx` / `nblosum` as `constants()` saw them. `pairalign()` gates
@@ -780,10 +784,13 @@ impl Constants {
 
         let mut amino_dis = vec![vec![0i32; CHARSIZE]; CHARSIZE];
         let mut n_dis_consweight_multi = vec![vec![0.0f64; NALPHABETS]; NALPHABETS];
+        let mut amino_dis_consweight_multi = vec![vec![0.0f64; CHARSIZE]; CHARSIZE];
         for i in 0..NALPHABETS {
             for j in 0..NALPHABETS {
                 amino_dis[amino[i] as usize][amino[j] as usize] = n_dis[i][j];
                 n_dis_consweight_multi[i][j] = n_dis[i][j] as f64 * CONSWEIGHT_MULTI;
+                amino_dis_consweight_multi[amino[i] as usize][amino[j] as usize] =
+                    n_dis[i][j] as f64 * CONSWEIGHT_MULTI;
             }
         }
 
@@ -812,6 +819,7 @@ impl Constants {
         };
 
         Constants {
+            amino_dis_consweight_multi,
             n_dis_fft,
             polarity: normalise(&POLARITY_),
             volume: normalise(&VOLUME_),
