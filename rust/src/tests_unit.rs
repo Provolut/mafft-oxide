@@ -734,6 +734,8 @@ fn importance_is_symmetric_after_averaging() {
         false,
         &mut lst,
         &mut ast,
+        &mut crate::genalign::GenalignState::new(),
+        false,
     );
     let eff = vec![1.0 / njob as f64; njob];
     localhom::calcimportance_half(njob, &eff, &seqs, &mut table);
@@ -778,6 +780,8 @@ fn pairwise_distances_are_in_range() {
         false,
         &mut lst,
         &mut ast,
+        &mut crate::genalign::GenalignState::new(),
+        false,
     );
     for i in 0..njob - 1 {
         for j in i + 1..njob {
@@ -1414,4 +1418,147 @@ fn dna_pairwise_alignment_preserves_inputs() {
     for (x, y) in s1.iter().zip(s2.iter()) {
         assert!(!(*x == b'-' && *y == b'-'), "gap-gap column");
     }
+}
+
+// ------------------------------------------------- generalised affine gaps
+
+/// The parameters `mafft --genafpair` uses for its pairwise stage.
+fn genaf_constants() -> Constants {
+    let a = Args {
+        nblosum: 62,
+        ppenalty: -2000,
+        ppenalty_ex: 0,
+        ppenalty_op: -6000,
+        poffset: 0,
+        penalty_shift_factor: 100.0,
+        ..Default::default()
+    };
+    Constants::new(&a)
+}
+
+/// The generalised local alignment preserves both inputs: ungapping a row
+/// returns the slice of the input it started from, and no column is gap-gap.
+#[test]
+fn generalized_alignment_columns_come_from_the_inputs() {
+    let cn = genaf_constants();
+    let mut gst = crate::genalign::GenalignState::new();
+    let seqs = deterministic_seqs(6, 90, 0x9e1f);
+    for i in 0..seqs.len() {
+        for j in i + 1..seqs.len() {
+            let r = gst.gen_l_align11(&cn, &cn.n_dis_consweight_multi, &seqs[i], &seqs[j]);
+            assert_eq!(r.a1.len(), r.a2.len(), "rows differ in width");
+            if r.a1.is_empty() {
+                continue;
+            }
+            for (x, y) in r.a1.iter().zip(r.a2.iter()) {
+                assert!(!(*x == b'-' && *y == b'-'), "gap-gap column");
+            }
+            let u1 = ungap(&r.a1);
+            let u2 = ungap(&r.a2);
+            assert!(
+                seqs[i][r.off1..].starts_with(&u1),
+                "row 1 is not the input from off1"
+            );
+            assert!(
+                seqs[j][r.off2..].starts_with(&u2),
+                "row 2 is not the input from off2"
+            );
+        }
+    }
+}
+
+/// A sequence against itself aligns to itself, ungapped, from offset zero.
+#[test]
+fn generalized_self_alignment_is_the_identity() {
+    let cn = genaf_constants();
+    let mut gst = crate::genalign::GenalignState::new();
+    for s in deterministic_seqs(3, 60, 0x5e1f).iter() {
+        let r = gst.gen_l_align11(&cn, &cn.n_dis_consweight_multi, s, s);
+        assert_eq!(r.a1, *s);
+        assert_eq!(r.a2, *s);
+        assert_eq!(r.off1, 0);
+        assert_eq!(r.off2, 0);
+    }
+}
+
+/// Opening a pair of unaligned runs costs `penalty_OP` once, however long the
+/// runs are, which is the whole point of the generalised recurrence: two
+/// sequences sharing flanks but with unrelated middles of *different* lengths
+/// must still align both flanks, which a plain affine local DP would not do
+/// for a cheap enough opening cost.
+#[test]
+fn generalized_gaps_join_flanks_across_unrelated_middles() {
+    let cn = genaf_constants();
+    let mut gst = crate::genalign::GenalignState::new();
+    let left = b"WYFMKLDEHQNRSTAGVIPC".to_vec();
+    let right = b"CPIVGATSRNQHEDLKMFYW".to_vec();
+    let mut a = left.clone();
+    a.extend_from_slice(b"AAAAAAAAAA");
+    a.extend_from_slice(&right);
+    let mut b = left.clone();
+    b.extend_from_slice(b"WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW");
+    b.extend_from_slice(&right);
+
+    let r = gst.gen_l_align11(&cn, &cn.n_dis_consweight_multi, &a, &b);
+    assert!(!r.a1.is_empty());
+    // Both flanks are inside the reported alignment.
+    let u1 = ungap(&r.a1);
+    let u2 = ungap(&r.a2);
+    assert!(
+        u1.len() > left.len(),
+        "alignment stopped at the first flank"
+    );
+    assert!(
+        u2.len() > left.len(),
+        "alignment stopped at the first flank"
+    );
+    assert!(
+        r.a1.len() < a.len() + b.len(),
+        "the two middles were not collapsed into one pair of runs"
+    );
+}
+
+/// `penalty_OP` buys a *pair* of unaligned runs for one flat cost, so with a
+/// real extension penalty in play a cheap `-O` lets the aligner cross two
+/// unrelated middles of different lengths and reach the second flank, while a
+/// prohibitive one makes it give up. Both numbers below are measured, not
+/// assumed: 80 columns against 70 for these inputs.
+#[test]
+fn generalized_pair_opening_penalty_decides_whether_both_flanks_align() {
+    let mk = |op: i32| {
+        Constants::new(&Args {
+            nblosum: 62,
+            ppenalty: -2000,
+            // A non-zero extension penalty is what makes the generalised
+            // recurrence worth anything; with free extension (which is what
+            // --genafpair itself passes) ordinary gaps cross just as cheaply.
+            ppenalty_ex: -100,
+            ppenalty_op: op,
+            poffset: 0,
+            penalty_shift_factor: 100.0,
+            ..Default::default()
+        })
+    };
+    let left = b"WYFMKLDEHQNRSTAGVIPC".to_vec();
+    let right = b"CPIVGATSRNQHEDLKMFYW".to_vec();
+    let mut a = left.clone();
+    a.extend_from_slice(b"AAAAAAAAAA");
+    a.extend_from_slice(&right);
+    let mut b = left.clone();
+    b.extend_from_slice(b"WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW");
+    b.extend_from_slice(&right);
+
+    let mut gst = crate::genalign::GenalignState::new();
+    let cheap = mk(-6000);
+    let dear = mk(-2_000_000);
+    let wide = gst.gen_l_align11(&cheap, &cheap.n_dis_consweight_multi, &a, &b);
+    let narrow = gst.gen_l_align11(&dear, &dear.n_dis_consweight_multi, &a, &b);
+    assert!(
+        narrow.a1.len() < wide.a1.len(),
+        "a prohibitive -O did not shorten the alignment ({} vs {})",
+        narrow.a1.len(),
+        wide.a1.len()
+    );
+    // The cheap one reaches past the first flank into the second.
+    assert!(ungap(&wide.a1).len() > left.len() + 10);
 }

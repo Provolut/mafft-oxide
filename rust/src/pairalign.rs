@@ -8,8 +8,10 @@
 
 use crate::align::AlignState;
 use crate::constants::{dist2offset, makedynamicmtx, Constants, NALPHABETS};
+use crate::genalign::GenalignState;
 use crate::lalign::LalignState;
 use crate::localhom::{putlocalhom2, LocalHomTable};
+use crate::score::naivepairscore11;
 
 /// `score2dist()`.
 fn score2dist(pscore: f64, selfscore1: f64, selfscore2: f64) -> f64 {
@@ -48,6 +50,8 @@ pub enum PairAlg {
     Local,
     /// `-A`: global pairwise alignment (G-INS-i).
     Global,
+    /// `-N`: generalised affine-gap local alignment (E-INS-i).
+    Generalized,
 }
 
 /// `pairalign()`: fill the distance half-matrix and the constraint table.
@@ -66,6 +70,10 @@ pub fn pairalign(
     outgap: bool,
     lst: &mut LalignState,
     ast: &mut AlignState,
+    gst: &mut GenalignState,
+    // `-Z`: score the alignment with `naivepairscore11` rather than keeping
+    // the DP's own score. The wrapper turns this on for `--genafpair`.
+    usenaivescore: bool,
 ) {
     // `dseq`: the X-free copy used for the score-only variants. `X` is only
     // stripped for protein against a real matrix -- for nucleotides the C
@@ -144,6 +152,47 @@ pub fn pairalign(
                             a2 = r.a2;
                             off1 = r.off1;
                             off2 = r.off2;
+                        }
+                    }
+                }
+                PairAlg::Generalized => {
+                    let r = gst.gen_l_align11(cn, &cn.n_dis_consweight_multi, &seq[i], &seq[j]);
+                    a1 = r.a1;
+                    a2 = r.a2;
+                    off1 = r.off1;
+                    off2 = r.off2;
+                    if usenaivescore {
+                        // `-Z`: the DP's score is overwritten, and the
+                        // `thereisx` / `--allowshift` re-runs below are skipped
+                        // entirely -- they live in the other branch of the C.
+                        pscore = naivepairscore11(cn, &a1, &a2, 0);
+                    } else {
+                        pscore = r.score;
+                        if thereisx != 0 {
+                            let r2 = gst.gen_l_align11(
+                                cn,
+                                &cn.n_dis_consweight_multi,
+                                &dseq[i],
+                                &dseq[j],
+                            );
+                            pscore = r2.score;
+                        }
+                        if spec > 0.0 {
+                            let dist = score2dist(pscore, selfscore[i], selfscore[j]);
+                            if dist2offset(dist, spec) < 0.0 {
+                                makedynamicmtx(
+                                    &mut dynmtx,
+                                    &cn.n_dis_consweight_multi,
+                                    0.5 * dist,
+                                    &cn.amino,
+                                    spec,
+                                );
+                                let r3 = gst.gen_l_align11(cn, &dynmtx, &seq[i], &seq[j]);
+                                a1 = r3.a1;
+                                a2 = r3.a2;
+                                off1 = r3.off1;
+                                off2 = r3.off2;
+                            }
                         }
                     }
                 }

@@ -11,6 +11,7 @@ pub mod constants;
 pub mod dist;
 pub mod falign;
 pub mod fft;
+pub mod genalign;
 pub mod io;
 pub mod lalign;
 pub mod localhom;

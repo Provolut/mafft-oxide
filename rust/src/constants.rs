@@ -206,6 +206,9 @@ pub struct Constants {
     pub penalty: i32,
     pub penalty_ex: i32,
     pub penalty_dist: i32,
+    /// `-O`: the one-off cost of opening a *pair* of unaligned runs. Read only
+    /// by the generalised affine-gap aligner (E-INS-i).
+    pub penalty_op: i32,
     /// Only read by the shift ("warp") DP, which this port refuses to run;
     /// kept because `constants()` computes it and it gates `trywarp`.
     #[allow(dead_code)]
@@ -261,6 +264,7 @@ impl Constants {
         let penalty_ex;
         let penalty_dist;
         let penalty_shift;
+        let penalty_op;
         let offset;
         // `nscoredalphabets`: 20 for protein, 10 for DNA. Only the FFT score
         // matrix below is built over it.
@@ -284,6 +288,10 @@ impl Constants {
             if poffset == crate::params::NOTSPECIFIED {
                 poffset = DEFAULTOFS_N;
             }
+            let mut ppenalty_op = args.ppenalty_op;
+            if ppenalty_op == crate::params::NOTSPECIFIED {
+                ppenalty_op = DEFAULTGOP_N;
+            }
             let pam_n = if args.pam_n == crate::params::NOTSPECIFIED {
                 DEFAULTPAMN
             } else {
@@ -299,6 +307,7 @@ impl Constants {
             penalty_dist = (3.0 * 600.0 / 1000.0 * ppenalty_dist as f64 + 0.5) as i32;
             penalty_shift = (args.penalty_shift_factor * penalty as f64) as i32;
             penalty_ex = (3.0 * 600.0 / 1000.0 * ppenalty_ex as f64 + 0.5) as i32;
+            penalty_op = (3.0 * 600.0 / 1000.0 * ppenalty_op as f64 + 0.5) as i32;
             offset = (1.0 * 600.0 / 1000.0 * poffset as f64 + 0.5) as i32;
 
             amino.copy_from_slice(LOCAMINON);
@@ -408,11 +417,16 @@ impl Constants {
             if poffset == crate::params::NOTSPECIFIED {
                 poffset = DEFAULTOFS_B;
             }
+            let mut ppenalty_op = args.ppenalty_op;
+            if ppenalty_op == crate::params::NOTSPECIFIED {
+                ppenalty_op = DEFAULTGOP_B;
+            }
 
             penalty = (600.0 / 1000.0 * ppenalty as f64 + 0.5) as i32;
             penalty_dist = (600.0 / 1000.0 * ppenalty_dist as f64 + 0.5) as i32;
             penalty_shift = (args.penalty_shift_factor * penalty as f64) as i32;
             penalty_ex = (600.0 / 1000.0 * ppenalty_ex as f64 + 0.5) as i32;
+            penalty_op = (600.0 / 1000.0 * ppenalty_op as f64 + 0.5) as i32;
             offset = (600.0 / 1000.0 * poffset as f64 + 0.5) as i32;
 
             let mut n_distmp = [[0.0f64; 20]; 20];
@@ -525,6 +539,7 @@ impl Constants {
             penalty,
             penalty_ex,
             penalty_dist,
+            penalty_op,
             penalty_shift,
             offset,
             trywarp,

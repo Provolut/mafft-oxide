@@ -32,6 +32,12 @@ struct TbArgs {
     pair_alg: Option<PairAlg>,
     pair_ppenalty: i32,
     pair_ppenalty_ex: i32,
+    pair_ppenalty_op: i32,
+    /// `-E` (penalty_EX); parsed and unused, see the note at the call site.
+    #[allow(dead_code)]
+    pair_ppenalty_ex2: i32,
+    /// `-Z`: overwrite the pairwise score with `naivepairscore11`.
+    usenaivescore: bool,
     pair_poffset: i32,
     pair_shift_factor: f64,
     pair_nblosum: i32,
@@ -65,6 +71,9 @@ impl Default for TbArgs {
             pair_alg: None,
             pair_ppenalty: NOTSPECIFIED,
             pair_ppenalty_ex: NOTSPECIFIED,
+            pair_ppenalty_op: NOTSPECIFIED,
+            pair_ppenalty_ex2: NOTSPECIFIED,
+            usenaivescore: false,
             pair_poffset: NOTSPECIFIED,
             pair_shift_factor: 1000.0,
             pair_nblosum: 62,
@@ -171,6 +180,13 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'f' => a.pair_ppenalty = (atof(&take().ok_or("-f")?) * 1000.0 - 0.5) as i32,
             'Q' => a.pair_shift_factor = atof(&take().ok_or("-Q")?),
             'h' => a.pair_poffset = (atof(&take().ok_or("-h")?) * 1000.0 - 0.5) as i32,
+            'O' => a.pair_ppenalty_op = (atof(&take().ok_or("-O")?) * 1000.0 - 0.5) as i32,
+            // `-E` sets penalty_EX, which `genL__align11` does not read (its
+            // `+= fpenalty_EX` lines are commented out); parsed so the value
+            // is consumed rather than mistaken for a flag.
+            'E' => a.pair_ppenalty_ex2 = (atof(&take().ok_or("-E")?) * 1000.0 - 0.5) as i32,
+            'N' => a.pair_alg = Some(PairAlg::Generalized),
+            'Z' => a.usenaivescore = true,
             'D' => a.dorp = Some(b'd'),
             'P' => a.dorp = Some(b'p'),
             // `--anysymbol`; only affects the nucleotide score matrix, so it
@@ -219,7 +235,10 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
 fn refuse(a: &TbArgs) -> Option<String> {
     let mut bad: Vec<String> = a.unsupported.clone();
     if a.pair_alg.is_none() {
-        bad.push("only the -L (local) and -A (global) pairwise stages are ported".into());
+        bad.push(
+            "only the -L (local), -A (global) and -N (generalised) pairwise stages are ported"
+                .into(),
+        );
     }
     if a.fastathreshold < 0.0001 {
         bad.push("this port only covers the constrained (-l) progressive stage".into());
@@ -248,6 +267,7 @@ fn constants_for(
     ppenalty_ex: i32,
     ppenalty_dist: i32,
     poffset: i32,
+    ppenalty_op: i32,
     shift_factor: f64,
     specificityconsideration: f64,
 ) -> Constants {
@@ -257,6 +277,7 @@ fn constants_for(
         ppenalty_ex,
         ppenalty_dist,
         poffset,
+        ppenalty_op,
         penalty_shift_factor: shift_factor,
         specificityconsideration,
         ..Default::default()
@@ -359,6 +380,7 @@ fn main() {
         a.pair_ppenalty_ex,
         NOTSPECIFIED,
         a.pair_poffset,
+        a.pair_ppenalty_op,
         a.pair_shift_factor,
         a.pair_unalignlevel,
     );
@@ -381,6 +403,7 @@ fn main() {
     let mut table = localhom::new_table(njob);
     let mut lst = LalignState::new();
     let mut ast = AlignState::new();
+    let mut gst = mafft_rs::genalign::GenalignState::new();
 
     eprintln!("Pairwise alignment ... ");
     pairalign::pairalign(
@@ -394,6 +417,8 @@ fn main() {
         a.outgap,
         &mut lst,
         &mut ast,
+        &mut gst,
+        a.usenaivescore,
     );
 
     // tbfast rescales `opt` back out of the 5.8/600 units pairalign stores it in.
@@ -427,6 +452,7 @@ fn main() {
         a.ppenalty_ex,
         a.ppenalty_dist,
         a.poffset,
+        mafft_rs::params::NOTSPECIFIED,
         a.shift_factor,
         a.unalignlevel,
     );

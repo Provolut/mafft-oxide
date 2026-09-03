@@ -119,6 +119,9 @@ pub struct Args {
     pub ppenalty_dist: i32,
     pub ppenalty: i32,
     pub ppenalty_ex: i32,
+    /// `-O` in the pairwise-stage parser: the generalised aligner's cost for
+    /// opening a pair of unaligned runs.
+    pub ppenalty_op: i32,
     pub penalty_shift_factor: f64,
     pub poffset: i32,
     pub kimura_r: i32,
@@ -181,6 +184,7 @@ impl Default for Args {
             ppenalty_dist: NOTSPECIFIED,
             ppenalty: -1530,
             ppenalty_ex: NOTSPECIFIED,
+            ppenalty_op: NOTSPECIFIED,
             penalty_shift_factor: 1000.0,
             poffset: -123,
             kimura_r: NOTSPECIFIED,

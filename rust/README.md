@@ -10,7 +10,7 @@ same argument vector, same input, same output files:
 | binary | replaces | strategies |
 |---|---|---|
 | `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2 (plain `mafft`, `fftns`, `nwns`) |
-| `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, `--allowshift` (`linsi`, `ginsi`) |
+| `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
 
 Both handle protein and nucleotide input, which the reader tells apart the same
 way the C does.
@@ -39,6 +39,7 @@ cd rust && cargo build --release
 | **group-to-group DP** | `Salignmm.c` (`A__align`, `Atracking`, `Atracking_localhom`) | `align.rs` |
 | 1-vs-1 global DP | `Galign11.c` (`G__align11`) | `align.rs` |
 | **1-vs-1 local DP** | `Lalign11.c` (`L__align11`) | `lalign.rs` |
+| **1-vs-1 generalised affine-gap local DP** | `genalign11.c` (`genL__align11`) | `genalign.rs` |
 | **FFT** | `fft.c` | `fft.rs` |
 | **FFT anchoring** | `Falign.c`, `fftFunctions.c` | `falign.rs` |
 | **all-pairs pairwise stage** | `pairlocalalign.c` (`pairalign`) | `pairalign.rs` |
@@ -85,6 +86,15 @@ length correction, the reader lower-cases instead of upper-casing, and the FFT
 signal changes shape (see the note below). `tests/golden/constants_dna.txt` pins
 the resulting matrix against the C, because none of that chain is obvious enough
 to trust otherwise.
+
+**`genL__align11`** is what E-INS-i runs instead, and it earns its own module
+because of a third recurrence. Besides "gap in seq1" and "gap in seq2" it keeps
+a *pair* of unaligned runs, which can be entered from either side for one flat
+`penalty_OP` however long the two runs grow. That is what lets E-INS-i leave
+large, mutually unalignable insertions out of the alignment rather than paying
+extension across them, and it is why its traceback needs two index matrices
+instead of one: a cell has to record both the row and the column it came from,
+because that transition moves in both axes at once.
 
 **The constraints** ("localhom") are what makes L-INS-i and G-INS-i
 consistency-based. Each pairwise alignment is cut at its gaps into ungapped
@@ -188,10 +198,10 @@ Current status, on this source tree:
 |---|---|
 | `verify.sh`, generated corpus (88 inputs × 16 argument sets) | 1408/1408 identical |
 | `verify.sh`, 7 larger inputs up to 300 sequences × 16 | 112/112 identical |
-| `verify_tbfast.sh`, generated corpus (40 inputs × 9 argument sets) | 360/360 identical |
-| `verify_e2e.sh`, 2 inputs × 19 wrapper strategies | 38/38 identical |
+| `verify_tbfast.sh`, generated corpus (40 inputs × 12 argument sets) | 480/480 identical |
+| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
-| `cargo test` | 62/62 |
+| `cargo test` | 66/66 |
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
 RNA folding programs and fail identically with the stock C binaries.)

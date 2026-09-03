@@ -21,6 +21,11 @@ trap 'rm -rf "$work"' EXIT
 P="-u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1"
 PG="-u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1"
 T="-W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1"
+# E-INS-i (--genafpair): the generalised affine-gap aligner, with -Z so the
+# score comes from naivepairscore11; --oldgenafpair is the same without -Z.
+PE="-u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z"
+PEO="-u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N"
+TE="-W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1"
 
 ARGSETS=(
   # L-INS-1 / L-INS-i  (--localpair)
@@ -36,6 +41,11 @@ ARGSETS=(
   # non-default constraint weight and tree parameters
   "_ $P -L _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5 -O"
   "_ $PG -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 5.0 -X 0.0"
+  # E-INS-1 / E-INS-i (--genafpair), and --oldgenafpair, which drops -Z and so
+  # takes the branch with the X-stripped rescore and the dynamic matrix
+  "_ $PE _ -+ 0 $TE"
+  "_ $PE _ -+ 2 $TE"
+  "_ $PEO _ -+ 0 $TE"
 )
 
 if [ -z "$CORPUS" ]; then

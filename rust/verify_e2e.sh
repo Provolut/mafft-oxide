@@ -66,6 +66,10 @@ STRATS=(
   "--globalpair --maxiterate 2 --thread 0"
   "--globalpair --maxiterate 100 --thread 0"
   "--allowshift --globalpair --maxiterate 100 --thread 0"
+  # E-INS-i: the generalised affine-gap pairwise aligner
+  "--genafpair --maxiterate 0"
+  "--genafpair --maxiterate 2 --thread 0"
+  "--oldgenafpair --maxiterate 0"
   "--auto"
 )
 
