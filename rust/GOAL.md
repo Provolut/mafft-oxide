@@ -14,7 +14,7 @@ Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 
 ## Work, roughly in order of value
 
-1. **E-INS-i / E-INS-1 (`--genafpair`).** The largest missing strategy. Port
+1. **E-INS-i (`--genafpair`).** The largest missing strategy. Port
    `genL__align11` from `core/genalign11.c` — the generalised affine-gap local
    aligner — as a third arm of `pairalign.rs` beside `L__align11` and
    `G__align11`. The wrapper selects it with `-N -Z` in `tbfast`'s pairwise
