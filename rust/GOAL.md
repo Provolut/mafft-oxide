@@ -25,11 +25,15 @@ before porting: `--allowshift` cost nothing -- the warp DP was already in
 divides the added sequences' weights by 100), which cost a day.
 
 1. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
-   `Falign_givenanchors` (~670 lines). Blocked, not just big: `anchcomp` and
-   `anchscorecomp` break ties on `(int)((void *)p - (void *)q)`, the addresses
-   of the two elements *inside the array qsort is permuting*. Matching that
-   means reimplementing glibc's qsort, not just the comparator. Decide whether
-   to accept a documented divergence before starting.
+   `checkanchors_strongestfirst`, `pickpairanch`, `Falign_givenanchors`
+   (~670 lines, but most of its body is `falign`'s block loop, already ported;
+   what is new is turning anchors into cut points, the `alignorcopy` copy-vs-
+   align marking and the terminal-margin cuts).
+   Earlier I called this blocked because `anchcomp` and `anchscorecomp` break
+   ties on `(int)((void *)p - (void *)q)`. Measured instead of assumed: glibc
+   2.39's qsort is a mergesort here, so those tie-breaks reduce to *stable*
+   for `anchcomp` and *reverse-stable* for `anchscorecomp` -- both of which a
+   Rust stable sort reproduces. Not blocked; just big.
 
 2. **The `compacttree*` builders**, reached by `--treein very compact`,
    `stepadd` and `youngestlinkage`, and by `compact` only above its RAM
