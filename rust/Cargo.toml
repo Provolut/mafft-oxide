@@ -1,13 +1,21 @@
 [package]
 name = "mafft-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Bit-exact Rust port of the MAFFT progressive multiple-sequence-alignment algorithm (disttbfast, non-FFT path)"
+description = "Bit-exact Rust port of MAFFT's multiple-sequence-alignment algorithms"
 license = "BSD-3-Clause"
+
+[lib]
+name = "mafft_rs"
+path = "src/lib.rs"
 
 [[bin]]
 name = "disttbfast-rs"
-path = "src/main.rs"
+path = "src/bin/disttbfast.rs"
+
+[[bin]]
+name = "tbfast-rs"
+path = "src/bin/tbfast.rs"
 
 [profile.release]
 opt-level = 2

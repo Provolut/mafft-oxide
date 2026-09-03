@@ -15,6 +15,7 @@
 
 use crate::constants::{Constants, NALPHABETS};
 use crate::profile;
+use crate::warp::Warp;
 
 // Salignmm.c / Galign11.c
 const TERMGAPFAC: f64 = 0.0;
@@ -211,6 +212,7 @@ fn atracking(
     lgth2: usize,
     ijp: &mut [Vec<i32>],
     tailgp: bool,
+    warp: Option<&Warp>,
 ) -> Track {
     let mut wm = 0.0f64;
 
@@ -253,15 +255,42 @@ fn atracking(
     let mut jin = lgth2 as i32;
     let limk = (lgth1 + lgth2 + 1) as i32;
     let mut k = 0i32;
+    let warpbase = warp.map(|w| w.warpbase).unwrap_or(i32::MAX);
     while k < limk {
         let v = ijp[iin as usize][jin as usize];
-        let (ifi, jfi) = if v < 0 {
+        let (ifi, jfi) = if v >= warpbase {
+            warp.unwrap().target(v)
+        } else if v < 0 {
             (iin - 1, jin + v)
         } else if v > 0 {
             (iin - v, jin - 1)
         } else {
             (iin - 1, jin - 1)
         };
+
+        #[allow(unused_assignments)]
+        if ifi == -warpbase && jfi == -warpbase {
+            // A jump straight off the front: everything left is terminal gap.
+            let mut l = iin;
+            while {
+                l -= 1;
+                l >= 0
+            } {
+                rev1.push(b'o');
+                rev2.push(b'-');
+                k += 1;
+            }
+            let mut l = jin;
+            while {
+                l -= 1;
+                l >= 0
+            } {
+                rev1.push(b'-');
+                rev2.push(b'o');
+                k += 1;
+            }
+            break;
+        }
 
         let mut l = iin - ifi;
         loop {
@@ -473,6 +502,9 @@ impl AlignState {
         headgp: bool,
         tailgp: bool,
         gaps: Option<(&[u8], &[u8], &[u8], &[u8])>,
+        // `imp` is `impmtx` when the caller runs with constraints: the
+        // per-cell match bonus derived from the pairwise local alignments.
+        imp: Option<&[Vec<f64>]>,
         firstmem: i32,
         calledbyfulltreebase: i32,
         cpmxchild0: Option<CpmxHist>,
@@ -505,6 +537,17 @@ impl AlignState {
 
         let fpenalty = penalty_l as f64;
         let fpenalty_ex = penalty_ex_l as f64;
+        let fpenalty_shift = cn.penalty_shift as f64;
+
+        let mut warp = if cn.trywarp {
+            if !headgp || !tailgp {
+                eprintln!("At present, headgp and tailgp must be 1 to allow shift.");
+                std::process::exit(1);
+            }
+            Some(Warp::new(lgth1, lgth2))
+        } else {
+            None
+        };
 
         // --- buffer growth, mirroring the C `static` reallocation rule ---
         if lgth1 > self.orlgth1 || lgth2 > self.orlgth2 {
@@ -581,8 +624,11 @@ impl AlignState {
         let headgapfreq1: f64;
         let headgapfreq2: f64;
 
-        if want_cpmxresult {
-            // specificityconsideration == 0.0 is enforced by check_supported().
+        // The C selects this branch on `cpmxresult && specificityconsideration
+        // == 0.0`: with --allowshift the score matrix varies per node, so a
+        // child's cached profile cannot be reused -- but the parent's is still
+        // produced.
+        if want_cpmxresult && cn.specificityconsideration == 0.0 {
             assert!(
                 gaps.is_none(),
                 "The combination of sgap1 and cpmxhist is not supported"
@@ -620,10 +666,15 @@ impl AlignState {
                 None => gapfreq2[lgth2] = 1.0,
             }
         } else {
-            // The Falign block branch. `reuseprofiles` cannot be true here --
-            // it needs calledbyfulltreebase == 1, and Falign passes -1 -- so
-            // the incremental cpmx/gap-count updates are unreachable.
-            profile::cpmx_calc_new(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
+            // The Falign block branch, and the --allowshift branch. When the
+            // previous call built the same group one member smaller, the C
+            // updates the profile incrementally rather than recomputing it --
+            // a different summation order, so it has to be reproduced.
+            if reuseprofiles {
+                profile::cpmx_calc_add(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
+            } else {
+                profile::cpmx_calc_new(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
+            }
             profile::cpmx_calc_new(cn, &g2, &mut cpmx2, eff2, lgth2, jcyc);
 
             let mut hgf1 = 0.0f64;
@@ -640,8 +691,13 @@ impl AlignState {
                     gapfreq2[lgth2] = profile::outgapcount(jcyc, egap2, eff2);
                 }
                 None => {
-                    profile::st_opening_gap_count(&mut ogcp1o, icyc, &g1, eff1, lgth1);
-                    profile::st_final_gap_count(&mut fgcp1o, icyc, &g1, eff1, lgth1);
+                    if reuseprofiles {
+                        profile::st_opening_gap_add(&mut ogcp1o, icyc, &g1, eff1, lgth1);
+                        profile::st_final_gap_add(&mut fgcp1o, icyc, &g1, eff1, lgth1);
+                    } else {
+                        profile::st_opening_gap_count(&mut ogcp1o, icyc, &g1, eff1, lgth1);
+                        profile::st_final_gap_count(&mut fgcp1o, icyc, &g1, eff1, lgth1);
+                    }
                     profile::st_opening_gap_count(&mut ogcp2o, jcyc, &g2, eff2, lgth2);
                     profile::st_final_gap_count(&mut fgcp2o, jcyc, &g2, eff2, lgth2);
                     gapfreq1[lgth1] = 0.0;
@@ -650,7 +706,11 @@ impl AlignState {
             }
 
             // legacygapcost == 0 is enforced by check_supported().
-            profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+            if reuseprofiles {
+                profile::gapcountadd(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+            } else {
+                profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+            }
             profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);
             for v in gapfreq1.iter_mut().take(lgth1 + 1) {
                 *v = 1.0 - *v;
@@ -707,6 +767,12 @@ impl AlignState {
             &mut intwork,
             true,
         );
+        if let Some(im) = imp {
+            // imp_match_out_vead_tate( initverticalw, 0, lgth1 )
+            for (i, v) in initverticalw.iter_mut().enumerate().take(lgth1) {
+                *v += im[i][0];
+            }
+        }
         match_calc(
             n_dynamicmtx,
             &mut w1,
@@ -718,6 +784,12 @@ impl AlignState {
             &mut intwork,
             true,
         );
+        if let Some(im) = imp {
+            // imp_match_out_vead( currentw, 0, lgth2 )
+            for (j, v) in w1.iter_mut().enumerate().take(lgth2) {
+                *v += im[0][j];
+            }
+        }
 
         if headgp {
             for i in 1..lgth1 + 1 {
@@ -769,6 +841,12 @@ impl AlignState {
                 &mut intwork,
                 false,
             );
+            if let Some(im) = imp {
+                // imp_match_out_vead( currentw, i, lgth2 )
+                for (j, v) in currentw.iter_mut().enumerate().take(lgth2) {
+                    *v += im[i][j];
+                }
+            }
             currentw[0] = initverticalw[i];
 
             let mut mi = previousw[0] + ogcp2[1] * gapfreq1v[i - 1];
@@ -807,28 +885,59 @@ impl AlignState {
                 }
                 m[j] += fpenalty_ex;
 
+                if let Some(wp) = warp.as_mut() {
+                    let (nw, code) = wp.cell(i, j, w, currentw[j], fpenalty_shift, fpenalty_ex);
+                    w = nw;
+                    if let Some(c) = code {
+                        ijprow[j] = c;
+                    }
+                }
+
                 currentw[j] += w;
                 wm = w;
+            }
+            if let Some(wp) = warp.as_mut() {
+                wp.end_row(lastj);
             }
             lastverticalw[i] = currentw[lgth2 - 1];
         }
 
         let track = {
             let currentw: &[f64] = if cur_is_w1 { &w1 } else { &w2 };
-            atracking(
-                currentw,
-                &lastverticalw,
-                fpenalty,
-                fpenalty_ex,
-                lgth1,
-                lgth2,
-                &mut ijp,
-                tailgp,
-            )
+            match imp {
+                // Under constraints the C uses Atracking_localhom, which picks
+                // the end cell with `>=` and consults the global `outgap`
+                // rather than the `tailgp` argument, and leaves `wm` as the
+                // DP's last value.
+                Some(im) => atracking_localhom(
+                    currentw,
+                    &lastverticalw,
+                    lgth1,
+                    lgth2,
+                    &mut ijp,
+                    tailgp,
+                    im,
+                    warp.as_ref(),
+                ),
+                None => {
+                    let t = atracking(
+                        currentw,
+                        &lastverticalw,
+                        fpenalty,
+                        fpenalty_ex,
+                        lgth1,
+                        lgth2,
+                        &mut ijp,
+                        tailgp,
+                        warp.as_ref(),
+                    );
+                    if !tailgp {
+                        wm = t.wm;
+                    }
+                    t
+                }
+            }
         };
-        if !tailgp {
-            wm = track.wm;
-        }
 
         // --- profile history for the parent node ---
         let cpmxresult = if want_cpmxresult && icyc + jcyc > 20 {
@@ -945,6 +1054,16 @@ impl AlignState {
 
         let fpenalty = penalty as f64;
         let fpenalty_ex = penalty_ex as f64;
+        let fpenalty_shift = cn.penalty_shift as f64;
+        let mut warp = if cn.trywarp {
+            if !headgp || !tailgp {
+                eprintln!("At present, headgp and tailgp must be 1.");
+                std::process::exit(1);
+            }
+            Some(Warp::new(lgth1, lgth2))
+        } else {
+            None
+        };
 
         if lgth1 > self.g_orlgth1 || lgth2 > self.g_orlgth2 {
             let ll1 = max_usize((1.3 * lgth1 as f64) as usize, self.g_orlgth1) + 100;
@@ -1072,8 +1191,19 @@ impl AlignState {
                     m[j] += fpenalty_ex;
                 }
 
+                if let Some(wp) = warp.as_mut() {
+                    let (nw, code) = wp.cell(i, j, w, currentw[j], fpenalty_shift, fpenalty_ex);
+                    w = nw;
+                    if let Some(c) = code {
+                        ijprow[j] = c;
+                    }
+                }
+
                 currentw[j] += w;
                 wm = w;
+            }
+            if let Some(wp) = warp.as_mut() {
+                wp.end_row(lastj);
             }
             lastverticalw[i] = currentw[lgth2 - 1];
         }
@@ -1090,6 +1220,7 @@ impl AlignState {
                 fpenalty,
                 fpenalty_ex,
                 newgapstr,
+                warp.as_ref(),
             )
         };
         if !tailgp {
@@ -1124,6 +1255,7 @@ fn g_atracking(
     fpenalty: f64,
     fpenalty_ex: f64,
     gap: u8,
+    warp: Option<&Warp>,
 ) -> (f64, Vec<u8>, Vec<u8>) {
     let lgth1 = seq1.len();
     let lgth2 = seq2.len();
@@ -1166,15 +1298,41 @@ fn g_atracking(
     let mut jin = lgth2 as i32;
     let limk = (lgth1 + lgth2 + 1) as i32;
     let mut k = 0i32;
+    let warpbase = warp.map(|w| w.warpbase).unwrap_or(i32::MAX);
     while k < limk {
         let v = ijp[iin as usize][jin as usize];
-        let (ifi, jfi) = if v < 0 {
+        let (ifi, jfi) = if v >= warpbase {
+            warp.unwrap().target(v)
+        } else if v < 0 {
             (iin - 1, jin + v)
         } else if v > 0 {
             (iin - v, jin - 1)
         } else {
             (iin - 1, jin - 1)
         };
+
+        #[allow(unused_assignments)]
+        if ifi == -warpbase && jfi == -warpbase {
+            let mut l = iin;
+            while {
+                l -= 1;
+                l >= 0
+            } {
+                r1.push(seq1[l as usize]);
+                r2.push(gap);
+                k += 1;
+            }
+            let mut l = jin;
+            while {
+                l -= 1;
+                l >= 0
+            } {
+                r1.push(gap);
+                r2.push(seq2[l as usize]);
+                k += 1;
+            }
+            break;
+        }
 
         let mut l = iin - ifi;
         loop {
@@ -1210,4 +1368,137 @@ fn g_atracking(
     r1.reverse();
     r2.reverse();
     (wm, r1, r2)
+}
+
+/// `Atracking_localhom()` from Salignmm.c.
+///
+/// Differs from [`atracking`] in two ways that change the answer: the end cell
+/// is chosen with `>=` (so the *last* equal-scoring cell wins, not the first),
+/// and the choice is governed by the global `outgap` — which `treebase` passes
+/// as `tailgp`, so the parameter carries it here.
+fn atracking_localhom(
+    lasthorizontalw: &[f64],
+    lastverticalw: &[f64],
+    lgth1: usize,
+    lgth2: usize,
+    ijp: &mut [Vec<i32>],
+    outgap: bool,
+    imp: &[Vec<f64>],
+    warp: Option<&Warp>,
+) -> Track {
+    if !outgap {
+        let mut wm = lastverticalw[0];
+        for i in 0..lgth1 {
+            if lastverticalw[i] >= wm {
+                wm = lastverticalw[i];
+                ijp[lgth1][lgth2] = (lgth1 - i) as i32;
+            }
+        }
+        for j in 0..lgth2 {
+            if lasthorizontalw[j] >= wm {
+                wm = lasthorizontalw[j];
+                ijp[lgth1][lgth2] = -((lgth2 - j) as i32);
+            }
+        }
+    }
+
+    for (i, row) in ijp.iter_mut().enumerate().take(lgth1 + 1) {
+        row[0] = i as i32 + 1;
+    }
+    for j in 0..lgth2 + 1 {
+        ijp[0][j] = -(j as i32 + 1);
+    }
+
+    let mut rev1: Vec<u8> = Vec::with_capacity(lgth1 + lgth2 + 1);
+    let mut rev2: Vec<u8> = Vec::with_capacity(lgth1 + lgth2 + 1);
+
+    let mut iin = lgth1 as i32;
+    let mut jin = lgth2 as i32;
+    let limk = (lgth1 + lgth2 + 1) as i32;
+    let mut k = 0i32;
+    let mut impwm = 0.0f64;
+    let warpbase = warp.map(|w| w.warpbase).unwrap_or(i32::MAX);
+    while k < limk {
+        let v = ijp[iin as usize][jin as usize];
+        let (ifi, jfi) = if v >= warpbase {
+            warp.unwrap().target(v)
+        } else if v < 0 {
+            (iin - 1, jin + v)
+        } else if v > 0 {
+            (iin - v, jin - 1)
+        } else {
+            (iin - 1, jin - 1)
+        };
+
+        #[allow(unused_assignments)]
+        if ifi == -warpbase && jfi == -warpbase {
+            let mut l = iin;
+            while {
+                l -= 1;
+                l >= 0
+            } {
+                rev1.push(b'o');
+                rev2.push(b'-');
+                k += 1;
+            }
+            let mut l = jin;
+            while {
+                l -= 1;
+                l >= 0
+            } {
+                rev1.push(b'-');
+                rev2.push(b'o');
+                k += 1;
+            }
+            break;
+        }
+
+        let mut l = iin - ifi;
+        loop {
+            l -= 1;
+            if l == 0 {
+                break;
+            }
+            rev1.push(b'o');
+            rev2.push(b'-');
+            k += 1;
+        }
+        let mut l = jin - jfi;
+        loop {
+            l -= 1;
+            if l == 0 {
+                break;
+            }
+            rev1.push(b'-');
+            rev2.push(b'o');
+            k += 1;
+        }
+
+        if !(iin as usize == lgth1 || jin as usize == lgth2) {
+            impwm += imp[iin as usize][jin as usize];
+        }
+
+        if iin <= 0 || jin <= 0 {
+            break;
+        }
+        rev1.push(b'o');
+        rev2.push(b'o');
+        k += 1;
+        iin = ifi;
+        jin = jfi;
+        k += 1;
+    }
+    let _ = impwm; // the caller discards it (tbfast passes a dummy)
+
+    rev1.reverse();
+    rev2.reverse();
+    let ngap1 = rev1.contains(&b'-');
+    let ngap2 = rev2.contains(&b'-');
+    Track {
+        wm: 0.0,
+        gt1: rev1,
+        gt2: rev2,
+        ngap1,
+        ngap2,
+    }
 }

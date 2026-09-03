@@ -105,6 +105,9 @@ pub struct Constants {
     pub volume: [f64; 0x100],
     pub fft_win_size: i32,
     pub fft_threshold: i32,
+    /// `-s` / `-u`: how far a shift is allowed to pay for itself
+    /// (`--allowshift` / `--unalignlevel`). Zero disables the whole mechanism.
+    pub specificityconsideration: f64,
 }
 
 // Defaults from blosum.h / constants.c for the protein BLOSUM branch.
@@ -237,6 +240,7 @@ impl Constants {
             volume: normalise(&VOLUME_),
             fft_win_size,
             fft_threshold,
+            specificityconsideration: args.specificityconsideration,
             amino,
             amino_n,
             amino_grp,
@@ -309,5 +313,49 @@ mod tests {
             aminoline.split_whitespace().nth(1).unwrap().as_bytes(),
             &cn.amino[..]
         );
+    }
+}
+
+/// `dist2offset()`: how much of a bonus a shifted match may earn.
+pub fn dist2offset(dist: f64, specificityconsideration: f64) -> f64 {
+    let val = dist * 0.5 - specificityconsideration;
+    if val > 0.0 {
+        0.0
+    } else {
+        val
+    }
+}
+
+/// `makedynamicmtx()`: raise every residue-residue score by an offset that
+/// depends on how diverged the node being aligned is.
+///
+/// Under `--allowshift` the score matrix is no longer a constant: closely
+/// related groups get a flatter matrix, so a shift costs relatively less.
+pub fn makedynamicmtx(
+    out: &mut [Vec<f64>],
+    input: &[Vec<f64>],
+    offset: f64,
+    amino: &[u8; NALPHABETS],
+    specificityconsideration: f64,
+) {
+    let offset = dist2offset(offset * 2.0, specificityconsideration);
+    for i in 0..NALPHABETS {
+        for j in 0..NALPHABETS {
+            out[i][j] = input[i][j];
+        }
+    }
+    if offset == 0.0 {
+        return;
+    }
+    for i in 0..NALPHABETS {
+        if amino[i] == b'-' {
+            continue;
+        }
+        for j in 0..NALPHABETS {
+            if amino[j] == b'-' {
+                continue;
+            }
+            out[i][j] = input[i][j] + offset * 600.0;
+        }
     }
 }

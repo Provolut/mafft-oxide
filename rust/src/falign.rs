@@ -455,6 +455,7 @@ pub fn falign(
     fs: &mut FalignState,
     ast: &mut AlignState,
     cn: &Constants,
+    n_dynamicmtx: &[Vec<f64>],
     group1: &mut Vec<Vec<u8>>,
     group2: &mut Vec<Vec<u8>>,
     eff1: &[f64],
@@ -693,7 +694,7 @@ pub fn falign(
             let mut s2 = std::mem::take(&mut block2[0]);
             totalscore += ast.g_align11(
                 cn,
-                &cn.n_dis_consweight_multi,
+                n_dynamicmtx,
                 cn.penalty,
                 cn.penalty_ex,
                 &mut s1,
@@ -707,7 +708,7 @@ pub fn falign(
         } else {
             let (sc, _) = ast.a_align(
                 cn,
-                &cn.n_dis_consweight_multi,
+                n_dynamicmtx,
                 cn.penalty,
                 cn.penalty_ex,
                 &mut block1,
@@ -717,6 +718,7 @@ pub fn falign(
                 headgp,
                 tailgp,
                 Some((&sgap1, &sgap2, &egap1, &egap2)),
+                None,
                 -1,
                 -1,
                 None,

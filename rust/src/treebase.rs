@@ -1,16 +1,48 @@
 //! The progressive alignment driver, transliterated from `treebase()` in
-//! `core/disttbfast.c` (the single-threaded, unconstrained, non-FFT path).
+//! `core/disttbfast.c` and `core/tbfast.c` (single-threaded, non-memsave).
+//!
+//! The two C copies differ in three places, all of them parameters here: the
+//! minimum sequence weight, whether the FFT branch may be taken, and whether
+//! position-specific constraints from the pairwise stage are applied.
 
 use crate::align::{AlignState, CpmxHist};
-use crate::constants::Constants;
+use crate::constants::{makedynamicmtx, Constants, NALPHABETS};
 use crate::falign::{falign, FalignState};
-use crate::params::Args;
+use crate::localhom::{fastshrinklocalhom_half, fillimp, LocalHomTable};
 use crate::tree::Tree;
+
+/// What varies between the `disttbfast` and `tbfast` call sites.
+pub struct TreebaseOpts<'a> {
+    /// Terminal gaps are free when this is false (`-O` on the command line).
+    pub outgap: bool,
+    pub use_fft: bool,
+    pub force_fft: bool,
+    /// `-W`: sequence weights are clamped up to this.
+    pub minimumweight: f64,
+    /// The constraints from the pairwise stage (L-INS-i / G-INS-i).
+    pub constraint: Option<&'a LocalHomTable>,
+    /// `-l`: how strongly the constraints pull.
+    pub fastathreshold: f64,
+    /// Rebuild the score matrix per tree node from its distance from the tips
+    /// (`makedynamicmtx`). A no-op unless `--allowshift` is on, but `tbfast`
+    /// calls it unconditionally and `disttbfast` only when it matters.
+    pub use_dynamic_mtx: bool,
+}
 
 /// `fastconjuction_noname()`: gather a group's members and normalise their
 /// weights, returning the pre-normalisation total (`oritotal`).
-fn fastconjuction_noname(memlist: &[i32], eff: &[f64]) -> (Vec<f64>, f64) {
-    let mut peff: Vec<f64> = memlist.iter().map(|&m| eff[m as usize]).collect();
+fn fastconjuction_noname(memlist: &[i32], eff: &[f64], mineff: f64) -> (Vec<f64>, f64) {
+    let mut peff: Vec<f64> = memlist
+        .iter()
+        .map(|&m| {
+            let e = eff[m as usize];
+            if e < mineff {
+                mineff
+            } else {
+                e
+            }
+        })
+        .collect();
     let mut total = 0.0f64;
     for v in peff.iter() {
         total += *v;
@@ -24,9 +56,10 @@ fn fastconjuction_noname(memlist: &[i32], eff: &[f64]) -> (Vec<f64>, f64) {
 /// `treebase()`: walk the guide tree bottom-up, aligning group to group.
 ///
 /// `aseq` holds the (initially ungapped) sequences and is aligned in place.
+#[allow(clippy::too_many_arguments)]
 pub fn treebase(
     cn: &Constants,
-    args: &Args,
+    opts: &TreebaseOpts,
     njob: usize,
     aseq: &mut [Vec<u8>],
     nlen: &mut [i32],
@@ -36,11 +69,14 @@ pub fn treebase(
     fs: &mut FalignState,
 ) {
     let newgapstr = b'-';
-    let outgap = args.outgap;
+    let outgap = opts.outgap;
 
     let mut memhist: Vec<Option<Vec<i32>>> = vec![None; njob.saturating_sub(1)];
     let mut cpmxhist: Vec<Option<CpmxHist>> = (0..njob.saturating_sub(1)).map(|_| None).collect();
     let mut fftlog = vec![1i32; njob];
+    let mut impmtx: Vec<Vec<f64>> = Vec::new();
+    let mut impalloclen = 0usize;
+    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];
 
     for l in 0..njob - 1 {
         let m1 = tree.topol[l][0] as usize;
@@ -75,8 +111,22 @@ pub fn treebase(
             memhist[l] = Some(merged);
         }
 
-        let (effarr1, orieff1) = fastconjuction_noname(&mem0, effarr);
-        let (effarr2, orieff2) = fastconjuction_noname(&mem1, effarr);
+        if opts.use_dynamic_mtx {
+            makedynamicmtx(
+                &mut dynmtx,
+                &cn.n_dis_consweight_multi,
+                tree.dep[l].distfromtip,
+                &cn.amino,
+                cn.specificityconsideration,
+            );
+        } else {
+            for (i, row) in dynmtx.iter_mut().enumerate() {
+                row.copy_from_slice(&cn.n_dis_consweight_multi[i]);
+            }
+        }
+
+        let (effarr1, orieff1) = fastconjuction_noname(&mem0, effarr, opts.minimumweight);
+        let (effarr2, orieff2) = fastconjuction_noname(&mem1, effarr, opts.minimumweight);
         let clus1 = mem0.len();
         let clus2 = mem1.len();
 
@@ -84,43 +134,39 @@ pub fn treebase(
         let mut group1: Vec<Vec<u8>> = mem0.iter().map(|&m| aseq[m as usize].clone()).collect();
         let mut group2: Vec<Vec<u8>> = mem1.iter().map(|&m| aseq[m as usize].clone()).collect();
 
-        // `ffttry`: the FFT scan needs sequences longer than the group is wide.
-        let ffttry = nlen[m1] > clus1 as i32 && nlen[m2] > clus2 as i32;
-        if args.force_fft || (args.use_fft && ffttry) {
-            falign(
-                fs,
-                st,
-                cn,
-                &mut group1,
-                &mut group2,
-                &effarr1,
-                &effarr2,
-                outgap,
-                &mut fftlog[m1],
-                newgapstr,
-            );
-        } else if clus1 == 1 && clus2 == 1 {
-            fftlog[m1] = 0;
-            let mut s1 = std::mem::take(&mut group1[0]);
-            let mut s2 = std::mem::take(&mut group2[0]);
-            st.g_align11(
-                cn,
-                &cn.n_dis_consweight_multi,
-                cn.penalty,
-                cn.penalty_ex,
-                &mut s1,
-                &mut s2,
-                outgap,
-                outgap,
-                newgapstr,
-            );
-            group1[0] = s1;
-            group2[0] = s2;
-        } else {
-            fftlog[m1] = 0;
+        if let Some(table) = opts.constraint {
+            // imp_match_init_strict() -> fillimp(): paint the constraint
+            // weights onto the match-bonus matrix for this pair of groups.
+            // With constraints the C never takes the FFT branch.
+            let lgth1 = group1[0].len();
+            let lgth2 = group2[0].len();
+            if impalloclen < lgth1 + 2 || impalloclen < lgth2 + 2 {
+                impalloclen = lgth1.max(lgth2) + 2;
+                impmtx = vec![vec![0.0f64; impalloclen]; impalloclen];
+            }
+            let shrink = fastshrinklocalhom_half(&mem0, &mem1, table);
+            {
+                let g1: Vec<&[u8]> = group1.iter().map(|s| s.as_slice()).collect();
+                let g2: Vec<&[u8]> = group2.iter().map(|s| s.as_slice()).collect();
+                fillimp(
+                    &mut impmtx,
+                    clus1,
+                    clus2,
+                    lgth1,
+                    lgth2,
+                    &g1,
+                    &g2,
+                    &effarr1,
+                    &effarr2,
+                    &shrink,
+                    &mem0,
+                    &mem1,
+                    opts.fastathreshold,
+                );
+            }
             let (_pscore, hist) = st.a_align(
                 cn,
-                &cn.n_dis_consweight_multi,
+                &dynmtx,
                 cn.penalty,
                 cn.penalty_ex,
                 &mut group1,
@@ -130,6 +176,7 @@ pub fn treebase(
                 outgap,
                 outgap,
                 None,
+                Some(&impmtx),
                 mem0[0],
                 1,
                 cpmxchild0,
@@ -140,6 +187,66 @@ pub fn treebase(
                 newgapstr,
             );
             cpmxhist[l] = hist;
+        } else {
+            // `ffttry`: the FFT scan needs sequences longer than the group is wide.
+            let ffttry = nlen[m1] > clus1 as i32 && nlen[m2] > clus2 as i32;
+            if opts.force_fft || (opts.use_fft && ffttry) {
+                falign(
+                    fs,
+                    st,
+                    cn,
+                    &dynmtx,
+                    &mut group1,
+                    &mut group2,
+                    &effarr1,
+                    &effarr2,
+                    outgap,
+                    &mut fftlog[m1],
+                    newgapstr,
+                );
+            } else if clus1 == 1 && clus2 == 1 {
+                fftlog[m1] = 0;
+                let mut s1 = std::mem::take(&mut group1[0]);
+                let mut s2 = std::mem::take(&mut group2[0]);
+                st.g_align11(
+                    cn,
+                    &dynmtx,
+                    cn.penalty,
+                    cn.penalty_ex,
+                    &mut s1,
+                    &mut s2,
+                    outgap,
+                    outgap,
+                    newgapstr,
+                );
+                group1[0] = s1;
+                group2[0] = s2;
+            } else {
+                fftlog[m1] = 0;
+                let (_pscore, hist) = st.a_align(
+                    cn,
+                    &dynmtx,
+                    cn.penalty,
+                    cn.penalty_ex,
+                    &mut group1,
+                    &mut group2,
+                    &effarr1,
+                    &effarr2,
+                    outgap,
+                    outgap,
+                    None,
+                    None,
+                    mem0[0],
+                    1,
+                    cpmxchild0,
+                    cpmxchild1,
+                    orieff1,
+                    orieff2,
+                    true,
+                    newgapstr,
+                );
+                cpmxhist[l] = hist;
+            }
         }
 
         for (k, &m) in mem0.iter().enumerate() {

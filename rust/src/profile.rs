@@ -141,6 +141,80 @@ pub fn outgapcount(nseq: usize, gappat: &[u8], eff: &[f64]) -> f64 {
     fr
 }
 
+/// `cpmx_calc_add()`: incremental update when one member was appended.
+///
+/// Reachable only under `--allowshift`, where the profile-history cache is
+/// off but consecutive tree steps can still grow the same group by one.
+pub fn cpmx_calc_add(
+    cn: &Constants,
+    seq: &[&[u8]],
+    cpmx: &mut [Vec<f64>],
+    eff: &[f64],
+    lgth: usize,
+    clus: usize,
+) {
+    let newmem = clus - 1;
+    let neweff = eff[clus - 1];
+    let orieff = 1.0 - neweff;
+    for j in 0..lgth {
+        for row in cpmx.iter_mut().take(NALPHABETS) {
+            row[j] *= orieff;
+        }
+        cpmx[cn.amino_n[seq[newmem][j] as usize] as usize][j] += neweff;
+    }
+}
+
+/// `st_OpeningGapAdd()`: incremental form of [`st_opening_gap_count`].
+pub fn st_opening_gap_add(ogcp: &mut [f64], clus: usize, seq: &[&[u8]], eff: &[f64], len: usize) {
+    let j = clus - 1;
+    let feff = eff[j];
+    let orieff = 1.0 - feff;
+    let s = seq[j];
+    let mut gc = false;
+    for i in 0..len {
+        let gb = gc;
+        gc = s[i] == b'-';
+        ogcp[i] *= orieff;
+        if !gb && gc {
+            ogcp[i] += feff;
+        }
+    }
+    ogcp[len] = 0.0;
+}
+
+/// `st_FinalGapAdd()`: incremental form of [`st_final_gap_count`].
+pub fn st_final_gap_add(fgcp: &mut [f64], clus: usize, seq: &[&[u8]], eff: &[f64], len: usize) {
+    let j = clus - 1;
+    let feff = eff[j];
+    let orieff = 1.0 - feff;
+    let s = seq[j];
+    let mut gc = s[0] == b'-';
+    for i in 0..len {
+        let gb = gc;
+        gc = i + 1 < len && s[i + 1] == b'-';
+        fgcp[i] *= orieff;
+        if gb && !gc {
+            fgcp[i] += feff;
+        }
+    }
+}
+
+/// `gapcountadd()`: incremental form of [`gapcountf`], operating on the
+/// already-complemented values (the C flips them back, updates, and leaves
+/// them un-flipped for the caller to flip again).
+pub fn gapcountadd(freq: &mut [f64], seq: &[&[u8]], nseq: usize, eff: &[f64], lgth: usize) {
+    let j = nseq - 1;
+    let newfr = eff[j];
+    let orifr = 1.0 - newfr;
+    for i in 0..lgth {
+        freq[i] = 1.0 - freq[i];
+        freq[i] *= orifr;
+        if seq[j][i] == b'-' {
+            freq[i] += newfr;
+        }
+    }
+}
+
 /// `gapireru()`: expand `ori` according to a gap table of `o`/`-`.
 pub fn gapireru(ori: &[u8], gt: &[u8], gapchar: u8) -> Vec<u8> {
     let mut res = Vec::with_capacity(gt.len());

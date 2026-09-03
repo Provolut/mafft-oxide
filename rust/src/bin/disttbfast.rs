@@ -6,24 +6,13 @@
 //! into the working directory.  Configurations whose C code path is not ported
 //! are refused rather than approximated — see `Args::check_supported`.
 
-mod align;
-mod blosum;
-mod constants;
-mod dist;
-mod falign;
-mod fft;
-mod io;
-mod params;
-mod profile;
-mod score;
-mod tree;
-mod treebase;
-
 use std::io::{Read, Write};
 
-use align::AlignState;
-use constants::Constants;
-use params::Args;
+use mafft_rs::align::AlignState;
+use mafft_rs::constants::{self, Constants};
+use mafft_rs::params::Args;
+use mafft_rs::treebase::TreebaseOpts;
+use mafft_rs::{dist, falign, io, score, tree, treebase};
 
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -143,8 +132,17 @@ fn main() {
             iguidetree + 1,
             nguidetree
         );
+        let opts = TreebaseOpts {
+            outgap: args.outgap,
+            use_fft: args.use_fft,
+            force_fft: args.force_fft,
+            minimumweight: 0.0,
+            constraint: None,
+            fastathreshold: 0.0,
+            use_dynamic_mtx: cn.specificityconsideration != 0.0,
+        };
         treebase::treebase(
-            &cn, &args, njob, &mut bseq, &mut nlen, &tr, &effarr, &mut st, &mut fs,
+            &cn, &opts, njob, &mut bseq, &mut nlen, &tr, &effarr, &mut st, &mut fs,
         );
 
         if calcpairdists {
