@@ -133,7 +133,18 @@ quietly returning a different alignment:
   the port refuses instead. 78 of the 88 corpus inputs never reach it.
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- the memory-saving aligner (`-M`) and the other `alg` values
+- the memory-saving aligner and the other `alg` values, both when asked for
+  (`-M`, `-&`, `-@`) and when the C reaches for it on its own. That second case
+  is the one that matters: past 30000 columns the C sets `alg = 'M'` itself
+  (`disttbfast.c:2836`, `tbfast.c:1096`) and, since `alg` is a global that is
+  never reset, stays on the linear-space aligner for the rest of the run. It is
+  not an equivalent optimisation -- forcing it with `-M -B` on inputs the C
+  would otherwise align conventionally changes the alignment on 17 of the 86
+  corpus inputs -- so the port refuses at that threshold rather than quietly
+  staying on `A__align`. `-N` (`--nomemsave`) suppresses the switch in the C
+  and so also the refusal. On four 31000-column sequences with the FFT off the
+  C peaks at 32.8 MB and this port at 6.4 GB, which is the other half of what
+  the switch is for.
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
 - **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
   a "not implemented", not a "cannot be implemented": measured on 39 corpus

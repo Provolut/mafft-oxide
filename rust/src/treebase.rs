@@ -17,6 +17,10 @@ pub struct TreebaseOpts<'a> {
     pub outgap: bool,
     pub use_fft: bool,
     pub force_fft: bool,
+    /// `-N`: suppress the C's automatic switch to the memsave aligner past
+    /// 30000 columns. Without it, this port refuses there rather than
+    /// silently staying on the conventional aligner (see the check below).
+    pub nevermemsave: bool,
     /// `-W`: sequence weights are clamped up to this.
     pub minimumweight: f64,
     /// The constraints from the pairwise stage (L-INS-i / G-INS-i).
@@ -157,6 +161,11 @@ pub fn treebase(
             }
         }
 
+        // `len1 = strlen( aseq[m1] ); len2 = strlen( aseq[m2] );` -- the full
+        // alignment rows of the two representatives, not the groups.
+        let len1 = aseq[m1].len();
+        let len2 = aseq[m2].len();
+
         let (effarr1, orieff1) = fastconjuction_noname(&mem0, effarr, opts.minimumweight);
         let (effarr2, orieff2) = fastconjuction_noname(&mem1, effarr, opts.minimumweight);
         let clus1 = mem0.len();
@@ -178,6 +187,39 @@ pub fn treebase(
         } else if moa == b'2' {
             gapmap = crate::addfunctions::findcommongaps(&group1);
             crate::addfunctions::commongappick(&mut group1);
+        }
+
+        // `if( !nevermemsave && ( alg != 'M' && ( len1 > 30000 || len2 > 30000 ) ) )`
+        // -- disttbfast.c:2836. Past 30000 columns the C stops using `A__align`
+        // and switches, for the rest of the run, to the linear-space aligner in
+        // `MSalignmm.c` (or `Falign_udpari_long` on the FFT branch). `alg` is a
+        // global and is never switched back.
+        //
+        // That is not a memory optimisation with the same answer. Forcing the C
+        // down the memsave path with `-M -B` on inputs it would otherwise align
+        // conventionally changes the alignment on 17 of the 86 corpus inputs --
+        // the tandem-repeat and shuffled-domain cases, where the DP has real
+        // ties to break. So continuing here with `A__align` would silently
+        // produce an alignment the C does not.
+        //
+        // Refusing is also the honest thing on memory: measured on four 31000
+        // -column sequences with the FFT off, the C peaks at 32.8 MB because it
+        // switches, and this port peaks at 6.4 GB because it does not.
+        //
+        // `-N` (`nevermemsave`) suppresses the switch in the C, and so also
+        // this refusal -- there the conventional aligner is what the C uses.
+        if !opts.nevermemsave && (len1 > 30000 || len2 > 30000) {
+            eprintln!(
+                "disttbfast-rs: len1={}, len2={}. Past 30000 columns the C switches to the\n  \
+                memsave aligner (MSalignmm.c / Falign_udpari_long, disttbfast.c:2836) and\n  \
+                stays there for the rest of the run. That aligner is not ported, and it is\n  \
+                not equivalent -- forcing it with -M changes the alignment on 17 of the 86\n  \
+                corpus inputs. Refusing rather than returning an alignment the C would not.\n  \
+                Pass -N (--nomemsave) to keep the C on the conventional aligner, which is\n  \
+                the branch this port reproduces.",
+                len1, len2
+            );
+            std::process::exit(1);
         }
 
         if let Some(table) = opts.constraint {

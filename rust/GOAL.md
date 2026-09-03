@@ -17,30 +17,35 @@ Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 
 ## Work
 
-Each item is sized here from reading the C, not guessed. Size the refusal too,
-before porting: `--allowshift` cost nothing -- the warp DP was already in
-`warp.rs` and correct in all three aligners, and only a stale up-front
-`exit(1)` in `disttbfast.rs` kept it unreachable. And check both copies:
-`tbfast`'s `--add` is not `disttbfast`'s (it skips the `samemembern` pass and
-divides the added sequences' weights by 100), which cost a day.
+Size each item from the C, and measure how it is *reached* -- an option nobody
+types can still be the default path, as item 3 turned out to be. Size the
+refusal too: `--allowshift` cost nothing, only a stale `exit(1)`. And check
+both copies: `tbfast`'s `--add` is not `disttbfast`'s.
 
 1. ~~**External anchors (`-l`)**~~ done: `anchors.rs` plus
-   `Falign_givenanchors` in `falign.rs`. The tie-break worry was unfounded --
-   glibc 2.39's qsort is a mergesort here, so `anchcomp` reduces to stable and
-   `anchscorecomp` to reverse-stable. 1376 comparisons byte-identical;
-   `verify.sh` block, files from `gen_anchors.py`. Two C quirks reproduced and
-   one input refused, all in issue #3.
+   `Falign_givenanchors`. 1376 comparisons byte-identical; `verify.sh` block,
+   files from `gen_anchors.py`. Two C quirks reproduced and one input refused,
+   all in issue #4.
 
 2. **The `compacttree*` builders**, reached by `--treein very compact`,
    `stepadd` and `youngestlinkage`, and by `compact` only above its RAM
    budget -- below it the C falls back to the ordinary tree, which is ported
    and covered. `compacttree_memsaveselectable` is 637 lines and brings its
-   own distance pipeline (`partmtx`, `mindist`, `selfscore`, `skiptable`).
-   (`pileup`, `shuffle`, `nodepair` done; `auto`/`test` done but refusing the
-   inputs where the C's `varpairscore` reads past its `pickseq` row.)
+   own pipeline (`partmtx`, `mindist`, `skiptable`). ~1200 lines of C.
+   (`pileup`, `shuffle`, `nodepair` done; `auto`/`test` done but refusing
+   where the C's `varpairscore` reads past its `pickseq` row.)
 
 3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
-   aligner in `MSalignmm.c` / `partSalignmm.c`. Largest, lowest demand.
+   aligner in `MSalignmm.c` / `partSalignmm.c`, ~5600 live lines. An earlier
+   draft called this "lowest demand". Measuring says the opposite: the C
+   switches to it *by itself* whenever a row passes 30000
+   columns (`disttbfast.c:2836`, `tbfast.c:1096`), `alg` is a global and never
+   switches back, and no `--memsave` is needed. It is not an equivalent
+   optimisation either -- forcing it with `-M -B` changes the alignment on 17
+   of the 86 corpus inputs. The port now refuses at that threshold instead of
+   silently continuing on `A__align`; `-N` (`--nomemsave`) suppresses the
+   switch in the C and so also the refusal. Until this is ported, long input
+   is a refusal, so this is the item that decides the goal.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical

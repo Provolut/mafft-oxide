@@ -28,6 +28,9 @@ use mafft_rs::{addfunctions, io, keeplength, tree, treebase};
 /// refused rather than ignored.
 #[derive(Debug, Clone)]
 struct TbArgs {
+    /// `-N`: suppress the C's automatic switch to the memsave aligner past
+    /// 30000 columns (tbfast.c:1096). `-B` is accepted and ignored, as in the C.
+    nevermemsave: bool,
     // pair phase
     pair_alg: Option<PairAlg>,
     pair_ppenalty: i32,
@@ -101,6 +104,7 @@ struct TbArgs {
 impl Default for TbArgs {
     fn default() -> Self {
         TbArgs {
+            nevermemsave: false,
             pair_alg: None,
             pair_ppenalty: NOTSPECIFIED,
             pair_ppenalty_ex: NOTSPECIFIED,
@@ -317,7 +321,8 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'P' => a.dorp = Some(b'p'),
             'a' => a.fmodel = 1,
             ':' => a.nwildcard = true,
-            'v' | 'B' | 'N' => {}
+            'N' => a.nevermemsave = true,
+            'v' | 'B' => {}
             other => a.unsupported.push(format!("option -{}", other)),
         }
         Ok(())
@@ -750,6 +755,7 @@ fn main() {
         outgap: a.outgap,
         use_fft: a.use_fft,
         force_fft: false,
+        nevermemsave: a.nevermemsave,
         minimumweight: a.minimumweight,
         constraint: Some(&table),
         fastathreshold: a.fastathreshold,
