@@ -106,9 +106,14 @@ quietly returning a different alignment:
 - `--legacygapcost`, `--keeplength`
 - the memory-saving aligner (`-M`) and the other `alg` values
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
-- **threads.** MAFFT's threaded path is a different computation, not a race:
-  it does not agree with the single-thread result even at `--thread 1`. Run
-  with `-C 0` / `-C 0-0`, which is what the wrapper passes by default.
+- **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
+  a "not implemented", not a "cannot be implemented": measured on 39 corpus
+  inputs x 3 repeats, the C's own `disttbfast` and `tbfast` give byte-identical
+  `pre`, `order`, `hat2` and `hat3` at `-C 4` as at `-C 0`, including on an
+  80-sequence input where four threads are a real 3.3x speedup. The end-to-end
+  `mafft --thread` difference is confined to `--maxiterate > 0`, i.e. to
+  `dvtditr`, which this port does not touch. Run with `-C 0` / `-C 0-0`, which
+  is what the wrapper passes by default.
 
 Iterative refinement (`--maxiterate`) is not ported either, but it still works
 end-to-end, because `dvtditr` is a separate binary fed by these ones' output.
