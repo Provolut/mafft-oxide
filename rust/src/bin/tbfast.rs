@@ -227,11 +227,9 @@ fn refuse(a: &TbArgs) -> Option<String> {
     if a.nthread > 0 || a.nthreadtb > 0 || a.pair_nthread > 0 {
         bad.push("threads change the result; run with -C 0".into());
     }
-    if a.nblosum != 62 || a.pair_nblosum != 62 {
+    // -b is ignored for nucleotides, whose matrix comes from Kimura's model.
+    if a.dorp != Some(b'd') && (a.nblosum != 62 || a.pair_nblosum != 62) {
         bad.push("only the BLOSUM62 protein matrix is ported".into());
-    }
-    if a.dorp == Some(b'd') {
-        bad.push("nucleotide input is not ported".into());
     }
     if bad.is_empty() {
         None
