@@ -91,6 +91,9 @@ pub struct Args {
     pub nthreadpair: i32,
     pub nthreadtb: i32,
     pub outnumber: bool,
+    /// Never set: the C's `case 'V': topin = 1` sits inside `#if 0`, and its
+    /// branch in `disttbfast()` prints "--topin has been disabled" and exits.
+    #[allow(dead_code)]
     pub topin: bool,
     pub treein: bool,
     pub treeout: i32,
@@ -442,9 +445,6 @@ impl Args {
         }
         if self.subalignment {
             bad.push("-H (sub-alignments) is not ported");
-        }
-        if self.topin {
-            bad.push("--topin is not ported");
         }
         if self.oneiteration {
             bad.push("-r (one iteration) is not ported");
