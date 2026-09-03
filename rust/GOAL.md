@@ -31,11 +31,13 @@ divides the added sequences' weights by 100), which cost a day.
    means reimplementing glibc's qsort, not just the comparator. Decide whether
    to accept a documented divergence before starting.
 
-2. **The `--treein` trees still refused**: `compact`, `very compact`,
-   `stepadd`, `youngestlinkage` -- each routes to a `compacttree*` builder.
-   (`pileup`, `shuffle` and `nodepair` are done; `auto`/`test` are done but
-   refuse the inputs where the C's own `varpairscore` reads past its
-   `pickseq` row, which is most gap-free input.)
+2. **The `compacttree*` builders**, reached by `--treein very compact`,
+   `stepadd` and `youngestlinkage`, and by `compact` only above its RAM
+   budget -- below it the C falls back to the ordinary tree, which is ported
+   and covered. `compacttree_memsaveselectable` is 637 lines and brings its
+   own distance pipeline (`partmtx`, `mindist`, `selfscore`, `skiptable`).
+   (`pileup`, `shuffle`, `nodepair` done; `auto`/`test` done but refusing the
+   inputs where the C's `varpairscore` reads past its `pickseq` row.)
 
 3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Largest, lowest demand.

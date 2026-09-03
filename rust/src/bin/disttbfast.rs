@@ -275,6 +275,9 @@ fn main() {
     let mut treekind = b'l';
     let mut randomseed: u32 = 0;
     let mut npickx: usize = 200;
+    // `compact` can clear `treein` after the fact, putting the run back on the
+    // ordinary distance-matrix path.
+    let mut treein_cleared = false;
     if args.treein {
         let first = std::fs::read_to_string("_guidetree")
             .map(|t| {
@@ -315,9 +318,52 @@ fn main() {
                 std::process::exit(1);
             }
             treekind = if test { b't' } else { b'a' };
+        } else if first.starts_with("compact") {
+            // `--initialramusage`: a size with a unit suffix. The C's first
+            // test is `strchr(s,'k') || strchr(s,'k')` -- the same character
+            // twice -- so an upper-case K is *not* a kilobyte here and falls
+            // through to the error, while a lower-case k works. Kept.
+            let sizestring = &first[7..];
+            let has = |c: char| sizestring.contains(c);
+            let tanni = if has('k') || has('k') {
+                1e3
+            } else if has('M') || has('m') {
+                1e6
+            } else if has('G') || has('g') {
+                1e9
+            } else if has('T') || has('t') {
+                1e12
+            } else {
+                eprintln!("\nSpecify initial ram usage by '--initialramusage xGB'\n\n");
+                std::process::exit(1);
+            };
+            let tmpd: f64 = {
+                let t = sizestring.trim_start();
+                let end = t
+                    .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+'))
+                    .unwrap_or(t.len());
+                t[..end].parse().unwrap_or(0.0)
+            };
+            let limitram = tmpd * tanni;
+            eprintln!("sizestring = {}", sizestring);
+            eprintln!("Initial RAM usage = {:10.3}GB", limitram / 1e9);
+            // `compacttree = 1`, and then: if the full matrix would fit in the
+            // stated budget the C drops straight back to the ordinary tree.
+            // That is the only branch of `compact` this port covers; the
+            // `compacttree*` builders themselves are not ported.
+            if limitram > njob as f64 * (njob - 1) as f64 * 8.0 / 2.0 {
+                eprintln!("Use conventional tree.");
+                treekind = b'l';
+                treein_cleared = true;
+            } else {
+                eprintln!(
+                    "disttbfast-rs: the compact-tree builder is not ported; this input needs\n                       more than the {:.2}GB budget for its distance matrix",
+                    limitram / 1e9
+                );
+                std::process::exit(1);
+            }
         } else {
             for kw in [
-                "compact",
                 "very compact",
                 "stepadd",
                 "youngestlinkage",
@@ -333,7 +379,7 @@ fn main() {
     // `test` and `auto` both sample pairwise scores first. `test` then stops;
     // `auto` picks a chain or a real tree from the answer -- and either way
     // the sampled scores have already gone to stdout, ahead of everything.
-    let mut treein = args.treein;
+    let mut treein = args.treein && !treein_cleared;
     let mut nguidetree_override: Option<usize> = None;
     if treekind == b't' || treekind == b'a' {
         let mut lst = LalignState::new();
