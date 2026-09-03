@@ -756,6 +756,7 @@ fn main() {
         use_fft: a.use_fft,
         force_fft: false,
         nevermemsave: a.nevermemsave,
+        alg: b'A',
         minimumweight: a.minimumweight,
         constraint: Some(&table),
         fastathreshold: a.fastathreshold,

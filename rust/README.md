@@ -133,18 +133,15 @@ quietly returning a different alignment:
   the port refuses instead. 78 of the 88 corpus inputs never reach it.
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- the memory-saving aligner and the other `alg` values, both when asked for
-  (`-M`, `-&`, `-@`) and when the C reaches for it on its own. That second case
-  is the one that matters: past 30000 columns the C sets `alg = 'M'` itself
-  (`disttbfast.c:2836`, `tbfast.c:1096`) and, since `alg` is a global that is
-  never reset, stays on the linear-space aligner for the rest of the run. It is
-  not an equivalent optimisation -- forcing it with `-M -B` on inputs the C
-  would otherwise align conventionally changes the alignment on 17 of the 86
-  corpus inputs -- so the port refuses at that threshold rather than quietly
-  staying on `A__align`. `-N` (`--nomemsave`) suppresses the switch in the C
-  and so also the refusal. On four 31000-column sequences with the FFT off the
-  C peaks at 32.8 MB and this port at 6.4 GB, which is the other half of what
-  the switch is for.
+- the memory-saving FFT branch. `MSalignmm` itself is ported, including the
+  switch the C makes on its own past 30000 columns (`disttbfast.c:2836`,
+  `tbfast.c:1096`) -- that switch is sticky, since `alg` is a global, and it
+  is not an equivalent optimisation: `MSalignmm.c` compiles with
+  `USE_PENALTY_EX 0` where `Salignmm.c` uses 1, so forcing it with `-M -B`
+  changes the alignment on 17 of the 86 corpus inputs. What is not ported is
+  `Falign_udpari_long` (`Falign.c:2583`), the anchoring pass the C uses when
+  memsave and FFT are both on, so `-M` together with `-F`/`-G` is refused.
+- the other `alg` values: `-@` (`--sp`, `D__align`) and `-&` (`Aalign`)
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
 - **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
   a "not implemented", not a "cannot be implemented": measured on 39 corpus
@@ -246,7 +243,7 @@ RNA folding programs and fail identically with the stock C binaries.)
 
 ## Notes for anyone extending this
 
-Eleven things about the C are load-bearing and easy to "clean up" by accident.
+Twelve things about the C are load-bearing and easy to "clean up" by accident.
 Most were found the hard way, by a corpus case rather than by reading.
 
 1. **Scratch buffers are never cleared.** `A__align` and friends keep `static`
@@ -312,6 +309,16 @@ Most were found the hard way, by a corpus case rather than by reading.
    members, and never clears it, so a position above a short member's residue
    count reads whatever a longer member left there. Both are reproduced;
    neither is a rounding detail, since they decide which anchors survive.
+
+12. **The two group aligners are not the same recurrence.** `Salignmm.c`
+   (`A__align`) compiles with `USE_PENALTY_EX 1`, `MSalignmm.c` (`MSalignmm`)
+   with 0 — the memsave aligner never charges a gap extension on its running
+   scores. And `MSalignmm.c:2459` hands `createogresult` its *local*
+   `ogcp1o`/`fgcp1o` where `Salignmm.c:2119` hands over `ogcp1opt`/`fgcp1opt`,
+   so a node that reused a child's cached profile passes gap rows of zeros up
+   to its parent. Together these make the memsave path a different alignment,
+   not a cheaper route to the same one: forcing it with `-M -B` moves 17 of
+   the 88 corpus inputs, and the second defect alone moves 5.
 
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a

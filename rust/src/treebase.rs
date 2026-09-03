@@ -18,9 +18,13 @@ pub struct TreebaseOpts<'a> {
     pub use_fft: bool,
     pub force_fft: bool,
     /// `-N`: suppress the C's automatic switch to the memsave aligner past
-    /// 30000 columns. Without it, this port refuses there rather than
-    /// silently staying on the conventional aligner (see the check below).
+    /// 30000 columns.
     pub nevermemsave: bool,
+    /// The C's `alg` global: `'A'` for `A__align`, `'M'` for the linear-space
+    /// `MSalignmm`. It is a *global* there, and the 30000-column switch below
+    /// writes to it, so once any node crosses the threshold every later node
+    /// uses the memsave aligner too. Kept as loop state for that reason.
+    pub alg: u8,
     /// `-W`: sequence weights are clamped up to this.
     pub minimumweight: f64,
     /// The constraints from the pairwise stage (L-INS-i / G-INS-i).
@@ -102,6 +106,9 @@ pub fn treebase(
 
     let mut memhist: Vec<Option<Vec<i32>>> = vec![None; njob.saturating_sub(1)];
     let mut cpmxhist: Vec<Option<CpmxHist>> = (0..njob.saturating_sub(1)).map(|_| None).collect();
+    // The C's `alg` global. `treebase` may flip it to 'M' at the 30000-column
+    // threshold, and it stays there for every later node.
+    let mut alg = opts.alg;
     let mut fftlog = vec![1i32; njob];
     let mut impmtx: Vec<Vec<f64>> = Vec::new();
     let mut impalloclen = 0usize;
@@ -190,36 +197,22 @@ pub fn treebase(
         }
 
         // `if( !nevermemsave && ( alg != 'M' && ( len1 > 30000 || len2 > 30000 ) ) )`
-        // -- disttbfast.c:2836. Past 30000 columns the C stops using `A__align`
-        // and switches, for the rest of the run, to the linear-space aligner in
-        // `MSalignmm.c` (or `Falign_udpari_long` on the FFT branch). `alg` is a
-        // global and is never switched back.
+        // -- disttbfast.c:2836. Past 30000 columns the C stops using
+        // `A__align` and switches, for the rest of the run, to the linear
+        // -space aligner. `alg` is a global there and is never switched back,
+        // which is why it is loop state here.
         //
-        // That is not a memory optimisation with the same answer. Forcing the C
-        // down the memsave path with `-M -B` on inputs it would otherwise align
-        // conventionally changes the alignment on 17 of the 86 corpus inputs --
-        // the tandem-repeat and shuffled-domain cases, where the DP has real
-        // ties to break. So continuing here with `A__align` would silently
-        // produce an alignment the C does not.
-        //
-        // Refusing is also the honest thing on memory: measured on four 31000
-        // -column sequences with the FFT off, the C peaks at 32.8 MB because it
-        // switches, and this port peaks at 6.4 GB because it does not.
-        //
-        // `-N` (`nevermemsave`) suppresses the switch in the C, and so also
-        // this refusal -- there the conventional aligner is what the C uses.
-        if !opts.nevermemsave && (len1 > 30000 || len2 > 30000) {
+        // This is not a memory optimisation with the same answer: forcing the
+        // C down the memsave path with `-M -B` on inputs it would otherwise
+        // align conventionally changes the alignment on 17 of the 86 corpus
+        // inputs, because `MSalignmm.c` compiles with `USE_PENALTY_EX 0` where
+        // `Salignmm.c` uses 1.
+        if !opts.nevermemsave && alg != b'M' && (len1 > 30000 || len2 > 30000) {
             eprintln!(
-                "disttbfast-rs: len1={}, len2={}. Past 30000 columns the C switches to the\n  \
-                memsave aligner (MSalignmm.c / Falign_udpari_long, disttbfast.c:2836) and\n  \
-                stays there for the rest of the run. That aligner is not ported, and it is\n  \
-                not equivalent -- forcing it with -M changes the alignment on 17 of the 86\n  \
-                corpus inputs. Refusing rather than returning an alignment the C would not.\n  \
-                Pass -N (--nomemsave) to keep the C on the conventional aligner, which is\n  \
-                the branch this port reproduces.",
+                "\nlen1={}, len2={}, Switching to the memsave mode",
                 len1, len2
             );
-            std::process::exit(1);
+            alg = b'M';
         }
 
         if let Some(table) = opts.constraint {
@@ -297,6 +290,15 @@ pub fn treebase(
                     newgapstr,
                 );
             } else if opts.force_fft || (opts.use_fft && ffttry) {
+                if alg == b'M' {
+                    // The FFT branch under memsave is `Falign_udpari_long`,
+                    // a different anchoring pass, not `Falign` plus a
+                    // different block aligner. It is not ported.
+                    eprintln!(
+                        "disttbfast-rs: the memsave aligner reached the FFT branch, where the C\n                           uses Falign_udpari_long (Falign.c:2583) rather than Falign. That one is\n                           not ported. Run without -F/-G, or with -N (--nomemsave)."
+                    );
+                    std::process::exit(1);
+                }
                 falign(
                     fs,
                     st,
@@ -310,6 +312,29 @@ pub fn treebase(
                     &mut fftlog[m1],
                     newgapstr,
                 );
+            } else if alg == b'M' {
+                // `case( 'M' )` has no `clus1 == 1 && clus2 == 1` shortcut --
+                // unlike `'A'` and `'d'`, a two-sequence node still goes
+                // through the linear-space aligner.
+                fftlog[m1] = 0;
+                let (_pscore, hist) = crate::msalign::msalignmm(
+                    cn,
+                    &dynmtx,
+                    &mut group1,
+                    &mut group2,
+                    &effarr1,
+                    &effarr2,
+                    outgap,
+                    outgap,
+                    None,
+                    cpmxchild0,
+                    cpmxchild1,
+                    orieff1,
+                    orieff2,
+                    true,
+                    newgapstr,
+                );
+                cpmxhist[l] = hist;
             } else if clus1 == 1 && clus2 == 1 {
                 fftlog[m1] = 0;
                 let mut s1 = std::mem::take(&mut group1[0]);

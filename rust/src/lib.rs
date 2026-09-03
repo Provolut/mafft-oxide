@@ -12,6 +12,7 @@ pub mod blosum;
 pub mod cerand;
 pub mod constants;
 pub mod compacttree;
+pub mod msalign;
 pub mod dist;
 pub mod falign;
 pub mod fft;

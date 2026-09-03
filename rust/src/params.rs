@@ -434,8 +434,8 @@ impl Args {
     /// `--add`, no sub-alignments, no external anchors and no threads.
     pub fn check_supported(&self) -> Result<(), Unsupported> {
         let mut bad: Vec<&str> = Vec::new();
-        if self.alg != b'A' {
-            bad.push("only alg 'A' (-A) is ported; -M/-&/-@ are not");
+        if self.alg != b'A' && self.alg != b'M' {
+            bad.push("only alg 'A' (-A) and 'M' (-M) are ported; -&/-@ are not");
         }
         if self.keeplength && self.nadd == 0 {
             // The C reaches `restoreoriginalgaps( njob, bseq, NULL )` and

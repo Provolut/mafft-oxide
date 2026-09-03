@@ -341,7 +341,7 @@ fn atracking(
 }
 
 /// `createcpmxresult()`: merged composition profile of the two aligned groups.
-fn create_cpmx_result(
+pub(crate) fn create_cpmx_result(
     limk: usize,
     eff1: f64,
     eff2: f64,
@@ -374,7 +374,7 @@ fn create_cpmx_result(
 }
 
 /// `creategapfreqresult()`.
-fn create_gapfreq_result(
+pub(crate) fn create_gapfreq_result(
     limk: usize,
     eff1: f64,
     eff2: f64,
@@ -408,7 +408,7 @@ fn create_gapfreq_result(
 
 /// `createogresult()`.
 #[allow(clippy::too_many_arguments)]
-fn create_og_result(
+pub(crate) fn create_og_result(
     limk: usize,
     eff1: f64,
     eff2: f64,
@@ -443,7 +443,7 @@ fn create_og_result(
 
 /// `createfgresult()`.
 #[allow(clippy::too_many_arguments)]
-fn create_fg_result(
+pub(crate) fn create_fg_result(
     limk: usize,
     eff1: f64,
     eff2: f64,

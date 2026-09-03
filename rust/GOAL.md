@@ -34,17 +34,18 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
    `compact`, `very compact`, `stepadd`, `youngestlinkage` -- byte-identical
    over 3096 comparisons including `infile.tree`.
 
-3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
-   aligner in `MSalignmm.c` / `partSalignmm.c`, ~5600 live lines. An earlier
-   draft called this "lowest demand". Measuring says the opposite: the C
-   switches to it *by itself* whenever a row passes 30000
-   columns (`disttbfast.c:2836`, `tbfast.c:1096`), `alg` is a global and never
-   switches back, and no `--memsave` is needed. It is not an equivalent
-   optimisation either -- forcing it with `-M -B` changes the alignment on 17
-   of the 86 corpus inputs. The port now refuses at that threshold instead of
-   silently continuing on `A__align`; `-N` (`--nomemsave`) suppresses the
-   switch in the C and so also the refusal. Until this is ported, long input
-   is a refusal, so this is the item that decides the goal.
+3. **`-M` (memsave)**, mostly done. `msalign.rs` has `MSalignmm` with its
+   Hirschberg recursion and single-block base case, and `treebase` now makes
+   the C's own 30000-column switch instead of refusing at it. 430 comparisons
+   byte-identical; on four 31000-column sequences peak RSS went from 6.4GB to
+   55.9MB against the C's 32.7MB. Left: `Falign_udpari_long` (844 lines), the
+   memsave FFT branch, so `-M` with `-F`/`-G` still refuses; `-@` (`--sp`,
+   `D__align`, 1801 lines), reachable, refused; `-&` (`Aalign`, 223 lines),
+   not reachable from the wrapper.
+   A fourth upstream defect turned up here and is reproduced: MSalignmm.c
+   :2459 passes `ogcp1o`/`fgcp1o` to `createogresult` where Salignmm.c:2119
+   passes `ogcp1opt`/`fgcp1opt`, so a node that reused a child's cached
+   profile hands up gap rows built from zeros. It changes 5 of 86 inputs.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
