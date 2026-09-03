@@ -11,7 +11,7 @@ into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
 `--legacygapcost`, `-y`/`-T`/`-t`/`-^`/`-U`/`-q`, 10-mer nucleotide tuples,
-`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`.
+`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`).
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -24,31 +24,28 @@ before porting: `--allowshift` cost nothing -- the warp DP was already in
 `tbfast`'s `--add` is not `disttbfast`'s (it skips the `samemembern` pass and
 divides the added sequences' weights by 100), which cost a day.
 
-1. **Sub-alignments (`-H`).** Needs a *different* guide tree:
-   `..._treeout_constrained` keeps each sub-alignment monophyletic and stores
-   full member lists, where `tree.rs` stores the memsave single-member form.
-   So: a second tree function and a second `topol` representation, plus
-   `readsubalignmentstable`.
-
-2. **`--text` / `--textmatrix` (`nblosum == -2`).** The 256-symbol alphabet:
+1. **`--text` / `--textmatrix` (`nblosum == -2`).** The 256-symbol alphabet:
    `nalphabets` and `charsize` become 0x100, so `NALPHABETS` stops being a
    compile-time constant and every bound derived from it follows. Mechanical,
    wide, and every site is a chance to break bit-exactness -- but the
    harnesses would catch it. (`--aamatrix`, `nblosum == -1`, is done: it keeps
    the 26-letter alphabet and only swaps the table.)
 
-3. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
-   `Falign_givenanchors`. The C's `case 'l'` falls through into `case 'G'`, so
-   `-l` also forces the FFT on.
+2. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
+   `Falign_givenanchors` (~670 lines). Blocked, not just big: `anchcomp` and
+   `anchscorecomp` break ties on `(int)((void *)p - (void *)q)`, the addresses
+   of the two elements *inside the array qsort is permuting*. Matching that
+   means reimplementing glibc's qsort, not just the comparator. Decide whether
+   to accept a documented divergence before starting.
 
-4. **The generated guide trees `--treein` can ask for** -- `shuffle`,
+3. **The generated guide trees `--treein` can ask for** -- `shuffle`,
    `pileup`, `auto`, `compact`, `stepadd`, `youngestlinkage`, `nodepair`, each
    a separate construction. Refused by name today.
 
-5. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
+4. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Largest, lowest demand.
 
-6. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
+5. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
    output; porting them is scope growth, not parity.
 

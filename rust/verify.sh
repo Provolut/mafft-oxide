@@ -113,6 +113,15 @@ if [ -z "$CORPUS" ]; then
   gen_corpus "$CORPUS"
 fi
 
+# An empty or missing corpus would make every loop below run zero times and
+# report a clean pass. Refuse instead -- this harness has been vacuous once
+# already (see the abspath check above).
+n_corpus=$(find "$CORPUS" -maxdepth 1 -type f | wc -l)
+if [ "$n_corpus" -lt 10 ]; then
+  echo "verify: corpus at $CORPUS has only $n_corpus files; refusing to run" 1>&2
+  exit 2
+fi
+
 pass=0
 fail=0
 failed=""

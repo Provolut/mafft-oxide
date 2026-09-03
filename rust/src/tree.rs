@@ -590,3 +590,451 @@ pub fn counteff_simple(nseq: usize, tree: &mut Tree) -> Vec<f64> {
     }
     rootnode.iter().map(|v| v / total).collect()
 }
+
+/// `increaseintergroupdistanceshalfmtx()`: push every cross-group distance up
+/// to at least the widest *within*-group distance, so the UPGMA has a reason
+/// to keep each `--merge` group together before it is forced to.
+fn increase_intergroup_distances(eff: &mut [Vec<f64>], groups: &[Vec<i32>], nseq: usize) {
+    let mut nwarned = 0usize;
+    eprintln!(); // "Hitsuyou desu."
+    for (gi, g) in groups.iter().enumerate() {
+        if g.len() < 2 {
+            continue;
+        }
+        let mut tft = vec![false; nseq];
+        for &s in g.iter() {
+            tft[s as usize] = true;
+        }
+        let others: Vec<i32> = (0..nseq as i32).filter(|&m| !tft[m as usize]).collect();
+
+        let mut maxdist = 0.0f64;
+        for m in 1..g.len() {
+            let s2 = g[m];
+            for k in 0..m {
+                let s1 = g[k];
+                let (sl, ss) = if s2 > s1 { (s2, s1) } else { (s1, s2) };
+                let dtmp = eff[ss as usize][(sl - ss) as usize];
+                if dtmp > maxdist {
+                    maxdist = dtmp;
+                }
+            }
+        }
+
+        for &s2 in g.iter() {
+            for &s1 in others.iter() {
+                let (sl, ss) = if s2 > s1 { (s2, s1) } else { (s1, s2) };
+                let d = &mut eff[ss as usize][(sl - ss) as usize];
+                if *d < maxdist {
+                    if *d < 0.5 && nwarned < 100 {
+                        nwarned += 1;
+                        eprintln!("# Sequences {} and {} seem to be closely related, but are not in the same sub MSA ({}) in your setting.", s2 + 1, s1 + 1, gi + 1);
+                    } else if *d < 0.5 {
+                        nwarned += 1;
+                    }
+                    *d = maxdist;
+                }
+            }
+        }
+    }
+    if nwarned > 100 {
+        eprintln!("# Sequenc.... (more pairs)");
+    }
+}
+
+/// `overlapmember()`: the two lists share at least one member.
+fn overlapmember(mem1: &[i32], mem2: &[i32]) -> bool {
+    mem1.iter().any(|a| mem2.contains(a))
+}
+
+/// `includemember()`: every member of `mem` is in `cand`.
+fn includemember(mem: &[i32], cand: &[i32]) -> bool {
+    mem.iter().all(|m| cand.contains(m))
+}
+
+/// `fixed_supg_double_realloc_nobk_halfmtx_treeout_constrained()`: the UPGMA
+/// again, but a merge that would split a `--merge` group is rejected and the
+/// next-best pair tried instead.
+///
+/// Returns the tree in the same memsave shape as [`upgma_treeout`] plus, per
+/// node and side, the full member list -- which this builder has to keep
+/// anyway (it tests candidate merges against the groups) and which
+/// `disttbfast`'s sub-alignment checks then read.
+#[allow(clippy::type_complexity)]
+pub fn upgma_treeout_constrained(
+    nseq: usize,
+    eff: &mut Vec<Vec<f64>>,
+    sueff_global: f64,
+    names: &[Vec<u8>],
+    outnumber: bool,
+    groups: &[Vec<i32>],
+) -> (Tree, Vec<[Vec<i32>; 2]>) {
+    increase_intergroup_distances(eff, groups, nseq);
+
+    let sueff1 = 1.0 - sueff_global;
+    let sueff05 = sueff_global * 0.5;
+    let clusterfunc = |d1: f64, d2: f64| -> f64 {
+        let m = if d1 < d2 { d1 } else { d2 };
+        m * sueff1 + (d1 + d2) * sueff05
+    };
+
+    let mut topol = vec![[-1i32, -1i32]; nseq];
+    let mut full: Vec<[Vec<i32>; 2]> = (0..nseq).map(|_| [Vec::new(), Vec::new()]).collect();
+    let mut len = vec![[0.0f64, 0.0f64]; nseq];
+    let mut dep = vec![Treedep::default(); nseq];
+
+    let mut ac = Chain::new(nseq);
+    let mut mindisfrom = vec![0.0f64; nseq];
+    let mut nearest = vec![0i32; nseq];
+    for i in 0..nseq {
+        let (m, n) = setnearest(&ac, eff, i);
+        mindisfrom[i] = m;
+        nearest[i] = n;
+    }
+
+    let mut tmptmplen = vec![0.0f64; nseq];
+    let mut hist = vec![-1i32; nseq];
+    let mut nmemar = vec![1i32; nseq];
+    let mut im_g: i32 = -1;
+    let mut jm_g: i32 = -1;
+
+    let mut tree: Vec<String> = (0..nseq)
+        .map(|i| format!("\n{}_{}\n", i + 1, newick_name(&names[i], outnumber)))
+        .collect();
+    let mut treetmp = String::new();
+
+    let mut inconsistent = vec![vec![false; nseq]; nseq];
+    let mut inconsistentpairs: Vec<(usize, usize)> = Vec::new();
+    let mut warned = vec![false; groups.len()];
+
+    for k in 0..nseq - 1 {
+        for &(a, b) in inconsistentpairs.iter() {
+            inconsistent[a][b] = false;
+        }
+        inconsistentpairs.clear();
+        let mut firsttime = true;
+        // `minscore` is function-scope in the C: whichever branch of the retry
+        // loop ran last sets the branch length below.
+        let mut minscore;
+
+        loop {
+            if firsttime {
+                firsttime = false;
+                minscore = 999.9f64;
+                let mut i = 0i32;
+                while ac.next[i as usize] != -1 {
+                    if mindisfrom[i as usize] < minscore {
+                        im_g = i;
+                        minscore = mindisfrom[i as usize];
+                    }
+                    i = ac.next[i as usize];
+                }
+                jm_g = nearest[im_g as usize];
+                if jm_g < im_g {
+                    std::mem::swap(&mut im_g, &mut jm_g);
+                }
+            } else {
+                // No cached nearest here: the whole live half-matrix is
+                // rescanned, skipping the pairs already found inconsistent.
+                minscore = 999.9f64;
+                let mut i = 0i32;
+                while ac.next[i as usize] != -1 {
+                    let iu = i as usize;
+                    let mut j = ac.next[iu];
+                    while j != -1 {
+                        let ju = j as usize;
+                        let tmpdouble = eff[iu][ju - iu];
+                        if !inconsistent[iu][ju] && tmpdouble < minscore {
+                            minscore = tmpdouble;
+                            im_g = i;
+                            jm_g = j;
+                        }
+                        j = ac.next[ju];
+                    }
+                    let mut j = 0i32;
+                    while j != -1 && j != i {
+                        let ju = j as usize;
+                        let tmpdouble = eff[ju][iu - ju];
+                        if !inconsistent[ju][iu] && tmpdouble < minscore {
+                            minscore = tmpdouble;
+                            im_g = j;
+                            jm_g = i;
+                        }
+                        j = ac.next[ju];
+                    }
+                    i = ac.next[iu];
+                }
+            }
+
+            // Every remaining pair inconsistent means the grouping cannot be
+            // satisfied at all.
+            let mut allinconsistent = true;
+            'scan: {
+                let mut i = 0i32;
+                while ac.next[i as usize] != -1 {
+                    let mut j = ac.next[i as usize];
+                    while j != -1 {
+                        if !inconsistent[i as usize][j as usize] {
+                            allinconsistent = false;
+                            break 'scan;
+                        }
+                        j = ac.next[j as usize];
+                    }
+                    i = ac.next[i as usize];
+                }
+            }
+            if allinconsistent {
+                eprintln!("\n\n\nPlease check whether the grouping is possible.\n\n");
+                std::process::exit(1);
+            }
+
+            let im = im_g as usize;
+            let jm = jm_g as usize;
+            let mut testtopol: Vec<i32> = Vec::new();
+            for &side in [im, jm].iter() {
+                let prevnode = hist[side];
+                if prevnode == -1 {
+                    testtopol.push(side as i32);
+                } else {
+                    let p = prevnode as usize;
+                    testtopol.extend_from_slice(&full[p][0]);
+                    testtopol.extend_from_slice(&full[p][1]);
+                }
+            }
+
+            let mut hit = None;
+            for (gi, g) in groups.iter().enumerate() {
+                if overlapmember(g, &testtopol)
+                    && !includemember(&testtopol, g)
+                    && !includemember(g, &testtopol)
+                {
+                    if !warned[gi] {
+                        warned[gi] = true;
+                        eprintln!("\n###################################################################");
+                        eprintln!("# WARNING: Group {} is forced to be a monophyletic cluster.", gi + 1);
+                        eprintln!("###################################################################");
+                    }
+                    inconsistent[im][jm] = true;
+                    inconsistentpairs.push((im, jm));
+                    hit = Some(gi);
+                    break;
+                }
+            }
+            if hit.is_none() {
+                break;
+            }
+        }
+
+        let im = im_g as usize;
+        let jm = jm_g as usize;
+
+        // `topol[k][side]` keeps the full member list here: the smaller-headed
+        // child's members first, then the other's.
+        let mut build = |side: usize| -> Vec<i32> {
+            let prevnode = hist[side];
+            if prevnode == -1 {
+                vec![side as i32]
+            } else {
+                let p = prevnode as usize;
+                let (a, b) = if full[p][0][0] > full[p][1][0] {
+                    (1usize, 0usize)
+                } else {
+                    (0usize, 1usize)
+                };
+                let mut v = full[p][a].clone();
+                v.extend_from_slice(&full[p][b]);
+                v
+            }
+        };
+        dep[k].child0 = hist[im];
+        let nmemim = nmemar[im];
+        let f0 = build(im);
+        dep[k].child1 = hist[jm];
+        let nmemjm = nmemar[jm];
+        let f1 = build(jm);
+        topol[k][0] = f0[0];
+        topol[k][1] = f1[0];
+        full[k] = [f0, f1];
+
+        let minscore = minscore * 0.5;
+
+        len[k][0] = minscore - tmptmplen[im];
+        len[k][1] = minscore - tmptmplen[jm];
+        dep[k].distfromtip = minscore;
+        tmptmplen[im] = minscore;
+
+        hist[im] = k as i32;
+        nmemar[im] = nmemim + nmemjm;
+
+        mindisfrom[im] = 999.9;
+        let mut i = 0i32;
+        while i != -1 {
+            let iu = i as usize;
+            if iu != im && iu != jm {
+                let (miniim, maxiim, minijm, maxijm) = if iu < im {
+                    (iu, im, iu, jm)
+                } else if iu < jm {
+                    (im, iu, iu, jm)
+                } else {
+                    (im, iu, jm, iu)
+                };
+                let eff0 = eff[miniim][maxiim - miniim];
+                let eff1 = eff[minijm][maxijm - minijm];
+                let tmpdouble = clusterfunc(eff0, eff1);
+                eff[miniim][maxiim - miniim] = tmpdouble;
+                if tmpdouble < mindisfrom[iu] {
+                    mindisfrom[iu] = tmpdouble;
+                    nearest[iu] = im as i32;
+                }
+                if tmpdouble < mindisfrom[im] {
+                    mindisfrom[im] = tmpdouble;
+                    nearest[im] = iu as i32;
+                }
+                if nearest[iu] == jm as i32 {
+                    nearest[iu] = im as i32;
+                }
+            }
+            i = ac.next[iu];
+        }
+
+        treetmp = format!(
+            "({}:{:7.5},{}:{:7.5})",
+            tree[im], len[k][0], tree[jm], len[k][1]
+        );
+        tree[im] = treetmp.clone();
+        tree[jm] = String::new();
+
+        ac.unlink(jm);
+
+        let mut i = 0i32;
+        while i != -1 {
+            let iu = i as usize;
+            if nearest[iu] == im as i32 {
+                let (miniim, maxiim) = if iu < im { (iu, im) } else { (im, iu) };
+                if eff[miniim][maxiim - miniim] > mindisfrom[iu] {
+                    let (m, n) = setnearest(&ac, eff, iu);
+                    mindisfrom[iu] = m;
+                    nearest[iu] = n;
+                }
+            }
+            i = ac.next[iu];
+        }
+    }
+
+    std::fs::write("infile.tree", format!("{};\n", treetmp)).expect("Cannot open infile.tree");
+
+    (Tree { topol, len, dep }, full)
+}
+
+#[cfg(test)]
+mod constrained_tests {
+    use super::*;
+
+    /// A half matrix in the C's layout: `eff[i][j-i]` for j >= i.
+    fn halfmtx(n: usize, f: impl Fn(usize, usize) -> f64) -> Vec<Vec<f64>> {
+        (0..n)
+            .map(|i| (0..n - i).map(|d| f(i, i + d)).collect())
+            .collect()
+    }
+
+    fn names(n: usize) -> Vec<Vec<u8>> {
+        (0..n).map(|i| format!("=s{i}").into_bytes()).collect()
+    }
+
+    /// The builder writes `infile.tree`, so each case runs in its own
+    /// directory. The working directory is process-wide, hence the lock.
+    fn in_dir<T>(tag: &str, f: impl FnOnce() -> T) -> T {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let d = std::env::temp_dir().join(format!("mafft-rs-tree-{}-{}", tag, std::process::id()));
+        let _ = std::fs::create_dir_all(&d);
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&d).unwrap();
+        let r = f();
+        std::env::set_current_dir(old).unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+        r
+    }
+
+    /// Every group ends up as one node's member list -- that is what
+    /// "monophyletic" means here, and it is the whole point of this builder.
+    #[test]
+    fn every_group_comes_out_monophyletic() {
+        let n = 8;
+        // Neighbours by index are closest, so the plain UPGMA would certainly
+        // split these interleaved groups.
+        let mut eff = halfmtx(n, |i, j| (j - i) as f64 * 0.1 + 0.05);
+        let groups = vec![vec![0, 2, 4, 6], vec![1, 3, 5, 7]];
+        let (tree, full) = in_dir("mono", || {
+            upgma_treeout_constrained(n, &mut eff, 0.1, &names(n), false, &groups)
+        });
+
+        for g in groups.iter() {
+            let mut want = g.clone();
+            want.sort_unstable();
+            let found = (0..n - 1).any(|k| {
+                for side in 0..2 {
+                    let mut a = full[k][side].clone();
+                    a.sort_unstable();
+                    if a == want {
+                        return true;
+                    }
+                }
+                false
+            });
+            assert!(found, "group {g:?} is not a node");
+        }
+        // The memsave view agrees with the full lists.
+        for k in 0..n - 1 {
+            assert_eq!(tree.topol[k][0], full[k][0][0]);
+            assert_eq!(tree.topol[k][1], full[k][1][0]);
+        }
+    }
+
+    /// Each node's two sides partition its members, and the root covers
+    /// everything.
+    #[test]
+    fn the_constrained_tree_is_still_a_tree() {
+        let n = 7;
+        let mut eff = halfmtx(n, |i, j| ((i * 7 + j * 13) % 11) as f64 * 0.1 + 0.1);
+        let groups = vec![vec![0, 3, 6]];
+        let (_tree, full) = in_dir("tree", || {
+            upgma_treeout_constrained(n, &mut eff, 0.1, &names(n), false, &groups)
+        });
+
+        for k in 0..n - 1 {
+            let mut all = full[k][0].clone();
+            all.extend_from_slice(&full[k][1]);
+            let before = all.len();
+            all.sort_unstable();
+            all.dedup();
+            assert_eq!(all.len(), before, "node {k} repeats a member");
+        }
+        let mut root = full[n - 2][0].clone();
+        root.extend_from_slice(&full[n - 2][1]);
+        root.sort_unstable();
+        assert_eq!(root, (0..n as i32).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn overlap_and_include_are_what_they_say() {
+        assert!(overlapmember(&[1, 2], &[2, 3]));
+        assert!(!overlapmember(&[1, 2], &[3, 4]));
+        assert!(includemember(&[1, 2], &[1, 2, 3]));
+        assert!(!includemember(&[1, 4], &[1, 2, 3]));
+        // The empty list is included in anything.
+        assert!(includemember(&[], &[1]));
+    }
+
+    /// Cross-group distances are raised to the widest within-group distance;
+    /// within-group ones are left alone.
+    #[test]
+    fn intergroup_distances_are_raised_to_the_group_diameter() {
+        let n = 4;
+        let mut eff = halfmtx(n, |i, j| if i == j { 0.0 } else { 0.1 * (j - i) as f64 });
+        // group {0,1} has diameter 0.1; 1-2 is 0.1 already, 0-2 is 0.2.
+        increase_intergroup_distances(&mut eff, &[vec![0, 1]], n);
+        assert!((eff[0][1] - 0.1).abs() < 1e-12, "within group untouched");
+        assert!((eff[0][2] - 0.2).abs() < 1e-12, "already above");
+        assert!((eff[1][1] - 0.1).abs() < 1e-12, "1-2 stays at the diameter");
+    }
+}

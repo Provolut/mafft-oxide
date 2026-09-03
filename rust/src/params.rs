@@ -440,9 +440,6 @@ impl Args {
         if self.alg != b'A' {
             bad.push("only alg 'A' (-A) is ported; -M/-&/-@ are not");
         }
-        if self.subalignment {
-            bad.push("-H (sub-alignments) is not ported");
-        }
         if self.keeplength && self.nadd == 0 {
             // The C reaches `restoreoriginalgaps( njob, bseq, NULL )` and
             // segfaults; there is no output to be identical to.

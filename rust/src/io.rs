@@ -316,3 +316,188 @@ pub fn write_hat2(njob: usize, name: &[Vec<u8>], mtx: &[Vec<f64>]) {
     }
     std::fs::write("hat2", s).expect("write hat2");
 }
+
+/// `readsubalignmentstable()`: `--merge`'s `_subalignmentstable`.
+///
+/// One group per line, sequences given as 1-origin numbers. A negative number
+/// anywhere on the line sets that group's `preservegaps` flag (and its
+/// magnitude is the sequence). Lines starting with `#`, and lines whose first
+/// token reads as 0, are skipped.
+///
+/// Returns the groups (0-origin, no `-1` terminator) and their `preservegaps`
+/// flags.
+pub fn read_subalignments_table(nseq: usize) -> (Vec<Vec<i32>>, Vec<bool>) {
+    let text = match std::fs::read("_subalignmentstable") {
+        Ok(t) => t,
+        Err(_) => {
+            eprintln!("Cannot open _subalignmentstable");
+            std::process::exit(1);
+        }
+    };
+    let mut groups: Vec<Vec<i32>> = Vec::new();
+    let mut preservegaps: Vec<bool> = Vec::new();
+    let mut seen = vec![false; nseq];
+
+    // `fgets` then `if( line[strlen(line)-1] != '\n' )`: every line the C
+    // accepts ends in a newline, so a file whose last line does not is an
+    // error -- except that `feof` breaks the loop first, so a missing final
+    // newline just drops that line.
+    for raw in text.split_inclusive(|&c| c == b'\n') {
+        if raw.last() != Some(&b'\n') {
+            break;
+        }
+        if raw.first() == Some(&b'#') {
+            continue;
+        }
+        if atoi_bytes(raw) == 0 {
+            continue;
+        }
+        let (mem, pg) = read_a_subalignment(raw);
+        for &p in mem.iter() {
+            if p < 0 || p as usize > nseq - 1 {
+                eprintln!(
+                    "Sequence {} does not exist in the input sequence file.",
+                    p + 1
+                );
+                std::process::exit(1);
+            }
+            if seen[p as usize] {
+                eprintln!("\nSequence {} appears in different groups.", p + 1);
+                eprintln!("Hierarchical grouping is not supported.\n");
+                std::process::exit(1);
+            }
+            seen[p as usize] = true;
+        }
+        groups.push(mem);
+        preservegaps.push(pg);
+    }
+    (groups, preservegaps)
+}
+
+/// `readasubalignment()`: the numbers on one line, tabs counting as spaces.
+fn read_a_subalignment(line: &[u8]) -> (Vec<i32>, bool) {
+    let mut out = Vec::new();
+    let mut preservegaps = false;
+    let mut at_space = true;
+    for (i, &c) in line.iter().enumerate() {
+        if c == b' ' || c == b'\t' {
+            at_space = true;
+            continue;
+        }
+        if at_space {
+            if c == b'\n' || c == b'#' {
+                break;
+            }
+            at_space = false;
+            let v = atoi_bytes(&line[i..]);
+            if v == 0 {
+                eprintln!("Format error? Sequences must be specified as 1, 2, 3...");
+                std::process::exit(1);
+            }
+            if v < 0 {
+                preservegaps = true;
+            }
+            out.push(v.abs() - 1);
+        }
+    }
+    (out, preservegaps)
+}
+
+/// C's `atoi` on a byte slice: leading space, optional sign, digits, stop.
+fn atoi_bytes(s: &[u8]) -> i32 {
+    let mut i = 0usize;
+    while i < s.len() && (s[i] == b' ' || s[i] == b'\t') {
+        i += 1;
+    }
+    let neg = if i < s.len() && (s[i] == b'-' || s[i] == b'+') {
+        let n = s[i] == b'-';
+        i += 1;
+        n
+    } else {
+        false
+    };
+    let start = i;
+    let mut v: i64 = 0;
+    while i < s.len() && s[i].is_ascii_digit() {
+        v = v * 10 + (s[i] - b'0') as i64;
+        if v > i32::MAX as i64 + 1 {
+            v = i32::MAX as i64 + 1;
+        }
+        i += 1;
+    }
+    if i == start {
+        return 0;
+    }
+    if neg {
+        (-v) as i32
+    } else {
+        v as i32
+    }
+}
+
+#[cfg(test)]
+mod subaln_tests {
+    use super::*;
+    use std::io::Write as _;
+
+    fn with_table<T>(tag: &str, contents: &str, f: impl FnOnce() -> T) -> T {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let d = std::env::temp_dir().join(format!("mafft-rs-subaln-{}-{}", tag, std::process::id()));
+        let _ = std::fs::create_dir_all(&d);
+        let mut fh = std::fs::File::create(d.join("_subalignmentstable")).unwrap();
+        fh.write_all(contents.as_bytes()).unwrap();
+        drop(fh);
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&d).unwrap();
+        let r = f();
+        std::env::set_current_dir(old).unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+        r
+    }
+
+    #[test]
+    fn groups_are_read_one_per_line_and_made_zero_origin() {
+        let (g, p) = with_table("plain", "1 2 3\n4 5\n", || read_subalignments_table(6));
+        assert_eq!(g, vec![vec![0, 1, 2], vec![3, 4]]);
+        assert_eq!(p, vec![false, false]);
+    }
+
+    /// A negative number anywhere on the line sets that group's
+    /// `preservegaps`, and its magnitude is still the sequence.
+    #[test]
+    fn a_negative_number_means_preservegaps() {
+        let (g, p) = with_table("neg", "1 2\n-3 4\n", || read_subalignments_table(5));
+        assert_eq!(g, vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(p, vec![false, true]);
+    }
+
+    #[test]
+    fn comments_and_trailing_comments_are_skipped() {
+        let (g, _) = with_table("cmt", "# a header\n1 2 # rest ignored\n3 4\n", || {
+            read_subalignments_table(5)
+        });
+        assert_eq!(g, vec![vec![0, 1], vec![2, 3]]);
+    }
+
+    /// `fgets` + `feof`: a last line with no newline is dropped, not read.
+    #[test]
+    fn a_final_line_without_a_newline_is_dropped() {
+        let (g, _) = with_table("nonl", "1 2\n3 4", || read_subalignments_table(5));
+        assert_eq!(g, vec![vec![0, 1]]);
+    }
+
+    #[test]
+    fn tabs_count_as_separators() {
+        let (g, _) = with_table("tab", "1\t2\t3\n", || read_subalignments_table(4));
+        assert_eq!(g, vec![vec![0, 1, 2]]);
+    }
+
+    #[test]
+    fn atoi_bytes_matches_c() {
+        assert_eq!(atoi_bytes(b"  -12abc"), -12);
+        assert_eq!(atoi_bytes(b"7 8"), 7);
+        assert_eq!(atoi_bytes(b"x9"), 0);
+        assert_eq!(atoi_bytes(b""), 0);
+    }
+}

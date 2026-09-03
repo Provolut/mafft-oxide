@@ -145,6 +145,15 @@ fn main() {
     // `--fmodel` reads it.
     let cn = Constants::new_seq(&args, input.dorp, &input.seq);
 
+    // `--merge` (-H): the groups that must stay monophyletic.
+    let (subtable, preservegaps) = if args.subalignment {
+        let (t, p) = io::read_subalignments_table(njob);
+        eprintln!("nsubalignments = {}", t.len());
+        (t, p)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+
     // seqcheck()
     for (i, s) in input.seq.iter().enumerate() {
         for (p, &c) in s.iter().enumerate() {
@@ -231,6 +240,7 @@ fn main() {
             }
         }
 
+        let mut subfull: Vec<[Vec<i32>; 2]> = Vec::new();
         let mut tr = if args.treein {
             match tree::load_tree(
                 njob,
@@ -247,6 +257,18 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+        } else if args.subalignment {
+            eprintln!("Constructing a UPGMA tree ... ");
+            let (t, f) = tree::upgma_treeout_constrained(
+                njob,
+                &mut mtx,
+                args.sueff_global,
+                &input.name,
+                args.outnumber,
+                &subtable,
+            );
+            subfull = f;
+            t
         } else if args.treeout != 0 {
             tree::upgma_treeout(
                 njob,
@@ -393,7 +415,78 @@ fn main() {
             }
         }
 
+        // `--merge`: every sub-alignment must already be aligned, and must
+        // come out monophyletic in the tree; the nodes entirely inside one are
+        // skipped, since it is kept as it is.
+        let mut insubtable = vec![false; njob];
+        if args.subalignment {
+            for v in mergeoralign.iter_mut() {
+                *v = b'a';
+            }
+            for (i, g) in subtable.iter().enumerate() {
+                eprintln!("Checking subalignment {}:", i + 1);
+                let alignmentlength = input.seq[g[0] as usize].len();
+                for &m in g.iter() {
+                    if m as usize >= njob {
+                        eprintln!("No such sequence, {}.", m + 1);
+                        std::process::exit(1);
+                    }
+                    if input.seq[m as usize].len() != alignmentlength {
+                        eprintln!("# Subalignment {} must be aligned.", i + 1);
+                        eprintln!(
+                            "# {}. {:.10} -> {} letters (including gaps)",
+                            g[0] + 1,
+                            String::from_utf8_lossy(&input.name[g[0] as usize][1..]),
+                            alignmentlength
+                        );
+                        eprintln!(
+                            "# {}. {:.10} -> {} letters (including gaps)",
+                            m + 1,
+                            String::from_utf8_lossy(&input.name[m as usize][1..]),
+                            input.seq[m as usize].len()
+                        );
+                        std::process::exit(1);
+                    }
+                    insubtable[m as usize] = true;
+                }
+                for j in 0..njob - 1 {
+                    if includemember(&subfull[j][0], g) && includemember(&subfull[j][1], g) {
+                        mergeoralign[j] = b'n';
+                    }
+                }
+                let found = (0..njob - 1).any(|j| {
+                    samemember(&subfull[j][0], g) || samemember(&subfull[j][1], g)
+                });
+                if !found {
+                    eprintln!("# Subalignment {} does not seem to form a monophyletic cluster", i + 1);
+                    eprintln!("# in the guide tree ('GuideTree' in this directory) internally computed.");
+                    let _ = std::fs::copy("infile.tree", "GuideTree");
+                    std::process::exit(1);
+                }
+                eprintln!(" -> OK");
+            }
+        }
+
         bseq = input.seq.iter().map(|s| io::gappick0(s)).collect();
+        if args.subalignment {
+            // Members of a sub-alignment keep their gaps; everyone else is
+            // ungapped as usual.
+            for (i, s) in input.seq.iter().enumerate() {
+                if insubtable[i] {
+                    bseq[i] = s.clone();
+                }
+            }
+            for (i, g) in subtable.iter().enumerate() {
+                if !preservegaps[i] {
+                    let mut block: Vec<Vec<u8>> =
+                        g.iter().map(|&m| bseq[m as usize].clone()).collect();
+                    addfunctions::commongappick(&mut block);
+                    for (j, s) in block.into_iter().enumerate() {
+                        bseq[g[j] as usize] = s;
+                    }
+                }
+            }
+        }
         if args.nadd != 0 {
             let nadd = args.nadd as usize;
             // `--addprofile` keeps the added block's own columns: the C
@@ -432,7 +525,7 @@ fn main() {
             nguidetree
         );
         let opts = TreebaseOpts {
-            mergeoralign: if args.nadd != 0 {
+            mergeoralign: if args.nadd != 0 || args.subalignment {
                 Some(&mergeoralign)
             } else {
                 None

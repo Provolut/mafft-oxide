@@ -9,7 +9,7 @@ same argument vector, same input, same output files:
 
 | binary | replaces | strategies |
 |---|---|---|
-| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--oneiteration` (plain `mafft`, `fftns`, `nwns`) |
+| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--oneiteration`, `--merge` (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
 
 Both handle protein and nucleotide input, which the reader tells apart the same
@@ -110,7 +110,9 @@ Refused loudly rather than approximated, so an unsupported run fails instead of
 quietly returning a different alignment:
 
 - `--text` / `--textmatrix` (the 256-symbol alphabet)
-- sub-alignments (`--merge`), external anchors (`--anchors`)
+- external anchors (`--anchors`): reproducing it needs glibc's exact `qsort`,
+  since two of MAFFT's comparators break ties on the *addresses* of the
+  elements being permuted
 - `--oneiteration` past the first node where the C would reach `A__align`:
   there the C segfaults (it hands `dooneiteration` a freed, NULL `cpmxhist`
   and then writes through `cpmxhist + l`), so there is no output to match and
