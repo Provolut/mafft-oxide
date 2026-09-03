@@ -17,10 +17,9 @@ Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 
 ## Work
 
-Size each item from the C, and measure how it is *reached* -- an option nobody
-types can still be the default path, as item 3 turned out to be. Size the
-refusal too: `--allowshift` cost nothing, only a stale `exit(1)`. And check
-both copies: `tbfast`'s `--add` is not `disttbfast`'s.
+Size each item from the C, and measure how it is *reached* -- an option
+nobody types can still be the default path, as item 3 turned out to be. Strip
+the dead `#if`s before sizing, and check which switches are really 0.
 
 1. ~~**External anchors (`-l`)**~~ done: `anchors.rs`,
    `Falign_givenanchors`. 1376 comparisons; two C quirks reproduced and one
@@ -32,11 +31,10 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
 3. **The `alg` values.** `-M` done: `msalign.rs`, `Falign_udpari_long` as a
    mode of `falign.rs`, and the C's 30000-column switch in `treebase`. 688
    comparisons and `mafft --memsave` end to end; peak RSS on four
-   31000-column sequences 6.4GB -> 55.9MB (C: 32.7MB). `-&` (`Aalign`) done:
-   344 comparisons. Two upstream defects found here, both in issue #4.
-   Left: **`-@` (`--sp`)**, `D__align`: the generalized-affine DP, which
-   carries a per-column distribution of gap *lengths* instead of two running
-   gap scores.
+   31000-column sequences 6.4GB -> 55.9MB (C: 32.7MB). `-&` done: 344
+   comparisons. Two upstream defects found here, in issue #4.
+   Left: **`-@` (`--sp`)**, `D__align`: the generalized-affine DP, carrying a
+   per-column distribution of gap *lengths* rather than two running scores.
    Half done: `dalign.rs` has the `Gaplen` layer (`gaplencount`,
    `fillgaplen`, the `compactx` helpers, all three live `calcpfac`), bit-exact
    over 203 fuzzed group pairs -- `verify_gaplen.sh` links a harness against a
