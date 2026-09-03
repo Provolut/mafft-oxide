@@ -10,6 +10,8 @@ mod align;
 mod blosum;
 mod constants;
 mod dist;
+mod falign;
+mod fft;
 mod io;
 mod params;
 mod profile;
@@ -96,6 +98,7 @@ fn main() {
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
     let mut st = AlignState::new();
+    let mut fs = falign::FalignState::new();
     let mut bseq: Vec<Vec<u8>> = Vec::new();
 
     let nguidetree = args.nguidetree.max(1) as usize;
@@ -141,7 +144,7 @@ fn main() {
             nguidetree
         );
         treebase::treebase(
-            &cn, &args, njob, &mut bseq, &mut nlen, &tr, &effarr, &mut st,
+            &cn, &args, njob, &mut bseq, &mut nlen, &tr, &effarr, &mut st, &mut fs,
         );
 
         if calcpairdists {

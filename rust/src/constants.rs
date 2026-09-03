@@ -8,6 +8,49 @@
 use crate::blosum;
 use crate::params::Args;
 
+/// Miyata's polarity scale (`polarity_` in `core/miyata.h`), in `LOCAMINOD`
+/// order.
+const POLARITY_: [f64; 20] = [
+    8.1, 10.5, 11.6, 13.0, 5.5, 10.5, 12.3, 9.0, 10.4, 5.2, 4.9, 11.3, 5.7, 5.2, 8.0, 9.2, 8.6,
+    5.4, 6.2, 5.9,
+];
+
+/// Miyata's volume scale (`volume_` in `core/miyata.h`).
+const VOLUME_: [f64; 20] = [
+    31.0, 124.0, 56.0, 54.0, 55.0, 85.0, 83.0, 3.0, 96.0, 111.0, 111.0, 119.0, 105.0, 132.0, 32.5,
+    32.0, 61.0, 170.0, 136.0, 84.0,
+];
+
+/// `FFT_THRESHOLD` and `FFT_WINSIZE_P` from `mltaln.h`.
+pub const FFT_THRESHOLD: i32 = 80;
+pub const FFT_WINSIZE_P: i32 = 20;
+
+/// Centre and scale a 20-element property vector, as the `fftscore` block of
+/// `constants()` does.
+fn normalise(raw: &[f64; 20]) -> [f64; 0x100] {
+    let mut out = [0.0f64; 0x100];
+    let mut v = *raw;
+    let mut av = 0.0f64;
+    for x in v.iter() {
+        av += *x;
+    }
+    av /= 20.0;
+    let mut sd = 0.0f64;
+    for x in v.iter() {
+        sd += (*x - av) * (*x - av);
+    }
+    sd /= 20.0;
+    sd = sd.sqrt();
+    for x in v.iter_mut() {
+        *x -= av;
+    }
+    for x in v.iter_mut() {
+        *x /= sd;
+    }
+    out[..20].copy_from_slice(&v);
+    out
+}
+
 pub const NALPHABETS: usize = 26;
 pub const CHARSIZE: usize = 0x80;
 
@@ -51,6 +94,17 @@ pub struct Constants {
     #[allow(dead_code)]
     pub offset: i32,
     pub trywarp: bool,
+
+    /// Score matrix used by the FFT segment scan: `n_dis + offset - offsetFFT`.
+    pub n_dis_fft: Vec<Vec<i32>>,
+    /// Normalised polarity and volume, the two components of the sequence
+    /// vector the FFT correlates.
+    /// 256 entries like the C globals; only the 20 scored residues are set, and
+    /// `seq_vec_5` does read index 20 (`B`), which is therefore 0.0.
+    pub polarity: [f64; 0x100],
+    pub volume: [f64; 0x100],
+    pub fft_win_size: i32,
+    pub fft_threshold: i32,
 }
 
 // Defaults from blosum.h / constants.c for the protein BLOSUM branch.
@@ -157,7 +211,32 @@ impl Constants {
             }
         }
 
+        // offsetFFT = (int)( 600.0 / 1000.0 * (-0) + 0.5 ) == 0
+        let offset_fft = (600.0 / 1000.0 * (-0.0f64) + 0.5) as i32;
+        let mut n_dis_fft = vec![vec![0i32; NALPHABETS]; NALPHABETS];
+        for i in 0..20 {
+            for j in 0..20 {
+                n_dis_fft[i][j] = n_dis[i][j] + offset - offset_fft;
+            }
+        }
+
+        let fft_win_size = if args.fft_win_size == crate::params::NOTSPECIFIED {
+            FFT_WINSIZE_P
+        } else {
+            args.fft_win_size
+        };
+        let fft_threshold = if args.fft_threshold == crate::params::NOTSPECIFIED {
+            FFT_THRESHOLD
+        } else {
+            args.fft_threshold
+        };
+
         Constants {
+            n_dis_fft,
+            polarity: normalise(&POLARITY_),
+            volume: normalise(&VOLUME_),
+            fft_win_size,
+            fft_threshold,
             amino,
             amino_n,
             amino_grp,

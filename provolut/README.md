@@ -60,15 +60,22 @@ straight-line *and* explicitly vectorised.
 
 `rust/` holds `disttbfast-rs`, a transliteration of MAFFT's progressive MSA
 algorithm into Rust, written for bit-exactness rather than speed. It is a
-drop-in replacement for `libexec/mafft/disttbfast` on the `--nofft` path
-(NW-NS-1 / NW-NS-2, and NW-NS-i via the unmodified `dvtditr`), covering FASTA
-I/O, the BLOSUM62 score matrix, the 6-mer distance matrix, the UPGMA guide tree
-and weights, and the group-to-group DP (`A__align`) with its profile-history
-cache.
+drop-in replacement for `libexec/mafft/disttbfast`, covering FASTA I/O, the
+BLOSUM62 score matrix, the 6-mer distance matrix, the UPGMA guide tree and
+weights, the group-to-group DP (`A__align`) with its profile-history cache,
+and the FFT anchoring (`Falign`, `fft`, `blockAlign2`) that MAFFT is named
+for. That is the whole of FFT-NS-1/2 and NW-NS-1/2; the `-i` variants come out
+identical too, since `dvtditr` consumes this binary's output unchanged.
 
 The same rule as the rest of this directory applies: output must not change,
 and it is verified, never argued. `rust/verify.sh` diffs it against the C
-binary over a generated corpus (504/504 byte-identical), `rust/verify_e2e.sh`
-does the same through the real `mafft` wrapper (24/24), and configurations
-outside the ported path — FFT anchoring above all — are refused rather than
+binary over a generated corpus of 74 inputs x 15 argument sets, all
+byte-identical; `rust/verify_e2e.sh` does the same through the real `mafft`
+wrapper; and upstream's own `test/script` passes 9/9 with the Rust binary
+installed. Configurations outside the ported path are refused rather than
 approximated. See `rust/README.md`.
+
+Not covered, and the reason this is not yet the binary the scorer would use:
+G-INS-i and L-INS-i do not go through `disttbfast` at all. They run `tbfast`
+plus `pairlocalalign`, which is where `L__align11` -- the 68% hotspot this
+directory is about -- lives. Porting those is the next step.

@@ -26,6 +26,16 @@ ARGSETS=(
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.5 -x 100"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -u"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -n"
+  # FFT anchoring (FFT-NS-1 / FFT-NS-2, i.e. plain mafft and fftns)
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -2.00 -s 0.0 -W 6 -O -C 0-0 -b 62 -g -0.05 -f -2.00 -Q 100.0 -h -0.1 -F -X 0.0 -x 100"
+  "-q 0 -E 3 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.5 -x 100 -u"
+  # -G forces the FFT path even when the sequences are short for it
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -G -X 0.1 -x 100"
+  # non-default FFT window and threshold
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -w 40 -X 0.1 -x 100"
 )
 
 gen_corpus() {
@@ -113,6 +123,48 @@ with open('%s/longname.fa' % out, 'w') as f:
 write('%s/lower.fa' % out, [(n, s.lower()) for n, s in recs[:8]])
 write('%s/stars.fa' % out,
       [(n, s[:100].replace('A', '*')) for n, s in recs[:8]])
+
+# Tandem repeats with varying copy number, shuffled domains and inversions.
+# These are the inputs on which the FFT scan proposes mutually inconsistent
+# anchors, so blockAlign2 has to prune -- the only place its DP quirks
+# (a penalised `maxj` carried into the next cell, a `result1[]` element left
+# over from the previous call) can change the answer.
+for idx, (motiflen, ncopies, nseq, mut) in enumerate(
+        [(15, (6, 20), 16, 0.10), (25, (4, 12), 20, 0.15), (40, (3, 8), 12, 0.10),
+         (50, (2, 6), 10, 0.05), (20, (8, 16), 30, 0.20)]):
+    motif = ''.join(rng.choice(alpha[:20]) for _ in range(motiflen))
+    rs = []
+    for i in range(nseq):
+        k = rng.randint(*ncopies)
+        s = ''
+        for _ in range(k):
+            t = list(motif)
+            for _ in range(max(1, int(motiflen * mut))):
+                t[rng.randrange(motiflen)] = rng.choice(alpha[:20])
+            s += ''.join(t)
+        rs.append(('r%02d' % i, s))
+    write('%s/tandem_%d.fa' % (out, idx), rs)
+
+domains = [''.join(rng.choice(alpha[:20]) for _ in range(70)) for _ in range(4)]
+rs = []
+for i in range(14):
+    order = list(range(4))
+    rng.shuffle(order)
+    t = list(''.join(domains[d] for d in order))
+    for _ in range(len(t) // 15):
+        t[rng.randrange(len(t))] = rng.choice(alpha[:20])
+    rs.append(('dom%02d' % i, ''.join(t)))
+write('%s/shuffled_domains.fa' % out, rs)
+
+base = ''.join(rng.choice(alpha[:20]) for _ in range(300))
+rs = []
+for i in range(12):
+    a, b = sorted(rng.sample(range(300), 2))
+    t = list(base[:a] + base[a:b][::-1] + base[b:])
+    for _ in range(20):
+        t[rng.randrange(len(t))] = rng.choice(alpha[:20])
+    rs.append(('inv%02d' % i, ''.join(t)))
+write('%s/inversions.fa' % out, rs)
 PY
 }
 

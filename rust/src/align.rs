@@ -445,12 +445,19 @@ fn create_fg_result(
 }
 
 impl AlignState {
-    /// `A__align()` as `treebase()` calls it: no constraints, no warp, no
-    /// `sgap`/`egap`, `calledbyfulltreebase == 1`, and a profile-history slot
-    /// always supplied (so the C always takes the `cpmxresult` branch).
+    /// `A__align()`, with no constraints and no warp.
+    ///
+    /// Two call sites reach it and they take different branches of the C:
+    ///
+    /// * `treebase()` supplies a profile-history slot (`want_cpmxresult`) and
+    ///   no boundary-gap patterns, so a child's cached profile can be reused
+    ///   and the parent's is produced.
+    /// * `Falign()` aligns one block between two anchors, so it supplies the
+    ///   `gaps` patterns describing what lies just outside the block, and no
+    ///   history slot.
     ///
     /// `group1` / `group2` hold the aligned members of each group; on return
-    /// they carry the new alignment.  The returned profile is the parent's
+    /// they carry the new alignment. The returned profile is the parent's
     /// `cpmxhist` entry, or `None` when the C would store a null.
     #[allow(clippy::too_many_arguments)]
     pub fn a_align(
@@ -465,11 +472,14 @@ impl AlignState {
         eff2: &[f64],
         headgp: bool,
         tailgp: bool,
+        gaps: Option<(&[u8], &[u8], &[u8], &[u8])>,
         firstmem: i32,
+        calledbyfulltreebase: i32,
         cpmxchild0: Option<CpmxHist>,
         cpmxchild1: Option<CpmxHist>,
         orieff1: f64,
         orieff2: f64,
+        want_cpmxresult: bool,
         newgapstr: u8,
     ) -> (f64, Option<CpmxHist>) {
         let icyc = group1.len();
@@ -528,9 +538,11 @@ impl AlignState {
         }
         self.ensure_ijp(self.orlgth1, self.orlgth2);
 
-        // `reuseprofiles` is still computed even though the cpmxhist branch
-        // below never takes the incremental path; Atracking consults it.
-        let reuseprofiles = self.previouscall != 0
+        // The C's `previouscall` holds the *previous* call's
+        // `calledbyfulltreebase`, which Falign passes as -1: truthy in C, so
+        // the flag is stored as-is and tested against zero.
+        let reuseprofiles = calledbyfulltreebase == 1
+            && self.previouscall != 0
             && firstmem >= 0
             && firstmem == self.previousfirstmem
             && lgth1 as i32 == self.previousfirstlen
@@ -560,41 +572,94 @@ impl AlignState {
         let mut intwork = std::mem::take(&mut self.intwork);
         let mut ijp = std::mem::take(&mut self.ijp);
 
-        // --- profiles: reuse a child's cached profile where one exists ---
+        // --- profiles ---
         let g1: Vec<&[u8]> = group1.iter().map(|s| s.as_slice()).collect();
         let g2: Vec<&[u8]> = group2.iter().map(|s| s.as_slice()).collect();
 
-        let mut hist1 = cpmxchild0;
-        if hist1.is_none() {
-            profile::cpmx_calc_new(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
-            profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
-            for v in gapfreq1.iter_mut().take(lgth1) {
-                *v = 1.0 - *v;
-            }
-            profile::st_opening_gap_count(&mut ogcp1o, icyc, &g1, eff1, lgth1);
-            profile::st_final_gap_count(&mut fgcp1o, icyc, &g1, eff1, lgth1);
-        }
-        let mut hist2 = cpmxchild1;
-        if hist2.is_none() {
-            profile::cpmx_calc_new(cn, &g2, &mut cpmx2, eff2, lgth2, jcyc);
-            profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);
-            for v in gapfreq2.iter_mut().take(lgth2) {
-                *v = 1.0 - *v;
-            }
-            profile::st_opening_gap_count(&mut ogcp2o, jcyc, &g2, eff2, lgth2);
-            profile::st_final_gap_count(&mut fgcp2o, jcyc, &g2, eff2, lgth2);
-        }
+        let mut hist1: Option<CpmxHist> = None;
+        let mut hist2: Option<CpmxHist> = None;
+        let headgapfreq1: f64;
+        let headgapfreq2: f64;
 
-        // sgap1 == NULL here, so head/tail gap frequencies are all 1.0.
-        let headgapfreq1 = 1.0f64;
-        let headgapfreq2 = 1.0f64;
-        match hist1.as_mut() {
-            Some(h) => h[NALPHABETS][lgth1] = 1.0,
-            None => gapfreq1[lgth1] = 1.0,
-        }
-        match hist2.as_mut() {
-            Some(h) => h[NALPHABETS][lgth2] = 1.0,
-            None => gapfreq2[lgth2] = 1.0,
+        if want_cpmxresult {
+            // specificityconsideration == 0.0 is enforced by check_supported().
+            assert!(
+                gaps.is_none(),
+                "The combination of sgap1 and cpmxhist is not supported"
+            );
+            hist1 = cpmxchild0;
+            if hist1.is_none() {
+                profile::cpmx_calc_new(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
+                profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+                for v in gapfreq1.iter_mut().take(lgth1) {
+                    *v = 1.0 - *v;
+                }
+                profile::st_opening_gap_count(&mut ogcp1o, icyc, &g1, eff1, lgth1);
+                profile::st_final_gap_count(&mut fgcp1o, icyc, &g1, eff1, lgth1);
+            }
+            hist2 = cpmxchild1;
+            if hist2.is_none() {
+                profile::cpmx_calc_new(cn, &g2, &mut cpmx2, eff2, lgth2, jcyc);
+                profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);
+                for v in gapfreq2.iter_mut().take(lgth2) {
+                    *v = 1.0 - *v;
+                }
+                profile::st_opening_gap_count(&mut ogcp2o, jcyc, &g2, eff2, lgth2);
+                profile::st_final_gap_count(&mut fgcp2o, jcyc, &g2, eff2, lgth2);
+            }
+
+            // Head and tail gaps are taken to be absent on this branch.
+            headgapfreq1 = 1.0;
+            headgapfreq2 = 1.0;
+            match hist1.as_mut() {
+                Some(h) => h[NALPHABETS][lgth1] = 1.0,
+                None => gapfreq1[lgth1] = 1.0,
+            }
+            match hist2.as_mut() {
+                Some(h) => h[NALPHABETS][lgth2] = 1.0,
+                None => gapfreq2[lgth2] = 1.0,
+            }
+        } else {
+            // The Falign block branch. `reuseprofiles` cannot be true here --
+            // it needs calledbyfulltreebase == 1, and Falign passes -1 -- so
+            // the incremental cpmx/gap-count updates are unreachable.
+            profile::cpmx_calc_new(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
+            profile::cpmx_calc_new(cn, &g2, &mut cpmx2, eff2, lgth2, jcyc);
+
+            let mut hgf1 = 0.0f64;
+            let mut hgf2 = 0.0f64;
+            match gaps {
+                Some((sgap1, sgap2, egap1, egap2)) => {
+                    profile::new_opening_gap_count(&mut ogcp1o, icyc, &g1, eff1, lgth1, sgap1);
+                    profile::new_final_gap_count(&mut fgcp1o, icyc, &g1, eff1, lgth1);
+                    profile::new_opening_gap_count(&mut ogcp2o, jcyc, &g2, eff2, lgth2, sgap2);
+                    profile::new_final_gap_count(&mut fgcp2o, jcyc, &g2, eff2, lgth2);
+                    hgf1 = profile::outgapcount(icyc, sgap1, eff1);
+                    hgf2 = profile::outgapcount(jcyc, sgap2, eff2);
+                    gapfreq1[lgth1] = profile::outgapcount(icyc, egap1, eff1);
+                    gapfreq2[lgth2] = profile::outgapcount(jcyc, egap2, eff2);
+                }
+                None => {
+                    profile::st_opening_gap_count(&mut ogcp1o, icyc, &g1, eff1, lgth1);
+                    profile::st_final_gap_count(&mut fgcp1o, icyc, &g1, eff1, lgth1);
+                    profile::st_opening_gap_count(&mut ogcp2o, jcyc, &g2, eff2, lgth2);
+                    profile::st_final_gap_count(&mut fgcp2o, jcyc, &g2, eff2, lgth2);
+                    gapfreq1[lgth1] = 0.0;
+                    gapfreq2[lgth2] = 0.0;
+                }
+            }
+
+            // legacygapcost == 0 is enforced by check_supported().
+            profile::gapcountf(&mut gapfreq1, &g1, icyc, eff1, lgth1);
+            profile::gapcountf(&mut gapfreq2, &g2, jcyc, eff2, lgth2);
+            for v in gapfreq1.iter_mut().take(lgth1 + 1) {
+                *v = 1.0 - *v;
+            }
+            for v in gapfreq2.iter_mut().take(lgth2 + 1) {
+                *v = 1.0 - *v;
+            }
+            headgapfreq1 = 1.0 - hgf1;
+            headgapfreq2 = 1.0 - hgf2;
         }
 
         let (cpmx1v, gapfreq1v, ogcp1ov, fgcp1ov): (&[Vec<f64>], &[f64], &[f64], &[f64]) =
@@ -766,7 +831,7 @@ impl AlignState {
         }
 
         // --- profile history for the parent node ---
-        let cpmxresult = if icyc + jcyc > 20 {
+        let cpmxresult = if want_cpmxresult && icyc + jcyc > 20 {
             let alen = track.gt1.len();
             let limk = ((alen + 1000) / 1000) * 1000;
 
@@ -821,7 +886,7 @@ impl AlignState {
         self.previousfirstlen = lgth1 as i32;
         self.previousfirstmem = firstmem;
         self.previousicyc = icyc as i32;
-        self.previouscall = 1;
+        self.previouscall = calledbyfulltreebase;
 
         // Give the scratch buffers back.
         self.w1 = w1;

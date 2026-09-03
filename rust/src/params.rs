@@ -418,9 +418,6 @@ impl Args {
     /// `--add`, no sub-alignments, no external anchors and no threads.
     pub fn check_supported(&self) -> Result<(), Unsupported> {
         let mut bad: Vec<&str> = Vec::new();
-        if self.use_fft || self.force_fft {
-            bad.push("-F/-G (FFT anchoring, Falign) is not ported; use --nofft");
-        }
         if self.useexternalanchors {
             bad.push("-l (external anchors) is not ported");
         }

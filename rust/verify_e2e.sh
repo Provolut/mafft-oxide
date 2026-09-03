@@ -32,6 +32,11 @@ STRATS=(
   "--nofft --retree 2 --maxiterate 0 --reorder"
   "--nofft --retree 2 --maxiterate 0 --clustalout"
   "--nofft --retree 2 --maxiterate 0 --inputorder"
+  ""                                    # plain mafft: FFT-NS-2
+  "--retree 1 --maxiterate 0"           # FFT-NS-1
+  "--maxiterate 2 --thread 0"           # FFT-NS-i
+  "--retree 2 --maxiterate 0 --reorder"
+  "--retree 2 --maxiterate 0 --clustalout"
 )
 
 pass=0; fail=0; failed=""

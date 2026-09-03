@@ -3,6 +3,7 @@
 
 use crate::align::{AlignState, CpmxHist};
 use crate::constants::Constants;
+use crate::falign::{falign, FalignState};
 use crate::params::Args;
 use crate::tree::Tree;
 
@@ -32,12 +33,14 @@ pub fn treebase(
     tree: &Tree,
     effarr: &[f64],
     st: &mut AlignState,
+    fs: &mut FalignState,
 ) {
     let newgapstr = b'-';
     let outgap = args.outgap;
 
     let mut memhist: Vec<Option<Vec<i32>>> = vec![None; njob.saturating_sub(1)];
     let mut cpmxhist: Vec<Option<CpmxHist>> = (0..njob.saturating_sub(1)).map(|_| None).collect();
+    let mut fftlog = vec![1i32; njob];
 
     for l in 0..njob - 1 {
         let m1 = tree.topol[l][0] as usize;
@@ -81,7 +84,23 @@ pub fn treebase(
         let mut group1: Vec<Vec<u8>> = mem0.iter().map(|&m| aseq[m as usize].clone()).collect();
         let mut group2: Vec<Vec<u8>> = mem1.iter().map(|&m| aseq[m as usize].clone()).collect();
 
-        if clus1 == 1 && clus2 == 1 {
+        // `ffttry`: the FFT scan needs sequences longer than the group is wide.
+        let ffttry = nlen[m1] > clus1 as i32 && nlen[m2] > clus2 as i32;
+        if args.force_fft || (args.use_fft && ffttry) {
+            falign(
+                fs,
+                st,
+                cn,
+                &mut group1,
+                &mut group2,
+                &effarr1,
+                &effarr2,
+                outgap,
+                &mut fftlog[m1],
+                newgapstr,
+            );
+        } else if clus1 == 1 && clus2 == 1 {
+            fftlog[m1] = 0;
             let mut s1 = std::mem::take(&mut group1[0]);
             let mut s2 = std::mem::take(&mut group2[0]);
             st.g_align11(
@@ -98,6 +117,7 @@ pub fn treebase(
             group1[0] = s1;
             group2[0] = s2;
         } else {
+            fftlog[m1] = 0;
             let (_pscore, hist) = st.a_align(
                 cn,
                 &cn.n_dis_consweight_multi,
@@ -109,11 +129,14 @@ pub fn treebase(
                 &effarr2,
                 outgap,
                 outgap,
+                None,
                 mem0[0],
+                1,
                 cpmxchild0,
                 cpmxchild1,
                 orieff1,
                 orieff2,
+                true,
                 newgapstr,
             );
             cpmxhist[l] = hist;

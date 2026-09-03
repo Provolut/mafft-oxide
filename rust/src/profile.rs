@@ -91,6 +91,56 @@ pub fn gapcountf(freq: &mut [f64], seq: &[&[u8]], nseq: usize, eff: &[f64], lgth
     }
 }
 
+/// `new_OpeningGapCount()`: like [`st_opening_gap_count`], but the run state
+/// starts from the boundary pattern just before the block, and `ogcp[len]` is
+/// deliberately left alone (the C only zeroes `0..len`).
+pub fn new_opening_gap_count(
+    ogcp: &mut [f64],
+    clus: usize,
+    seq: &[&[u8]],
+    eff: &[f64],
+    len: usize,
+    sgappat: &[u8],
+) {
+    for v in ogcp.iter_mut().take(len) {
+        *v = 0.0;
+    }
+    for j in 0..clus {
+        let feff = eff[j];
+        let s = seq[j];
+        let mut gc = sgappat[j] == b'-';
+        for i in 0..len {
+            let gb = gc;
+            gc = s[i] == b'-';
+            if !gb && gc {
+                ogcp[i] += feff;
+            }
+        }
+    }
+}
+
+/// `new_FinalGapCount()`.
+///
+/// The C takes an `egappat` argument but cannot use it: the extra step after
+/// its loop has already read the NUL terminator into `gb`, so the test is
+/// always false. The compiled function is therefore identical to
+/// [`st_final_gap_count`], and the parameter is dropped here rather than
+/// pretending it has an effect.
+pub fn new_final_gap_count(fgcp: &mut [f64], clus: usize, seq: &[&[u8]], eff: &[f64], len: usize) {
+    st_final_gap_count(fgcp, clus, seq, eff, len)
+}
+
+/// `outgapcount()`: weighted frequency of `-` in a boundary pattern.
+pub fn outgapcount(nseq: usize, gappat: &[u8], eff: &[f64]) -> f64 {
+    let mut fr = 0.0f64;
+    for j in 0..nseq {
+        if gappat[j] == b'-' {
+            fr += eff[j];
+        }
+    }
+    fr
+}
+
 /// `gapireru()`: expand `ori` according to a gap table of `o`/`-`.
 pub fn gapireru(ori: &[u8], gt: &[u8], gapchar: u8) -> Vec<u8> {
     let mut res = Vec::with_capacity(gt.len());
