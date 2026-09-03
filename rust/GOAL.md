@@ -42,8 +42,9 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
    comparisons byte-identical, plus `mafft --memsave` end to end; peak RSS on
    four 31000-column sequences went from 6.4GB to 55.9MB against the C's
    32.7MB. Two upstream defects reproduced here, both in issue #4.
-   Left in this item: `-@` (`--sp`, `D__align`, 1801 lines), reachable and
-   refused; `-&` (`Aalign`, 223 lines), not reachable from the wrapper.
+   `-&` (`Aalign`) is done too: 344 comparisons byte-identical, including
+   the `Falign` block-aligner case. Left in this item: `-@` (`--sp`,
+   `D__align`, 1801 lines plus the `Gaplen` machinery), reachable, refused.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical

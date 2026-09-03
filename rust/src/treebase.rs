@@ -304,7 +304,7 @@ pub fn treebase(
                     outgap,
                     &mut fftlog[m1],
                     newgapstr,
-                    alg == b'M',
+                    alg,
                 );
             } else if alg == b'M' {
                 // `case( 'M' )` has no `clus1 == 1 && clus2 == 1` shortcut --
@@ -329,6 +329,12 @@ pub fn treebase(
                     newgapstr,
                 );
                 cpmxhist[l] = hist;
+            } else if alg == b'a' {
+                // `case( 'a' )`: like `'M'`, no 1x1 shortcut.
+                fftlog[m1] = 0;
+                crate::saalign::aalign(
+                    cn, &mut group1, &mut group2, &effarr1, &effarr2, outgap, newgapstr,
+                );
             } else if clus1 == 1 && clus2 == 1 {
                 fftlog[m1] = 0;
                 let mut s1 = std::mem::take(&mut group1[0]);
@@ -516,7 +522,7 @@ pub fn dooneiteration(
                 // switch: the refinement pass refuses at `l != 0` first, and
                 // `alg` cannot have been flipped by `treebase` because the
                 // two do not share it here.
-                false,
+                b'A',
             );
         } else {
             fftlog[m1] = 0;

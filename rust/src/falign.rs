@@ -475,14 +475,15 @@ pub fn falign(
     outgap: bool,
     fftlog: &mut i32,
     newgapstr: u8,
-    // `Falign_udpari_long` rather than `Falign`: the C's FFT anchoring under
-    // `alg == 'M'`. The two differ in exactly two ways -- this one takes
-    // `NKOUHO_LONG` candidate lags instead of `NKOUHO`, and it aligns every
-    // block with `MSalignmm`, with no `clus1 == 1 && clus2 == 1` shortcut to
-    // `G__align11` (the C has that line, commented out and marked "CHUUI!!!").
-    // Everything else that differs between them is progress text.
-    memsave: bool,
+    // The C's `alg`, which picks both the anchoring pass and the block
+    // aligner. `'M'` selects `Falign_udpari_long` rather than `Falign` --
+    // those differ in exactly three ways: `NKOUHO_LONG` (500) candidate lags
+    // instead of `NKOUHO` (20), no `break` at a lag that yields no segment,
+    // and every block through `MSalignmm` with no 1x1 shortcut. `'a'` stays
+    // in `Falign` but sends every block to `Aalign`, also with no shortcut.
+    alg: u8,
 ) -> f64 {
+    let memsave = alg == b'M';
     let nkouho = if memsave { NKOUHO_LONG } else { NKOUHO };
     let clus1 = group1.len();
     let clus2 = group2.len();
@@ -746,6 +747,10 @@ pub fn falign(
                 newgapstr,
             );
             totalscore += sc;
+        } else if alg == b'a' {
+            totalscore += crate::saalign::aalign(
+                cn, &mut block1, &mut block2, eff1, eff2, outgap, newgapstr,
+            );
         } else if clus1 == 1 && clus2 == 1 {
             let mut s1 = std::mem::take(&mut block1[0]);
             let mut s2 = std::mem::take(&mut block2[0]);

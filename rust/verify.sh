@@ -569,6 +569,44 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# -& (alg 'a'): `Aalign`, the oldest and simplest of the group aligners -- one
+# flat `penalty * 0.5` per gap operation, scored against the static `n_dis`
+# rather than the dynamic matrix. No `mafft` option selects it; it is covered
+# because it is part of the binaries' option surface.
+AARGSETS=(
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -&"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -&"
+  "-q 0 -E 1 -V -2.00 -s 0.0 -W 6 -O -C 0-0 -b 62 -g -0.05 -f -2.00 -Q 100.0 -h -0.1 -X 0.0 -x 100 -&"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -&"
+)
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  for i in "${!AARGSETS[@]}"; do
+    rm -rf "$work/c" "$work/r"
+    mkdir -p "$work/c" "$work/r"
+    ( cd "$work/c" && $CBIN ${AARGSETS[$i]} < "$f" > out.fa 2> err.log )
+    cst=$?
+    ( cd "$work/r" && $RBIN ${AARGSETS[$i]} < "$f" > out.fa 2> err.log )
+    rst=$?
+    label="$(basename "$f") [aalign argset $i]"
+    if [ $cst -ne $rst ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      continue
+    fi
+    bad=""
+    for o in out.fa order hat2; do
+      if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+        cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+      fi
+    done
+    if [ -n "$bad" ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+    else
+      pass=$((pass+1))
+    fi
+  done
+done
+
 echo "pass=$pass fail=$fail"
 if [ $fail -ne 0 ]; then
   printf 'FAILED:%b\n' "$failed"

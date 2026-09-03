@@ -133,9 +133,10 @@ quietly returning a different alignment:
   the port refuses instead. 78 of the 88 corpus inputs never reach it.
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- the other `alg` values: `-@` (`--sp`, `D__align`) and `-&` (`Aalign`).
+- `-@` (`--sp`), the generalized-affine DP in `D__align`.
   The memsave aligner (`-M`, `--memsave`, and the switch the C makes on its
-  own past 30000 columns) *is* ported, both its DP and its FFT anchoring.
+  own past 30000 columns) is ported, both its DP and its FFT anchoring, and so
+  is `-&` (`Aalign`).
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
 - **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
   a "not implemented", not a "cannot be implemented": measured on 39 corpus
