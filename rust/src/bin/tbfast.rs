@@ -242,7 +242,9 @@ fn refuse(a: &TbArgs) -> Option<String> {
 
 /// Build a `Constants` from one phase's penalty settings by reusing the
 /// `disttbfast` argument struct, which `constants()` reads.
+#[allow(clippy::too_many_arguments)]
 fn constants_for(
+    dorp: u8,
     nblosum: i32,
     ppenalty: i32,
     ppenalty_ex: i32,
@@ -262,7 +264,7 @@ fn constants_for(
         ..Default::default()
     };
     ca.scoremtx = 1;
-    Constants::new(&ca)
+    Constants::new_dorp(&ca, dorp)
 }
 
 /// `hat3`: one line per constraint block, read back by `dvtditr`.
@@ -351,13 +353,9 @@ fn main() {
         eprintln!("At least 2 sequences should be input!");
         std::process::exit(1);
     }
-    if input.dorp != b'p' {
-        eprintln!("tbfast-rs: only amino-acid input is ported");
-        std::process::exit(1);
-    }
-
     // --- pairwise phase ---
     let pair_cn = constants_for(
+        input.dorp,
         a.pair_nblosum,
         a.pair_ppenalty,
         a.pair_ppenalty_ex,
@@ -425,6 +423,7 @@ fn main() {
 
     // --- progressive phase (its own scoring parameters) ---
     let cn = constants_for(
+        input.dorp,
         a.nblosum,
         a.ppenalty,
         a.ppenalty_ex,

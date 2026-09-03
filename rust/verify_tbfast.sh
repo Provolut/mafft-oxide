@@ -40,70 +40,10 @@ ARGSETS=(
 
 if [ -z "$CORPUS" ]; then
   CORPUS="$work/corpus"
-  # verify.sh knows how to build the corpus; borrow it by running it with a
-  # binary pair that cannot work, then keeping the directory it generated.
   mkdir -p "$CORPUS"
   cp "$here/../test/sample" "$CORPUS/sample.fa"
-  python3 - "$here/../test/sample" "$CORPUS" <<'PY'
-import random, sys
-src, out = sys.argv[1], sys.argv[2]
-recs, name, seq = [], None, []
-for line in open(src):
-    line = line.rstrip('\n')
-    if line.startswith('>'):
-        if name is not None:
-            recs.append((name, ''.join(seq)))
-        name, seq = line[1:], []
-    else:
-        seq.append(line)
-recs.append((name, ''.join(seq)))
-
-def write(path, rs):
-    with open(path, 'w') as f:
-        for n, s in rs:
-            f.write('>%s\n%s\n' % (n, s))
-
-rng = random.Random(31337)
-alpha = 'ARNDCQEGHILKMFPSTWYVBZX'
-for i in range(12):
-    k = rng.randint(2, len(recs))
-    write('%s/subset_%02d.fa' % (out, i), rng.sample(recs, k))
-for L in (2, 6, 12, 40):
-    write('%s/trunc_%02d.fa' % (out, L), [(n, s[:L]) for n, s in recs[:6]])
-write('%s/pair.fa' % out, recs[:2])
-write('%s/dup.fa' % out, [(('d%d' % i), recs[0][1]) for i in range(5)])
-# X is stripped for the score-only variants, so it exercises `thereisx`.
-rs = []
-for n, s in recs[:8]:
-    t = list(s[:150])
-    for _ in range(10):
-        t[rng.randrange(len(t))] = 'X'
-    rs.append((n, ''.join(t)))
-write('%s/withx.fa' % out, rs)
-rs = []
-for n, s in recs[:8]:
-    t = list(s[:150])
-    for _ in range(10):
-        t[rng.randrange(len(t))] = rng.choice(alpha)
-    rs.append((n, ''.join(t)))
-write('%s/ambig.fa' % out, rs)
-# Tandem repeats: the case --allowshift exists for.
-motif = ''.join(rng.choice(alpha[:20]) for _ in range(30))
-rs = []
-for i in range(10):
-    s = ''
-    for _ in range(rng.randint(2, 6)):
-        t = list(motif)
-        for _ in range(3):
-            t[rng.randrange(len(t))] = rng.choice(alpha[:20])
-        s += ''.join(t)
-    rs.append(('r%02d' % i, s))
-write('%s/tandem.fa' % out, rs)
-for i, (nseq, L) in enumerate(((4, 40), (15, 70))):
-    write('%s/random_%d.fa' % (out, i),
-          [('q%d' % j, ''.join(rng.choice(alpha[:20]) for _ in range(L)))
-           for j in range(nseq)])
-PY
+  cp "$here/../test/samplerna" "$CORPUS/samplerna.fa"
+  python3 "$here/gencorpus.py" "$here/../test/sample" "$CORPUS" small
 fi
 
 pass=0; fail=0; failed=""

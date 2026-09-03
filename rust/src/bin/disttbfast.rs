@@ -56,12 +56,7 @@ fn main() {
         return;
     }
 
-    if input.dorp != b'p' {
-        eprintln!("disttbfast-rs: only amino-acid input is ported");
-        std::process::exit(1);
-    }
-
-    let cn = Constants::new(&args);
+    let cn = Constants::new_dorp(&args, input.dorp);
     if cn.trywarp {
         eprintln!("disttbfast-rs: the shift (warp) DP path is not ported; use -Q >= 10");
         std::process::exit(1);
@@ -78,8 +73,16 @@ fn main() {
         }
     }
 
-    if args.tuplesize != 6 {
+    if input.dorp == b'p' && args.tuplesize != 6 {
         eprintln!("tuplesize must be 6 for aa sequence");
+        std::process::exit(1);
+    }
+    if input.dorp == b'd' && args.tuplesize != 6 && args.tuplesize != 10 {
+        eprintln!("tuplesize must be 6 or 10 for dna sequence");
+        std::process::exit(1);
+    }
+    if input.dorp == b'd' && args.tuplesize != 6 {
+        eprintln!("disttbfast-rs: only -F 6 (6-mer) is ported for nucleotides");
         std::process::exit(1);
     }
 

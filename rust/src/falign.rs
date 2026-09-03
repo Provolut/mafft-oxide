@@ -486,33 +486,46 @@ pub fn falign(
         fs.n_alloc = nlen;
     }
 
-    // --- build the two signals: real = polarity, imaginary = volume ---
-    // n20or4or2 == 1 for protein with fftscore, so there is a single vector.
+    // --- build the two signals ---
+    // `n20or4or2` is 1 in this function for both sequence types, so there is a
+    // single vector each side. For protein it carries polarity in the real part
+    // and volume in the imaginary one; for nucleotides the branch taken is
+    // `seq_vec_3`, which -- because `n20or4or2` is 1, not 4 -- fills only the
+    // vector for alphabet index 0, i.e. the indicator of `a`.
+    let nuc = cn.dorp == b'd';
     for v in fs.seq_vector1.iter_mut().take(nlen) {
         *v = Cpx::default();
     }
     for i in 0..clus1 {
-        seq_vec_5(
-            &mut fs.seq_vector1,
-            &cn.polarity,
-            &cn.volume,
-            eff1[i],
-            &group1[i],
-            cn,
-        );
+        if nuc {
+            seq_vec_3(&mut fs.seq_vector1, eff1[i], &group1[i], cn);
+        } else {
+            seq_vec_5(
+                &mut fs.seq_vector1,
+                &cn.polarity,
+                &cn.volume,
+                eff1[i],
+                &group1[i],
+                cn,
+            );
+        }
     }
     for v in fs.seq_vector2.iter_mut().take(nlen) {
         *v = Cpx::default();
     }
     for i in 0..clus2 {
-        seq_vec_5(
-            &mut fs.seq_vector2,
-            &cn.polarity,
-            &cn.volume,
-            eff2[i],
-            &group2[i],
-            cn,
-        );
+        if nuc {
+            seq_vec_3(&mut fs.seq_vector2, eff2[i], &group2[i], cn);
+        } else {
+            seq_vec_5(
+                &mut fs.seq_vector2,
+                &cn.polarity,
+                &cn.volume,
+                eff2[i],
+                &group2[i],
+                cn,
+            );
+        }
     }
 
     fs.fft.run(nlen as isize, &mut fs.seq_vector2);
@@ -747,6 +760,16 @@ pub fn falign(
     }
 
     totalscore
+}
+
+/// `seq_vec_3()` with `n20or4or2 == 1`: accumulate one member's contribution to
+/// the indicator vector of alphabet index 0.
+fn seq_vec_3(result: &mut [Cpx], incr: f64, seq: &[u8], cn: &Constants) {
+    for (p, &c) in seq.iter().enumerate() {
+        if cn.amino_n[c as usize] == 0 {
+            result[p].r += incr;
+        }
+    }
 }
 
 /// `seq_vec_5()`: accumulate one member's contribution to the signal.

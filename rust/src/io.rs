@@ -115,13 +115,18 @@ fn myfgets(fp: &mut CFile, l: usize) -> Vec<u8> {
     s
 }
 
-/// `onlyAlpha_upper()` followed by `kake2hiku()`.
-fn filter_seq_upper(raw: &[u8]) -> Vec<u8> {
+/// `onlyAlpha_upper()` / `onlyAlpha_lower()` followed by `kake2hiku()`.
+///
+/// The C picks the case from the global `dorp`, which is still unset while
+/// `getnumlen()` scans the file, so the first pass always upper-cases.
+fn filter_seq(raw: &[u8], lower: bool) -> Vec<u8> {
     let mut out = Vec::with_capacity(raw.len());
     for &ch in raw {
         if ch.is_ascii_alphabetic() || ch == b'-' || ch == b'*' || ch == b'.' {
             out.push(if ch == b'*' {
                 b'-'
+            } else if lower {
+                ch.to_ascii_lowercase()
             } else {
                 ch.to_ascii_uppercase()
             });
@@ -132,6 +137,10 @@ fn filter_seq_upper(raw: &[u8]) -> Vec<u8> {
 
 /// `load1SeqWithoutName_realloc()`: read residues up to the next record.
 fn load1_seq_without_name(fp: &mut CFile) -> Vec<u8> {
+    load1_seq_without_name_case(fp, false)
+}
+
+fn load1_seq_without_name_case(fp: &mut CFile, lower: bool) -> Vec<u8> {
     let mut raw = Vec::new();
     let mut b = b'\n';
     loop {
@@ -151,7 +160,7 @@ fn load1_seq_without_name(fp: &mut CFile) -> Vec<u8> {
             }
         }
     }
-    filter_seq_upper(&raw)
+    filter_seq(&raw, lower)
 }
 
 /// `countATGC()`: (nucleotide-ish characters, total alphabetic characters).
@@ -227,7 +236,7 @@ pub fn read_data(bytes: Vec<u8>, dorp_in: Option<u8>, outnumber: bool) -> Input 
         let mut nm = vec![b'='];
         nm.extend_from_slice(&myfgets(&mut fp, B - 2));
         name.push(nm);
-        seq.push(load1_seq_without_name(&mut fp));
+        seq.push(load1_seq_without_name_case(&mut fp, dorp == b'd'));
     }
 
     if outnumber {

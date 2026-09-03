@@ -67,13 +67,20 @@ pub fn pairalign(
     lst: &mut LalignState,
     ast: &mut AlignState,
 ) {
-    // `dseq`: the X-free copy used for the score-only variants.
+    // `dseq`: the X-free copy used for the score-only variants. `X` is only
+    // stripped for protein against a real matrix -- for nucleotides the C
+    // copies the sequence through and sets `thereisx` to zero.
     let mut dseq: Vec<Vec<u8>> = Vec::with_capacity(njob);
     let mut thereisxineachseq = vec![0i32; njob];
     for i in 0..njob {
-        let (d, n) = removex(&seq[i]);
-        dseq.push(d);
-        thereisxineachseq[i] = n;
+        if cn.dorp == b'p' {
+            let (d, n) = removex(&seq[i]);
+            dseq.push(d);
+            thereisxineachseq[i] = n;
+        } else {
+            dseq.push(seq[i].clone());
+            thereisxineachseq[i] = 0;
+        }
     }
 
     let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];

@@ -11,6 +11,11 @@ const PLENFACA: f64 = 0.01;
 const PLENFACB: f64 = 10000.0;
 const PLENFACC: f64 = 10000.0;
 const PLENFACD: f64 = 0.1;
+// D6LENFAC*, the nucleotide equivalents.
+const D6LENFACA: f64 = 0.01;
+const D6LENFACB: f64 = 2500.0;
+const D6LENFACC: f64 = 2500.0;
+const D6LENFACD: f64 = 0.1;
 
 /// `seq_grp()`: map residues to their 6 groups, dropping unscored characters.
 ///
@@ -33,6 +38,60 @@ pub fn seq_grp(cn: &Constants, seq: &[u8], nunknown: &mut i64) -> Vec<i32> {
         grp[0] = -1;
     }
     grp
+}
+
+/// `seq_grp_nuc()`: map bases to their 4 groups, dropping everything else.
+pub fn seq_grp_nuc(cn: &Constants, seq: &[u8], nunknown: &mut i64, tuplesize: usize) -> Vec<i32> {
+    let mut grp: Vec<i32> = Vec::with_capacity(seq.len() + 1);
+    for &c in seq {
+        let tmp = cn.amino_grp[c as usize];
+        if tmp < 4 {
+            grp.push(tmp);
+        } else {
+            *nunknown += 1;
+        }
+    }
+    let n = grp.len();
+    grp.push(END_OF_VEC);
+    // Unlike `seq_grp`, the nucleotide version compares against `tuplesize`.
+    if n < tuplesize {
+        grp[0] = -1;
+    }
+    grp
+}
+
+/// `makepointtable_nuc()`: rolling base-4 code of every 6-mer.
+pub fn makepointtable_nuc(grp: &[i32]) -> Vec<i32> {
+    if grp[0] == -1 {
+        return vec![-1];
+    }
+    let mut pointt = Vec::with_capacity(grp.len());
+    let mut p = 0usize;
+    let mut n = 0usize;
+    let mut point = grp[n] * 1024;
+    n += 1;
+    point += grp[n] * 256;
+    n += 1;
+    point += grp[n] * 64;
+    n += 1;
+    point += grp[n] * 16;
+    n += 1;
+    point += grp[n] * 4;
+    n += 1;
+    point += grp[n];
+    n += 1;
+    pointt.push(point);
+
+    while grp[n] != END_OF_VEC {
+        point -= grp[p] * 1024;
+        p += 1;
+        point *= 4;
+        point += grp[n];
+        n += 1;
+        pointt.push(point);
+    }
+    pointt.push(END_OF_VEC);
+    pointt
 }
 
 /// `makepointtable()`: rolling base-6 code of every 6-mer.
@@ -130,7 +189,14 @@ pub fn distance_matrix(
     seq: &[Vec<u8>],
     njob: usize,
 ) -> (Vec<Vec<f64>>, Vec<usize>) {
-    let tsize = 6usize.pow(6); // (int)pow( 6, 6 ) for amino acids
+    let nuc = cn.dorp == b'd';
+    // (int)pow( 4, tuplesize ) for nucleotides, (int)pow( 6, 6 ) for amino acids
+    let tsize = if nuc { 4usize.pow(6) } else { 6usize.pow(6) };
+    let (lenfaca, lenfacb, lenfacc, lenfacd) = if nuc {
+        (D6LENFACA, D6LENFACB, D6LENFACC, D6LENFACD)
+    } else {
+        (PLENFACA, PLENFACB, PLENFACC, PLENFACD)
+    };
     let mut nogaplen = vec![0usize; njob];
     let mut pointt: Vec<Vec<i32>> = Vec::with_capacity(njob);
     let mut maxl = 0usize;
@@ -142,8 +208,13 @@ pub fn distance_matrix(
         if nogaplen[i] > maxl {
             maxl = nogaplen[i];
         }
-        let grpseq = seq_grp(cn, &tmpseq, &mut nunknown);
-        pointt.push(makepointtable(&grpseq));
+        if nuc {
+            let grpseq = seq_grp_nuc(cn, &tmpseq, &mut nunknown, 6);
+            pointt.push(makepointtable_nuc(&grpseq));
+        } else {
+            let grpseq = seq_grp(cn, &tmpseq, &mut nunknown);
+            pointt.push(makepointtable(&grpseq));
+        }
     }
 
     let mut sextet = Sextet::new(tsize, maxl);
@@ -166,7 +237,7 @@ pub fn distance_matrix(
                 (nogaplen[j] as f64, nogaplen[i] as f64)
             };
             let lenfac =
-                1.0 / (shorter / longer * PLENFACD + PLENFACB / (longer + PLENFACC) + PLENFACA);
+                1.0 / (shorter / longer * lenfacd + lenfacb / (longer + lenfacc) + lenfaca);
             let bunbo = mtx[i][0].min(mtx[j][0]);
             mtx[i][j - i] = if bunbo == 0.0 {
                 2.0

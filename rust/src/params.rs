@@ -445,11 +445,10 @@ impl Args {
         if self.nthread > 0 || self.nthreadpair > 0 || self.nthreadtb > 0 {
             bad.push("threads change the result; run with -C 0-0");
         }
-        if self.scoremtx != 1 || self.nblosum != 62 {
+        // For nucleotides `constants()` ignores -b and derives the matrix from
+        // Kimura's model instead, so the BLOSUM check applies to protein only.
+        if self.dorp != Some(b'd') && (self.scoremtx != 1 || self.nblosum != 62) {
             bad.push("only the BLOSUM62 protein matrix (-b 62) is ported");
-        }
-        if self.dorp == Some(b'd') {
-            bad.push("nucleotide input (-D) is not ported");
         }
         if self.fmodel != 0 {
             bad.push("-a (--fmodel) is not ported");
@@ -463,9 +462,7 @@ impl Args {
         if self.distout != 0 || self.treeout != 0 || self.noalign {
             bad.push("-y/-t/-T (distance or tree output) is not ported");
         }
-        if self.nwildcard {
-            bad.push("--anysymbol is not ported");
-        }
+
         if bad.is_empty() {
             Ok(())
         } else {

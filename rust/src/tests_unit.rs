@@ -906,11 +906,17 @@ fn clustered_flags_parse_like_the_c() {
 fn unsupported_configurations_are_refused() {
     let base = ["-C".into(), "0-0".into()];
     let mut argv: Vec<String> = base.to_vec();
-    argv.push("-D".into()); // nucleotide
+    argv.extend(["-b".into(), "45".into()]); // a matrix that is not BLOSUM62
     assert!(Args::parse(&argv).unwrap().check_supported().is_err());
 
+    // ...but -b is ignored for nucleotides, whose matrix comes from Kimura's
+    // model, so the same flag must not refuse a nucleotide run.
     let mut argv: Vec<String> = base.to_vec();
-    argv.extend(["-b".into(), "45".into()]); // a matrix that is not BLOSUM62
+    argv.extend(["-D".into(), "-b".into(), "45".into()]);
+    assert!(Args::parse(&argv).unwrap().check_supported().is_ok());
+
+    let mut argv: Vec<String> = base.to_vec();
+    argv.push("-Y".into()); // --keeplength
     assert!(Args::parse(&argv).unwrap().check_supported().is_err());
 
     // Threads change the result, so they must not be silently accepted.
@@ -1135,5 +1141,277 @@ fn warp_targets_resolve() {
         assert!(c >= w.warpbase);
         let (a, b) = w.target(c);
         assert!(a >= -w.warpbase && b >= -w.warpbase);
+    }
+}
+
+// ------------------------------------------------------------ nucleotides
+
+/// The nucleotide branch of `constants()`, as the wrapper drives it.
+fn dna_constants() -> Constants {
+    let a = Args {
+        nblosum: 62,
+        penalty_shift_factor: 100.0,
+        ..Default::default()
+    };
+    Constants::new_dorp(&a, b'd')
+}
+
+fn dna_idx(cn: &Constants, c: u8) -> usize {
+    cn.amino_n[c as usize] as usize
+}
+
+/// The scored block of the nucleotide matrix is symmetric, like the protein one.
+#[test]
+fn dna_score_matrix_is_symmetric() {
+    let cn = dna_constants();
+    for i in 0..NALPHABETS {
+        for j in 0..NALPHABETS {
+            assert_eq!(
+                cn.n_dis[i][j], cn.n_dis[j][i],
+                "n_dis[{}][{}] != n_dis[{}][{}]",
+                i, j, j, i
+            );
+        }
+    }
+}
+
+/// Kimura's model with R = 2 must score a match above a transition and a
+/// transition above a transversion; nothing else fixes the sign of the model.
+#[test]
+fn dna_matrix_orders_match_transition_transversion() {
+    let cn = dna_constants();
+    let (a, g, c, t) = (
+        dna_idx(&cn, b'a'),
+        dna_idx(&cn, b'g'),
+        dna_idx(&cn, b'c'),
+        dna_idx(&cn, b't'),
+    );
+    for &(x, y, z) in &[(a, g, c), (g, a, t), (c, t, a), (t, c, g)] {
+        assert!(
+            cn.n_dis[x][x] > cn.n_dis[x][y],
+            "match not above transition"
+        );
+        assert!(
+            cn.n_dis[x][y] > cn.n_dis[x][z],
+            "transition not above transversion"
+        );
+    }
+}
+
+/// `'u'` scores as `'t'`, and the upper-case half of the alphabet repeats the
+/// lower-case half -- the two block copies at the end of the DNA branch.
+#[test]
+fn dna_matrix_copies_u_and_upper_case() {
+    let cn = dna_constants();
+    let t = dna_idx(&cn, b't');
+    let u = dna_idx(&cn, b'u');
+    for j in 0..5 {
+        assert_eq!(cn.n_dis[u][j], cn.n_dis[t][j]);
+        assert_eq!(cn.n_dis[j][u], cn.n_dis[j][t]);
+    }
+    for i in 0..5 {
+        for j in 0..5 {
+            assert_eq!(cn.n_dis[i + 5][j + 5], cn.n_dis[i][j]);
+        }
+    }
+}
+
+/// `ambiguousscore()`: every IUPAC code scores as the mean of the bases it
+/// stands for, rounded half away from zero.
+#[test]
+fn dna_ambiguity_codes_are_means_of_their_bases() {
+    let cn = dna_constants();
+    let round = |v: f64| {
+        if v > 0.0 {
+            (v + 0.5) as i32
+        } else if v == 0.0 {
+            0
+        } else {
+            (v - 0.5) as i32
+        }
+    };
+    let two: [(u8, u8, u8); 6] = [
+        (b'r', b'a', b'g'),
+        (b'y', b'c', b't'),
+        (b'k', b'g', b't'),
+        (b'm', b'a', b'c'),
+        (b's', b'g', b'c'),
+        (b'w', b'a', b't'),
+    ];
+    for &(code, p, q) in two.iter() {
+        let k = dna_idx(&cn, code);
+        for base in b"agct" {
+            let i = dna_idx(&cn, *base);
+            let want =
+                round(0.5 * (cn.n_dis[dna_idx(&cn, p)][i] + cn.n_dis[dna_idx(&cn, q)][i]) as f64);
+            assert_eq!(
+                cn.n_dis[i][k], want,
+                "{} vs {}",
+                code as char, *base as char
+            );
+        }
+    }
+    let three: [(u8, u8, u8, u8); 4] = [
+        (b'b', b'c', b'g', b't'),
+        (b'd', b'a', b'g', b't'),
+        (b'h', b'a', b'c', b't'),
+        (b'v', b'a', b'c', b'g'),
+    ];
+    for &(code, p, q, r) in three.iter() {
+        let k = dna_idx(&cn, code);
+        for base in b"agct" {
+            let i = dna_idx(&cn, *base);
+            let want = round(
+                (1.0 / 3.0)
+                    * (cn.n_dis[dna_idx(&cn, p)][i]
+                        + cn.n_dis[dna_idx(&cn, q)][i]
+                        + cn.n_dis[dna_idx(&cn, r)][i]) as f64,
+            );
+            assert_eq!(
+                cn.n_dis[i][k], want,
+                "{} vs {}",
+                code as char, *base as char
+            );
+        }
+    }
+}
+
+/// `--anysymbol` rewrites the `n` row and column; without it they stay put.
+#[test]
+fn dna_anysymbol_rewrites_the_n_row() {
+    let plain = dna_constants();
+    let wild = Constants::new_dorp(
+        &Args {
+            nblosum: 62,
+            penalty_shift_factor: 100.0,
+            nwildcard: true,
+            ..Default::default()
+        },
+        b'd',
+    );
+    let n = dna_idx(&plain, b'n');
+    assert_eq!(dna_idx(&wild, b'n'), n);
+    let a = dna_idx(&plain, b'a');
+    assert_ne!(plain.n_dis[a][n], wild.n_dis[a][n]);
+    // Each rewritten cell is a quarter of the corresponding self score.
+    for i in 0..NALPHABETS {
+        let want = {
+            let v = 0.25 * wild.n_dis[i][i] as f64;
+            if v > 0.0 {
+                (v + 0.5) as i32
+            } else if v == 0.0 {
+                0
+            } else {
+                (v - 0.5) as i32
+            }
+        };
+        if i != n {
+            assert_eq!(wild.n_dis[i][n], want);
+            assert_eq!(wild.n_dis[n][i], wild.n_dis[i][n]);
+        }
+    }
+}
+
+/// The base-4 k-tuple code of a nucleotide sequence: one entry per 6-mer, each
+/// in range, and the rolling update agrees with computing each code directly.
+#[test]
+fn dna_pointtable_matches_direct_codes() {
+    let cn = dna_constants();
+    let seq = b"acgtacgtttacggacatgcatgcaacgt".to_vec();
+    let mut unknown = 0i64;
+    let grp = crate::dist::seq_grp_nuc(&cn, &seq, &mut unknown, 6);
+    assert_eq!(unknown, 0);
+    let pointt = crate::dist::makepointtable_nuc(&grp);
+    assert_eq!(*pointt.last().unwrap(), crate::dist::END_OF_VEC);
+    let codes = &pointt[..pointt.len() - 1];
+    assert_eq!(codes.len(), seq.len() - 5);
+    for (k, &code) in codes.iter().enumerate() {
+        assert!((0..4096).contains(&code), "code {} out of range", code);
+        let mut direct = 0i32;
+        for d in 0..6 {
+            direct = direct * 4 + grp[k + d];
+        }
+        assert_eq!(code, direct);
+    }
+}
+
+/// Sequences shorter than the tuple get the "too short" sentinel rather than
+/// reading past the end of the group vector.
+#[test]
+fn dna_short_sequences_get_the_sentinel() {
+    let cn = dna_constants();
+    let mut unknown = 0i64;
+    for len in 0..6usize {
+        let seq: Vec<u8> = std::iter::repeat(b'a').take(len).collect();
+        let grp = crate::dist::seq_grp_nuc(&cn, &seq, &mut unknown, 6);
+        assert_eq!(grp[0], -1, "len {}", len);
+        assert_eq!(crate::dist::makepointtable_nuc(&grp), vec![-1]);
+    }
+}
+
+/// Characters outside `acgt` (and their upper case) are not tuple material;
+/// they are counted as unknown and dropped, so the codes stay in range.
+#[test]
+fn dna_ambiguity_codes_are_dropped_from_tuples() {
+    let cn = dna_constants();
+    let mut unknown = 0i64;
+    let grp = crate::dist::seq_grp_nuc(&cn, b"acgtnnrryyacgtacgt", &mut unknown, 6);
+    assert_eq!(unknown, 6);
+    assert_eq!(grp.len(), 12 + 1);
+    for &g in &grp[..12] {
+        assert!((0..4).contains(&g));
+    }
+}
+
+/// The reader lower-cases nucleotide input and upper-cases protein: the same
+/// file read either way must differ only in case.
+#[test]
+fn reader_lower_cases_nucleotides_only() {
+    let fasta = b">a\nACGTacgtACGT\n>b\nacgtACGTacgt\n".to_vec();
+    let d = io::read_data(fasta.clone(), Some(b'd'), false);
+    let p = io::read_data(fasta, Some(b'p'), false);
+    assert_eq!(d.dorp, b'd');
+    assert_eq!(p.dorp, b'p');
+    for (ds, ps) in d.seq.iter().zip(p.seq.iter()) {
+        assert_eq!(ds, &ps.to_ascii_lowercase());
+        assert_eq!(ps, &ds.to_ascii_uppercase());
+    }
+}
+
+/// Sequence-type detection: `atgcun` above 75% of the alphabetic characters.
+#[test]
+fn sequence_type_is_detected_from_composition() {
+    let dna = b">a\nacgtacgtacgtacgtacgt\n>b\nacgtacgtacgtacgtacgt\n".to_vec();
+    assert_eq!(io::read_data(dna, None, false).dorp, b'd');
+    let prot = b">a\nMKWVTFISLLLLFSSAYS\n>b\nMKWVTFISLLLLFSSAYS\n".to_vec();
+    assert_eq!(io::read_data(prot, None, false).dorp, b'p');
+}
+
+/// A nucleotide alignment still preserves its inputs, and the DNA branch is
+/// reached end to end (score matrix, k-tuple distance, pairwise DP).
+#[test]
+fn dna_pairwise_alignment_preserves_inputs() {
+    let cn = dna_constants();
+    let mut ast = AlignState::new();
+    let a = b"acgtacgtttacggacatgcatgcaacgt".to_vec();
+    let b = b"acgtacgttacggacatgcatgcaacgtt".to_vec();
+    let mut s1 = a.clone();
+    let mut s2 = b.clone();
+    ast.g_align11(
+        &cn,
+        &cn.n_dis_consweight_multi,
+        cn.penalty,
+        cn.penalty_ex,
+        &mut s1,
+        &mut s2,
+        false,
+        false,
+        b'-',
+    );
+    assert_eq!(s1.len(), s2.len());
+    assert_eq!(ungap(&s1), a);
+    assert_eq!(ungap(&s2), b);
+    for (x, y) in s1.iter().zip(s2.iter()) {
+        assert!(!(*x == b'-' && *y == b'-'), "gap-gap column");
     }
 }

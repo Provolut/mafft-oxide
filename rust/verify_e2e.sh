@@ -19,6 +19,19 @@ if [ ${#INPUTS[@]} -eq 0 ]; then
   INPUTS=("$here/../test/sample")
 fi
 
+# The wrapper itself: $MAFFT if set, else the `mafft` next to the libexec dir,
+# else whatever is on PATH. Refuse to run without one -- a missing wrapper makes
+# both runs fail identically, which would otherwise be counted as a pass.
+MAFFT="${MAFFT:-}"
+if [ -z "$MAFFT" ]; then
+  cand="$(cd "$LIBEXEC/../.." 2>/dev/null && pwd)/bin/mafft"
+  if [ -x "$cand" ]; then MAFFT="$cand"; else MAFFT="$(command -v mafft || true)"; fi
+fi
+if [ ! -x "$MAFFT" ]; then
+  echo "verify_e2e.sh: cannot find the mafft wrapper; set MAFFT=<path>" 1>&2
+  exit 2
+fi
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cp -r "$LIBEXEC" "$work/rs"
@@ -60,12 +73,15 @@ pass=0; fail=0; failed=""
 for f in "${INPUTS[@]}"; do
   for i in "${!STRATS[@]}"; do
     s="${STRATS[$i]}"
-    MAFFT_BINARIES="$LIBEXEC" mafft $s "$f" > "$work/o.c" 2>/dev/null
+    MAFFT_BINARIES="$LIBEXEC" "$MAFFT" $s "$f" > "$work/o.c" 2>/dev/null
     cst=$?
-    MAFFT_BINARIES="$work/rs" mafft $s "$f" > "$work/o.r" 2>/dev/null
+    MAFFT_BINARIES="$work/rs" "$MAFFT" $s "$f" > "$work/o.r" 2>/dev/null
     rst=$?
     label="$(basename "$f") [$s]"
-    if [ $cst -ne $rst ]; then
+    if [ $cst -ne 0 ] || [ ! -s "$work/o.c" ]; then
+      # The reference run itself failed, so the comparison would be vacuous.
+      fail=$((fail+1)); failed="$failed\n  $label (reference run failed: exit $cst)"
+    elif [ $cst -ne $rst ]; then
       fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
     elif ! cmp -s "$work/o.c" "$work/o.r"; then
       fail=$((fail+1)); failed="$failed\n  $label (output differs)"

@@ -12,6 +12,9 @@ same argument vector, same input, same output files:
 | `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2 (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, `--allowshift` (`linsi`, `ginsi`) |
 
+Both handle protein and nucleotide input, which the reader tells apart the same
+way the C does.
+
 Dropped into a MAFFT installation, upstream's own test suite passes 9/9 and
 `mafft --auto` is byte-identical. The `-i` (iterative refinement) variants come
 out identical too: `dvtditr` is a separate binary that consumes these ones'
@@ -29,8 +32,8 @@ cd rust && cargo build --release
 |---|---|---|
 | FASTA reading, type detection, writing | `io.c` | `io.rs` |
 | BLOSUM62 tables | `blosum.c` | `blosum.rs` |
-| score matrix, gap penalties, FFT scales, `makedynamicmtx` | `constants.c`, `mltaln9.c`, `miyata.h` | `constants.rs` |
-| 6-mer ("ktuples") distance matrix | `disttbfast.c`, `mltaln9.c` | `dist.rs` |
+| score matrix, gap penalties, FFT scales, `makedynamicmtx` | `constants.c`, `mltaln9.c`, `miyata.h`, `DNA.h` | `constants.rs` |
+| 6-mer ("ktuples") distance matrix, protein and nucleotide | `disttbfast.c`, `mltaln9.c` | `dist.rs` |
 | UPGMA guide tree, sequence weights | `mltaln9.c` | `tree.rs` |
 | profile statistics | `tddis.c`, `mltaln9.c` | `profile.rs` |
 | **group-to-group DP** | `Salignmm.c` (`A__align`, `Atracking`, `Atracking_localhom`) | `align.rs` |
@@ -71,6 +74,18 @@ runs on every pair of input sequences — the function this repository's
 profiling put 68% of the runtime in. Its result feeds both the guide tree and
 the constraints.
 
+**Nucleotides** take a different branch almost everywhere. The score matrix is
+not tabulated but generated: Kimura's two-parameter model at a
+transition/transversion ratio of 2, raised to the 200th power, taken through
+`log10`, recentred, rescaled so the mean diagonal is 600, offset and rounded --
+after which `'u'` is given `'t'`'s row, the upper-case half of the alphabet is
+made a copy of the lower-case half, and each IUPAC ambiguity code gets the mean
+of the bases it stands for. The k-tuple distance switches to base 4 with its own
+length correction, the reader lower-cases instead of upper-casing, and the FFT
+signal changes shape (see the note below). `tests/golden/constants_dna.txt` pins
+the resulting matrix against the C, because none of that chain is obvious enough
+to trust otherwise.
+
 **The constraints** ("localhom") are what makes L-INS-i and G-INS-i
 consistency-based. Each pairwise alignment is cut at its gaps into ungapped
 blocks; `calcimportance_half` reweights every block by how much of the rest of
@@ -83,9 +98,11 @@ scores.
 Refused loudly rather than approximated, so an unsupported run fails instead of
 quietly returning a different alignment:
 
-- nucleotide input, matrices other than BLOSUM62, `--fmodel`
+- matrices other than BLOSUM62 for protein (`--aamatrix`, `--text`), `--fmodel`
 - `--add` / `--addprofile`, sub-alignments, `--treein`, external anchors
-- `--anysymbol` for nucleotides (it is a no-op for protein and is accepted)
+- 10-mer nucleotide distances (`--tuplesize 10`, used only by `--parttree`)
+- RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
+  external programs
 - `--legacygapcost`, `--keeplength`
 - the memory-saving aligner (`-M`) and the other `alg` values
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
@@ -104,33 +121,39 @@ suite of unit tests.
 ```
 cd core && make                       # build the C reference
 
-rust/verify.sh         core/disttbfast core/../rust/target/release/disttbfast-rs
+rust/verify.sh         core/disttbfast rust/target/release/disttbfast-rs
 rust/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
-TBFAST_RS=rust/target/release/tbfast-rs \
-  rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs test/sample
+TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
+  rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
+  test/sample test/samplerna
 cargo test --manifest-path rust/Cargo.toml
 ```
 
 `verify.sh` and `verify_tbfast.sh` run the C binary and the Rust one on the
 same inputs with the same arguments and require every output file to be
 byte-identical — stdout and `order` for `disttbfast`, and `pre`, `order`,
-`hat2` and `hat3` for `tbfast`. Both generate their own corpus: `test/sample`,
-random subsets of it, sequences truncated to 1–40 residues (which trip the "too
-short for a 6-mer" sentinel), pairs, exact duplicates (ties everywhere in the
-tree), ragged lengths, ambiguity codes, sequences containing `X` (which the
-score-only variants strip), pre-existing gaps, random sequences with no
-phylogenetic signal, over-long names, lower case, `*` characters, and tandem
-repeats, shuffled domains and inversions. That last group matters twice over:
-it is the only kind of input on which the FFT scan proposes mutually
-inconsistent anchors and `blockAlign2` has to prune, and it is what
-`--allowshift` exists for. Each input is crossed with every argument vector the
-`mafft` wrapper is known to emit for the ported strategies.
+`hat2` and `hat3` for `tbfast`. Both generate their corpus with
+`gencorpus.py`: `test/sample` and `test/samplerna`, random subsets, sequences
+truncated to 1–40 residues (which trip the "too short for a 6-mer" sentinel),
+pairs, exact duplicates (ties everywhere in the tree), ragged lengths, ambiguity
+codes, sequences containing `X` (which the score-only variants strip),
+pre-existing gaps, random sequences with no phylogenetic signal, over-long
+names, lower case, `*` characters, and tandem repeats, shuffled domains and
+inversions. That last group matters twice over: it is the only kind of input on
+which the FFT scan proposes mutually inconsistent anchors and `blockAlign2` has
+to prune, and it is what `--allowshift` exists for. Half the corpus is
+nucleotide -- families at four divergences, IUPAC codes, `u` for `t`, upper
+case, repeats, and sequences below the tuple length -- because every stage
+branches on the sequence type. Each input is crossed with every argument vector
+the `mafft` wrapper is known to emit for the ported strategies.
 
 `verify_e2e.sh` does the same one level up: it runs the real `mafft` wrapper
 against a stock libexec directory and against a copy with the Rust binaries
 swapped in, across `--nofft` and FFT variants, `--localpair` and `--globalpair`
 at several `--maxiterate` settings, `--allowshift`, `--auto`, `--reorder`,
-`--clustalout` and `--inputorder`.
+`--clustalout` and `--inputorder`. It counts a case as failed when the
+*reference* run fails, so a missing wrapper cannot make the comparison pass
+vacuously.
 
 `cargo test` needs no C build. Beyond four golden alignments and two bit-exact
 tables dumped from the C (the derived score matrix and the FFT sine table), it
@@ -158,16 +181,19 @@ Current status, on this source tree:
 
 | check | result |
 |---|---|
-| `verify.sh`, generated corpus (70 inputs × 15 argument sets) | 1050/1050 identical |
-| `verify.sh`, 7 larger inputs up to 300 sequences × 15 | 105/105 identical |
-| `verify_tbfast.sh`, generated corpus × 9 argument sets | 216/216 identical |
+| `verify.sh`, generated corpus (88 inputs × 16 argument sets) | 1408/1408 identical |
+| `verify.sh`, 7 larger inputs up to 300 sequences × 16 | 112/112 identical |
+| `verify_tbfast.sh`, generated corpus (40 inputs × 9 argument sets) | 360/360 identical |
 | `verify_e2e.sh`, 2 inputs × 19 wrapper strategies | 38/38 identical |
-| upstream `test/script` with both Rust binaries | 9/9 |
-| `cargo test` | 50/50 |
+| upstream `test/script`, the 9 cases runnable here | 9/9 |
+| `cargo test` | 62/62 |
+
+(`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
+RNA folding programs and fail identically with the stock C binaries.)
 
 ## Notes for anyone extending this
 
-Eight things about the C are load-bearing and easy to "clean up" by accident.
+Nine things about the C are load-bearing and easy to "clean up" by accident.
 Most were found the hard way, by a corpus case rather than by reading.
 
 1. **Scratch buffers are never cleared.** `A__align` and friends keep `static`
@@ -198,12 +224,16 @@ Most were found the hard way, by a corpus case rather than by reading.
    argument parser sets `distout = 'h'` unconditionally and `tbfast`'s never
    resets it, so `hat2` is written on every run — including `-+ 0`, where
    nothing asked for it.
-7. **The two `_noalign` scorers charge extensions differently.**
+7. **The nucleotide FFT correlates one base, not four.** `Falign` sets
+   `n20or4or2` to 1 for `scoremtx == -1`, so `seq_vec_3`'s guard
+   `n < n20or4or2` admits only alphabet index 0 -- `a`. The four-vector form
+   exists, but in `Fgetlag`, which the ported strategies never call.
+8. **The two `_noalign` scorers charge extensions differently.**
    `G__align11_noalign` skips the extension penalty on its last row and its
    last column (a 2018 change); `L__align11_noalign`, which looks otherwise
    identical, charges it everywhere. Copying one into the other silently
    shifts every distance that goes through the `X`-stripped path.
-8. **Tie-breaking depends on traversal order.** The UPGMA search skips the last
+9. **Tie-breaking depends on traversal order.** The UPGMA search skips the last
    live element of its linked list and keeps `im` across iterations; the DPs
    use `>=` in some comparisons and `>` in others; `Atracking` picks the first
    equal-scoring end cell and `Atracking_localhom` the last. Every one of those
