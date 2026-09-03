@@ -1038,3 +1038,125 @@ mod constrained_tests {
         assert!((eff[1][1] - 0.1).abs() < 1e-12, "1-2 stays at the diameter");
     }
 }
+
+/// `createchain()`: `--treein pileup` and `--treein shuffle`.
+///
+/// Not a tree built from distances at all -- it is a comb. Sequence `order[0]`
+/// and `order[1]` are joined, then `order[2]` is added to that, then
+/// `order[3]`, and so on; `pileup` keeps the input order and `shuffle`
+/// permutes it first with glibc's `rand()`.
+///
+/// Branch lengths are a fixed `2/nseq` per step, so the depth grows linearly.
+/// Writes `_guidetree`, and `infile.tree` when `treeout` is on.
+pub fn createchain(
+    nseq: usize,
+    names: Option<&[Vec<u8>]>,
+    outnumber: bool,
+    shuffle: bool,
+    seed: u32,
+) -> Tree {
+    let mut topol = vec![[-1i32, -1i32]; nseq];
+    let mut len = vec![[0.0f64, 0.0f64]; nseq];
+    let mut dep = vec![Treedep::default(); nseq];
+
+    // One Newick fragment per sequence, spliced into a comb below.
+    let tree: Vec<String> = match names {
+        Some(name) => (0..nseq)
+            .map(|i| format!("\n{}_{}\n", i + 1, newick_name(&name[i], outnumber)))
+            .collect(),
+        None => Vec::new(),
+    };
+    // The C opens all nseq-1 parentheses up front, then fills in from the left.
+    let mut instanttree = String::new();
+    if names.is_some() {
+        for _ in 0..nseq - 1 {
+            instanttree.push('(');
+        }
+    }
+
+    let mut order: Vec<i32> = (0..nseq as i32).collect();
+    let mut rng = crate::cerand::CRand::new(seed);
+    if shuffle {
+        crate::cerand::stringshuffle(&mut order, &mut rng);
+    }
+
+    let l = 2.0 / nseq as f64;
+    let mut ll = l;
+
+    let im = order[0];
+    let jm = order[1];
+    // The smaller index goes on side 0, which is what `topolorderz` and the
+    // `order` file below assume.
+    let mut mm = if im < jm {
+        topol[0][0] = im;
+        topol[0][1] = jm;
+        im
+    } else {
+        topol[0][0] = jm;
+        topol[0][1] = im;
+        jm
+    };
+    len[0][0] = l;
+    len[0][1] = l;
+    dep[0].child0 = -1;
+    dep[0].child1 = -1;
+    dep[0].distfromtip = l;
+    ll += l;
+
+    if names.is_some() {
+        instanttree.push_str(&format!("{}:{:7.5},", tree[im as usize], len[0][0]));
+    }
+
+    for i in 1..nseq - 1 {
+        let im = order[i];
+        let jm = order[i + 1];
+        if mm < jm {
+            topol[i][0] = mm;
+            topol[i][1] = jm;
+            len[i][0] = l;
+            len[i][1] = ll;
+            dep[i].child0 = i as i32 - 1;
+            dep[i].child1 = -1;
+            dep[i].distfromtip = ll;
+        } else {
+            topol[i][1] = mm;
+            topol[i][0] = jm;
+            mm = jm;
+            len[i][1] = l;
+            len[i][0] = ll;
+            dep[i].child1 = i as i32 - 1;
+            dep[i].child0 = -1;
+            dep[i].distfromtip = ll;
+        }
+        if names.is_some() {
+            instanttree.push_str(&format!(
+                "{}:{:7.5}):{:7.5},",
+                tree[im as usize],
+                ll - l,
+                l
+            ));
+        }
+        ll += l;
+    }
+
+    if names.is_some() {
+        let last = order[nseq - 1];
+        instanttree.push_str(&format!("{}:{:7.5})", tree[last as usize], ll - l));
+        std::fs::write("infile.tree", format!("{};\n", instanttree))
+            .expect("Cannot open infile.tree");
+    }
+
+    let mut gt = String::new();
+    for i in 0..nseq - 1 {
+        gt.push_str(&format!(
+            "{} {} {:.6} {:.6}\n",
+            topol[i][0] + 1,
+            topol[i][1] + 1,
+            len[i][0],
+            len[i][1]
+        ));
+    }
+    std::fs::write("_guidetree", gt).expect("cannot open _guidetree");
+
+    Tree { topol, len, dep }
+}

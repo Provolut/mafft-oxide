@@ -8,6 +8,7 @@
 pub mod addfunctions;
 pub mod align;
 pub mod blosum;
+pub mod cerand;
 pub mod constants;
 pub mod dist;
 pub mod falign;

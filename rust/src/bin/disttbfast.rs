@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 
 use mafft_rs::align::AlignState;
 use mafft_rs::constants::Constants;
+use mafft_rs::lalign::LalignState;
 use mafft_rs::params::Args;
 use mafft_rs::treebase::TreebaseOpts;
 use mafft_rs::{addfunctions, dist, falign, io, keeplength, score, tree, treebase};
@@ -99,6 +100,102 @@ fn samemember(mem: &[i32], cand: &[i32]) -> bool {
     mem.len() == cand.len() && mem.iter().all(|m| cand.contains(m))
 }
 
+/// `varpairscore()`: how variable the pairwise scores of a random sample are.
+///
+/// `--treein auto` uses it to decide between a real tree and a chain: a low
+/// coefficient of variation means the sequences are all about equally similar,
+/// so the tree would not tell us much and a chain will do. Its `printf`s go to
+/// *stdout*, ahead of the alignment, which is the C's behaviour and not a slip
+/// here.
+fn varpairscore(
+    cn: &Constants,
+    lst: &mut LalignState,
+    nseq: usize,
+    npick: usize,
+    seq: &[Vec<u8>],
+    seed: u32,
+    out: &mut Vec<u8>,
+) -> u8 {
+    use std::io::Write as _;
+    let nlenmax = seq.iter().map(|s| s.len()).max().unwrap_or(0);
+    eprintln!("nseq = {}, nlenmax={}, seed={}", nseq, nlenmax, seed);
+
+    let mut rng = mafft_rs::cerand::CRand::new(seed);
+    let mut slist: Vec<i32> = (0..nseq as i32).collect();
+    mafft_rs::cerand::stringshuffle(&mut slist, &mut rng);
+
+    // The C indexes `slist` up to `npick` whatever `nseq` is; a larger npick
+    // reads off the end of its array, so refuse rather than invent a result.
+    if npick > nseq {
+        eprintln!(
+            "disttbfast-rs: npick={} exceeds the {} input sequences; the C reads past its array here",
+            npick, nseq
+        );
+        std::process::exit(1);
+    }
+    let pickseq: Vec<Vec<u8>> = (0..npick)
+        .map(|i| io::gappick0(&seq[slist[i] as usize]))
+        .collect();
+    // `pickseq = AllocateCharMtx( npick, nlenmax )` gives each row exactly
+    // `nlenmax` bytes, but `gappick0` writes the residues *and* a NUL. A picked
+    // sequence with no gaps and the maximal length therefore puts its
+    // terminator one byte past its own row, in memory the allocator owns.
+    //
+    // That is not harmless. The very next `malloc` -- `G__align11_noalign`
+    // allocating its own buffers on the first call -- writes a chunk header
+    // over that byte, and from then on `strlen( pickseq[i] )` runs off the end
+    // of the row into whatever follows. Measured on shuffled_domains.fa: the C
+    // reports 280 before the loop and aligns 282 bytes inside it, so its score
+    // for that pair is a function of the heap layout. Sometimes it aborts
+    // instead, when the stray byte lands on a live chunk header.
+    //
+    // There is no defined answer to reproduce, so refuse.
+    if let Some(i) = pickseq.iter().position(|p| p.len() >= nlenmax) {
+        eprintln!(
+            "disttbfast-rs: picked sequence {} is {} residues with nlenmax {}, so the C's\n  \
+             gappick0 writes its terminator outside the pickseq row and then aligns\n  \
+             whatever follows it in the heap (disttbfast.c:537,546). Refusing rather\n  \
+             than guessing which bytes those were.",
+            slist[i] + 1,
+            pickseq[i].len(),
+            nlenmax
+        );
+        std::process::exit(1);
+    }
+
+    let mut scoreav = 0.0f64;
+    let mut scoreav2 = 0.0f64;
+    let npair = npick * (npick - 1) / 2;
+    for i in 1..npick {
+        for j in 0..i {
+            let score = lst.g_align11_noalign(
+                cn,
+                &cn.n_dis_consweight_multi,
+                -1200,
+                -60,
+                &pickseq[i],
+                &pickseq[j],
+            );
+            scoreav += score;
+            scoreav2 += score * score;
+            let _ = writeln!(out, "score = {}", score as i32);
+        }
+    }
+    scoreav /= npair as f64;
+    scoreav2 /= npair as f64;
+    let scorevar = (scoreav2 - scoreav * scoreav) * npair as f64 / (npair - 1) as f64;
+    let scorestd = scorevar.sqrt();
+    let _ = writeln!(out, "av = {:.6}", scoreav);
+    let _ = writeln!(out, "stddev = {:.6}", scorestd);
+    let _ = writeln!(out, "cv = {:.6}", scorestd / scoreav);
+
+    if scorestd / scoreav < 0.2 {
+        b's'
+    } else {
+        b't'
+    }
+}
+
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(&argv) {
@@ -174,34 +271,105 @@ fn main() {
         std::process::exit(1);
     }
     // `check_guidetreefile()`: the first line of `_guidetree` selects between a
-    // real tree and a family of generated ones. Only the real tree is ported.
+    // real Newick tree and a family of generated ones.
+    let mut treekind = b'l';
+    let mut randomseed: u32 = 0;
+    let mut npickx: usize = 200;
     if args.treein {
         let first = std::fs::read_to_string("_guidetree")
-            .map(|t| t.lines().next().unwrap_or("").to_string())
+            .map(|t| {
+                // `fgets` keeps the newline, and `strncmp` only looks at the
+                // keyword, so a trailing newline is irrelevant.
+                t.lines().next().unwrap_or("").to_string()
+            })
             .unwrap_or_else(|_| {
                 eprintln!("cannot open _guidetree");
                 std::process::exit(1);
             });
-        for kw in [
-            "shuffle",
-            "pileup",
-            "auto",
-            "test",
-            "compact",
-            "very compact",
-            "stepadd",
-            "youngestlinkage",
-            "nodepair",
-        ] {
-            if first.starts_with(kw) {
-                eprintln!("disttbfast-rs: '{}' guide trees are not ported", kw);
+        if let Some(rest) = first.strip_prefix("shuffle") {
+            // `sscanf( string+7, "%d", seed )` -- absent leaves it at 0.
+            randomseed = rest.split_whitespace().next().and_then(|t| t.parse().ok()).unwrap_or(0);
+            eprintln!("shuffle, seed={}", randomseed);
+            treekind = b's';
+        } else if first.starts_with("pileup") {
+            eprintln!("pileup.");
+            treekind = b'p';
+        } else if first.starts_with("nodepair") {
+            // The C accepts the keyword and then falls off the end of its own
+            // dispatch, so this is its behaviour, not a refusal of ours.
+            eprintln!("Use nodepair.");
+            eprintln!("Error. treein = {} or {}", b'n', 'n');
+            std::process::exit(1);
+        } else if first.starts_with("auto") || first.starts_with("test") {
+            let test = first.starts_with("test");
+            let mut it = first[4..].split_whitespace();
+            randomseed = it.next().and_then(|t| t.parse().ok()).unwrap_or(0);
+            npickx = it.next().and_then(|t| t.parse().ok()).unwrap_or(200);
+            if test {
+                eprintln!("calc, seed={}, npick={}", randomseed, npickx);
+            } else {
+                eprintln!("auto, seed={}, npick={}", randomseed, npickx);
+            }
+            if npickx < 2 {
+                eprintln!("Check npick");
                 std::process::exit(1);
             }
+            treekind = if test { b't' } else { b'a' };
+        } else {
+            for kw in [
+                "compact",
+                "very compact",
+                "stepadd",
+                "youngestlinkage",
+            ] {
+                if first.starts_with(kw) {
+                    eprintln!("disttbfast-rs: '{}' guide trees are not ported", kw);
+                    std::process::exit(1);
+                }
+            }
+            eprintln!("loadtree.");
+        }
+    }
+    // `test` and `auto` both sample pairwise scores first. `test` then stops;
+    // `auto` picks a chain or a real tree from the answer -- and either way
+    // the sampled scores have already gone to stdout, ahead of everything.
+    let mut treein = args.treein;
+    let mut nguidetree_override: Option<usize> = None;
+    if treekind == b't' || treekind == b'a' {
+        let mut lst = LalignState::new();
+        if treekind == b't' {
+            varpairscore(&cn, &mut lst, njob, npickx, &input.seq, randomseed, &mut out);
+            std::io::stdout().write_all(&out).unwrap();
+            std::process::exit(1);
+        }
+        if njob > 200000 {
+            eprintln!("Chain?");
+            treekind = b's';
+            nguidetree_override = Some(1);
+        } else if njob < 100
+            || varpairscore(&cn, &mut lst, njob, npickx, &input.seq, randomseed, &mut out) == b't'
+        {
+            eprintln!("Tree!");
+            treekind = b'l';
+            treein = false;
+            nguidetree_override = Some(2);
+        } else {
+            eprintln!("Chain!");
+            treekind = b's';
+            nguidetree_override = Some(1);
         }
     }
 
+    // `shuffle` and `pileup` do not use the sequence weights at all: the C
+    // clears `weight` and `tbrweight` at the call site.
+    let tbrweight = if treekind == b's' || treekind == b'p' {
+        0
+    } else {
+        args.tbrweight
+    };
+
     // With a user tree there is no distance matrix at all.
-    let (mut mtx, nogaplen): (Vec<Vec<f64>>, Vec<usize>) = if args.treein {
+    let (mut mtx, nogaplen): (Vec<Vec<f64>>, Vec<usize>) = if treein {
         (Vec::new(), input.seq.iter().map(|s| s.len()).collect())
     } else {
         dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize)
@@ -219,10 +387,10 @@ fn main() {
     let mut addbk: Option<Vec<Vec<u8>>> = None;
     let mut mapseq: Option<Vec<Vec<u8>>> = None;
 
-    let nguidetree = if args.treein {
-        1
-    } else {
-        args.nguidetree.max(1) as usize
+    let nguidetree = match nguidetree_override {
+        Some(n) => n,
+        None if treein => 1,
+        None => args.nguidetree.max(1) as usize,
     };
     for iguidetree in 0..nguidetree {
         let calcpairdists = iguidetree != nguidetree - 1;
@@ -241,7 +409,19 @@ fn main() {
         }
 
         let mut subfull: Vec<[Vec<i32>; 2]> = Vec::new();
-        let mut tr = if args.treein {
+        let mut tr = if treekind == b's' || treekind == b'p' {
+            tree::createchain(
+                njob,
+                if args.treeout != 0 {
+                    Some(&input.name[..])
+                } else {
+                    None
+                },
+                args.outnumber,
+                treekind == b's',
+                randomseed,
+            )
+        } else if treein {
             match tree::load_tree(
                 njob,
                 if args.treeout != 0 {
@@ -299,7 +479,17 @@ fn main() {
 
         // The `order` file the mafft wrapper uses for --reorder / clustal out.
         {
-            let order = tree::topolorderz(&tr.topol, &tr.dep, njob - 2, 2);
+            // For a chain the members are read straight off it, since
+            // `topolorderz` would walk the comb one node at a time.
+            let order: Vec<i32> = if treekind == b's' || treekind == b'p' {
+                let mut o = vec![tr.topol[0][0]];
+                for i in 1..njob {
+                    o.push(tr.topol[i - 1][1]);
+                }
+                o
+            } else {
+                tree::topolorderz(&tr.topol, &tr.dep, njob - 2, 2)
+            };
             let mut s = String::new();
             for v in order.iter().take(njob) {
                 s.push_str(&format!("{}\n", v));
@@ -317,7 +507,7 @@ fn main() {
             return;
         }
 
-        let effarr: Vec<f64> = if args.tbrweight != 0 {
+        let effarr: Vec<f64> = if tbrweight != 0 {
             tree::counteff_simple(njob, &mut tr)
         } else {
             vec![1.0; njob]

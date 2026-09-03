@@ -9,7 +9,7 @@ same argument vector, same input, same output files:
 
 | binary | replaces | strategies |
 |---|---|---|
-| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--text`, `--oneiteration`, `--merge` (plain `mafft`, `fftns`, `nwns`) |
+| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--text`, `--oneiteration`, `--merge`, `--treein` (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
 
 Both handle protein and nucleotide input, which the reader tells apart the same
@@ -112,6 +112,12 @@ quietly returning a different alignment:
 - external anchors (`--anchors`): reproducing it needs glibc's exact `qsort`,
   since two of MAFFT's comparators break ties on the *addresses* of the
   elements being permuted
+- `--treein auto` / `test` where a picked sequence is gap-free and of maximal
+  length: `varpairscore` gives each `pickseq` row exactly `nlenmax` bytes and
+  `gappick0` writes its terminator one past that, into memory the allocator
+  then reuses, after which the C aligns whatever follows the row. Measured: it
+  reports 280 residues before the loop and aligns 282 inside it. No defined
+  answer to match.
 - `--oneiteration` past the first node where the C would reach `A__align`:
   there the C segfaults (it hands `dooneiteration` a freed, NULL `cpmxhist`
   and then writes through `cpmxhist + l`), so there is no output to match and

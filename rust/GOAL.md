@@ -11,7 +11,7 @@ into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
 `--legacygapcost`, `-y`/`-T`/`-t`/`-^`/`-U`/`-q`, 10-mer nucleotide tuples,
-`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`), `--text`/`--textmatrix`.
+`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`), `--text`/`--textmatrix`, `--treein pileup`/`shuffle`.
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -31,9 +31,11 @@ divides the added sequences' weights by 100), which cost a day.
    means reimplementing glibc's qsort, not just the comparator. Decide whether
    to accept a documented divergence before starting.
 
-2. **The generated guide trees `--treein` can ask for** -- `shuffle`,
-   `pileup`, `auto`, `compact`, `stepadd`, `youngestlinkage`, `nodepair`, each
-   a separate construction. Refused by name today.
+2. **The `--treein` trees still refused**: `compact`, `very compact`,
+   `stepadd`, `youngestlinkage` -- each routes to a `compacttree*` builder.
+   (`pileup`, `shuffle` and `nodepair` are done; `auto`/`test` are done but
+   refuse the inputs where the C's own `varpairscore` reads past its
+   `pickseq` row, which is most gap-free input.)
 
 3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Largest, lowest demand.

@@ -271,6 +271,63 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --treein's generated trees: `pileup` and `shuffle` build a comb instead of
+# clustering (shuffle permutes the input first with glibc's rand, which the
+# port reproduces), `nodepair` is a keyword the C accepts and then rejects,
+# and `auto` / `test` sample pairwise scores first.
+#
+# `auto` and `test` are refused by the port whenever a picked sequence is
+# gap-free and of maximal length: `varpairscore` gives each row exactly
+# `nlenmax` bytes and `gappick0` writes a terminator past the end, which the
+# next malloc overwrites, after which the C aligns whatever follows the row.
+# A C crash, or a Rust refusal naming that, is the expected outcome there.
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 4 ] || continue
+  np=4
+  [ "$n" -lt 4 ] && np=$n
+  for kw in "pileup" "shuffle" "shuffle 42" "shuffle 12345" "nodepair" "auto 0 $np" "test 1 $np"; do
+    for extra in "" "-t"; do
+      rm -rf "$work/c" "$work/r"
+      mkdir -p "$work/c" "$work/r"
+      printf '%s\n' "$kw" > "$work/c/_guidetree"
+      cp "$work/c/_guidetree" "$work/r/_guidetree"
+      GARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U $extra"
+      ( cd "$work/c" && $CBIN $GARGS < "$f" > out.fa 2> err.log )
+      cst=$?
+      ( cd "$work/r" && $RBIN $GARGS < "$f" > out.fa 2> err.log )
+      rst=$?
+      label="$(basename "$f") [--treein $kw $extra]"
+      # The C aborting, or the port refusing the undefined varpairscore case,
+      # is expected and counts as a pass -- but only for auto/test.
+      case "$kw" in
+        auto*|test*)
+          if [ $cst -ge 128 ]; then pass=$((pass+1)); continue; fi
+          if [ $rst -eq 1 ] && grep -qa "writes its terminator outside" "$work/r/err.log"; then
+            pass=$((pass+1)); continue
+          fi
+          ;;
+      esac
+      if [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+        continue
+      fi
+      bad=""
+      for o in out.fa order _guidetree infile.tree; do
+        if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+          cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+        fi
+      done
+      if [ -n "$bad" ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      else
+        pass=$((pass+1))
+      fi
+    done
+  done
+done
+
 # --text / --textmatrix (-b -2): the alphabet becomes every byte, so the
 # corpus does not apply -- gen_text.py makes inputs out of characters the
 # ordinary reader would refuse, plus the `_aamtx` that scores them.
