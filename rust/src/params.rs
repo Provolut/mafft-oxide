@@ -434,9 +434,6 @@ impl Args {
     /// `--add`, no sub-alignments, no external anchors and no threads.
     pub fn check_supported(&self) -> Result<(), Unsupported> {
         let mut bad: Vec<&str> = Vec::new();
-        if self.useexternalanchors {
-            bad.push("-l (external anchors) is not ported");
-        }
         if self.alg != b'A' {
             bad.push("only alg 'A' (-A) is ported; -M/-&/-@ are not");
         }

@@ -11,7 +11,7 @@ into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
 `--legacygapcost`, `-y`/`-T`/`-t`/`-^`/`-U`/`-q`, 10-mer nucleotide tuples,
-`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`), `--text`/`--textmatrix`, `--treein pileup`/`shuffle`.
+`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`), `--text`/`--textmatrix`, `--treein pileup`/`shuffle`, external anchors (`-l`).
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -24,16 +24,12 @@ before porting: `--allowshift` cost nothing -- the warp DP was already in
 `tbfast`'s `--add` is not `disttbfast`'s (it skips the `samemembern` pass and
 divides the added sequences' weights by 100), which cost a day.
 
-1. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
-   `checkanchors_strongestfirst`, `pickpairanch`, `Falign_givenanchors`
-   (~670 lines, but most of its body is `falign`'s block loop, already ported;
-   what is new is turning anchors into cut points, the `alignorcopy` copy-vs-
-   align marking and the terminal-margin cuts).
-   Earlier I called this blocked because `anchcomp` and `anchscorecomp` break
-   ties on `(int)((void *)p - (void *)q)`. Measured instead of assumed: glibc
-   2.39's qsort is a mergesort here, so those tie-breaks reduce to *stable*
-   for `anchcomp` and *reverse-stable* for `anchscorecomp` -- both of which a
-   Rust stable sort reproduces. Not blocked; just big.
+1. ~~**External anchors (`-l`)**~~ done: `anchors.rs` plus
+   `Falign_givenanchors` in `falign.rs`. The tie-break worry was unfounded --
+   glibc 2.39's qsort is a mergesort here, so `anchcomp` reduces to stable and
+   `anchscorecomp` to reverse-stable. 1376 comparisons byte-identical;
+   `verify.sh` block, files from `gen_anchors.py`. Two C quirks reproduced and
+   one input refused, all in issue #3.
 
 2. **The `compacttree*` builders**, reached by `--treein very compact`,
    `stepadd` and `youngestlinkage`, and by `compact` only above its RAM

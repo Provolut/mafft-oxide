@@ -109,9 +109,18 @@ scores.
 Refused loudly rather than approximated, so an unsupported run fails instead of
 quietly returning a different alignment:
 
-- external anchors (`--anchors`): reproducing it needs glibc's exact `qsort`,
-  since two of MAFFT's comparators break ties on the *addresses* of the
-  elements being permuted
+- external anchors (`--anchors`) whose end positions run past the sequence's
+  residue count: `readexternalanchors` range-checks only the two *start*
+  positions, and even those with `>` rather than `>=`, so an over-long end
+  reads `recountpositions`' map above the entries it filled and the anchor
+  comes back ending before it starts. `Falign_givenanchors` writes that
+  inversion into its cut list and copies the block with a negative `strncpy`
+  length; the C segfaults. Anchors are otherwise ported. (An earlier draft of
+  this list called the whole feature unreproducible because `anchcomp` and
+  `anchscorecomp` break ties on the *addresses* of the elements being
+  permuted. Measured rather than assumed: glibc's `qsort` is a mergesort at
+  these element sizes, so those tie-breaks reduce to stable and
+  reverse-stable, which a Rust stable sort gives.)
 - `--treein auto` / `test` where a picked sequence is gap-free and of maximal
   length: `varpairscore` gives each `pickseq` row exactly `nlenmax` bytes and
   `gappick0` writes its terminator one past that, into memory the allocator
@@ -226,7 +235,7 @@ RNA folding programs and fail identically with the stock C binaries.)
 
 ## Notes for anyone extending this
 
-Ten things about the C are load-bearing and easy to "clean up" by accident.
+Eleven things about the C are load-bearing and easy to "clean up" by accident.
 Most were found the hard way, by a corpus case rather than by reading.
 
 1. **Scratch buffers are never cleared.** `A__align` and friends keep `static`
@@ -282,6 +291,16 @@ Most were found the hard way, by a corpus case rather than by reading.
    copy you are porting, not the one you ported last week. The same goes for
    the two definitions of `samemember()` — the live one compares as sets, the
    `#if 0` one position by position.
+
+11. **The anchor code writes one field twice and reuses one buffer.**
+   `checkanchors_strongestfirst` invalidates an inconsistent anchor with
+   `a[q].starti = a[q].startj = a[q].startj = a[q].endj = -1` — `startj`
+   assigned twice, `endi` never — so a dead anchor keeps its end position, and
+   which fields are -1 is what the callers test. `recountpositions` allocates
+   its residue-to-column `map` once, outside the loop over the group's
+   members, and never clears it, so a position above a short member's residue
+   count reads whatever a longer member left there. Both are reproduced;
+   neither is a rounding detail, since they decide which anchors survive.
 
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a

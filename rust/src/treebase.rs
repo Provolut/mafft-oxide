@@ -7,7 +7,7 @@
 
 use crate::align::{AlignState, CpmxHist};
 use crate::constants::{makedynamicmtx, Constants};
-use crate::falign::{falign, FalignState};
+use crate::falign::{falign, falign_givenanchors, FalignState};
 use crate::localhom::{fastshrinklocalhom_half, fillimp, LocalHomTable};
 use crate::tree::Tree;
 
@@ -30,6 +30,12 @@ pub struct TreebaseOpts<'a> {
     /// The number of sequences appended by `--add`; the first
     /// `njob - nadd` are the existing alignment.
     pub nadd: usize,
+    /// `-l <file>`: the external anchors, and the per-pair index into them.
+    /// When present every node is aligned with `Falign_givenanchors` instead
+    /// of the FFT scan, whatever `use_fft` says.
+    pub extanch: Option<(&'a [crate::anchors::ExtAnch], &'a [Vec<i32>])>,
+    /// `-x`: how much longer a terminal overhang may be than its partner.
+    pub terminalmargin: i32,
     /// Rebuild the score matrix per tree node from its distance from the tips
     /// (`makedynamicmtx`). A no-op unless `--allowshift` is on, but `tbfast`
     /// calls it unconditionally and `disttbfast` only when it matters.
@@ -230,7 +236,25 @@ pub fn treebase(
         } else {
             // `ffttry`: the FFT scan needs sequences longer than the group is wide.
             let ffttry = nlen[m1] > clus1 as i32 && nlen[m2] > clus2 as i32;
-            if opts.force_fft || (opts.use_fft && ffttry) {
+            if let Some((extanch, anchindex)) = opts.extanch {
+                let pairanch = crate::anchors::pick_pair_anch(
+                    extanch, anchindex, &mem0, &mem1, &group1, &group2,
+                );
+                falign_givenanchors(
+                    &pairanch,
+                    st,
+                    cn,
+                    &dynmtx,
+                    &mut group1,
+                    &mut group2,
+                    &effarr1,
+                    &effarr2,
+                    outgap,
+                    opts.terminalmargin,
+                    &mut fftlog[m1],
+                    newgapstr,
+                );
+            } else if opts.force_fft || (opts.use_fft && ffttry) {
                 falign(
                     fs,
                     st,

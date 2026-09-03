@@ -7,6 +7,7 @@
 
 pub mod addfunctions;
 pub mod align;
+pub mod anchors;
 pub mod blosum;
 pub mod cerand;
 pub mod constants;

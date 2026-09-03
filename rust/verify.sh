@@ -463,6 +463,68 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# -l (--anchors): anchors read from `_externalanchors`, which pin an interval
+# of one sequence to an interval of another and cut the DP into blocks around
+# them. gen_anchors.py writes both consistent anchors and deliberately
+# conflicting ones, since the conflicting ones are what drive
+# `checkanchors_strongestfirst`.
+#
+# The C segfaults on part of this too. `readexternalanchors` range-checks only
+# the two *start* positions, and even those with `>` rather than `>=`; the end
+# positions are never checked. An end position past the sequence's residue
+# count -- which is what a user gets by counting on their own FASTA when MAFFT
+# drops characters from it, `*` for instance -- reads `recountpositions`' map
+# above the entries it filled, so the anchor comes back ending before it
+# starts. `Falign_givenanchors` lays that inversion into its cut list and then
+# copies the block with a negative `strncpy` length. As with -r, a C crash
+# paired with a Rust exit 1 is the expected outcome and counts as a pass.
+LARGS_BASE="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100"
+LARGSETS=(
+  "$LARGS_BASE -l"
+  "$LARGS_BASE -l -u"
+  "-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 -l"
+  "-q 0 -E 2 -V -2.00 -s 0.0 -W 6 -O -C 0-0 -b 62 -g -0.05 -f -2.00 -Q 100.0 -h -0.1 -X 0.0 -x 100 -l"
+)
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 2 ] || continue
+  # seed + count, and whether the intervals may conflict
+  for spec in "1 4" "2 10" "3 6 overlap" "4 20 overlap"; do
+    for i in "${!LARGSETS[@]}"; do
+      rm -rf "$work/c" "$work/r"
+      mkdir -p "$work/c" "$work/r"
+      python3 "$here/gen_anchors.py" "$f" $spec > "$work/c/_externalanchors" || continue
+      [ -s "$work/c/_externalanchors" ] || continue
+      cp "$work/c/_externalanchors" "$work/r/_externalanchors"
+      ( cd "$work/c" && $CBIN ${LARGSETS[$i]} < "$f" > out.fa 2> err.log )
+      cst=$?
+      ( cd "$work/r" && $RBIN ${LARGSETS[$i]} < "$f" > out.fa 2> err.log )
+      rst=$?
+      label="$(basename "$f") [anchors $spec, argset $i]"
+      if [ $cst -ge 128 ] && [ $rst -eq 1 ]; then
+        pass=$((pass+1))
+        continue
+      fi
+      if [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+        continue
+      fi
+      bad=""
+      for o in out.fa order hat2; do
+        if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+          cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+        fi
+      done
+      if [ -n "$bad" ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      else
+        pass=$((pass+1))
+      fi
+    done
+  done
+done
+
 echo "pass=$pass fail=$fail"
 if [ $fail -ne 0 ]; then
   printf 'FAILED:%b\n' "$failed"

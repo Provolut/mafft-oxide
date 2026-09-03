@@ -793,3 +793,362 @@ fn seq_vec_5(
         result[p].i += incr * score2[n as usize];
     }
 }
+
+const MAXSEG_GIVENANCHORS: usize = 1000000;
+
+/// `estimategapfreq()`: mean gap fraction of the group, ignoring terminal gaps.
+fn estimategapfreq(s: &[Vec<u8>]) -> f64 {
+    let mut fv = 0.0f64;
+    for row in s.iter() {
+        // Trim leading and trailing gaps, then count the gaps that remain.
+        let start = row.iter().position(|&c| c != b'-').unwrap_or(row.len());
+        let end = row.iter().rposition(|&c| c != b'-').map(|p| p + 1).unwrap_or(start);
+        let len = end - start;
+        let mut f = 0.0f64;
+        for &c in &row[start..end] {
+            if c == b'-' {
+                f += 1.0;
+            }
+        }
+        fv += f / len as f64;
+    }
+    fv / s.len() as f64
+}
+
+/// `getterminalmargin()`: how much longer than the other side a terminal
+/// overhang may be before it is cut back.
+fn getterminalmargin(lshorter: i32, groupsizefac: f64, terminalmargin: i32) -> i32 {
+    ((lshorter as f64 * 2.0 + terminalmargin as f64) * groupsizefac) as i32
+}
+
+/// `Falign_givenanchors()`: the block alignment of [`falign`], but with the
+/// cut points given rather than found by the FFT.
+///
+/// Each anchor becomes two cuts -- one at its start, one just past its end --
+/// and the block between them is *copied* rather than aligned when the two
+/// sides already agree. Long anchors are subdivided every `DIVIDEANCHOR`
+/// residues, and an overhang at either terminus that is much longer on one
+/// side than the other gets an extra cut so the DP does not have to pay for
+/// it. Those cuts are marked `'A'` and are aligned with a non-zero extension
+/// penalty even when the run asked for zero.
+#[allow(clippy::too_many_arguments)]
+pub fn falign_givenanchors(
+    pairanch: &[crate::anchors::ExtAnch],
+    ast: &mut AlignState,
+    cn: &Constants,
+    n_dynamicmtx: &[Vec<f64>],
+    group1: &mut [Vec<u8>],
+    group2: &mut [Vec<u8>],
+    eff1: &[f64],
+    eff2: &[f64],
+    outgap: bool,
+    terminalmargin: i32,
+    fftlog: &mut i32,
+    newgapstr: u8,
+) -> f64 {
+    const DIVIDEANCHOR: i32 = 100;
+    let clus1 = group1.len();
+    let clus2 = group2.len();
+    let len1 = group1[0].len() as i32;
+    let len2 = group2[0].len() as i32;
+
+    let marginfac1 = 1.0 + estimategapfreq(group1);
+    let marginfac2 = 1.0 + estimategapfreq(group2);
+    let mut starttermcut1 = false;
+    let mut starttermcut2 = false;
+    let mut endtermcut1 = false;
+    let mut endtermcut2 = false;
+
+    let mut cut1 = vec![0i32; MAXSEG_GIVENANCHORS];
+    let mut cut2 = vec![0i32; MAXSEG_GIVENANCHORS];
+    let mut alignorcopy = vec![0u8; MAXSEG_GIVENANCHORS];
+
+    let mut count = 0usize;
+    let mut count0 = 0usize;
+    cut1[0] = 0;
+    cut2[0] = 0;
+    alignorcopy[0] = b'a';
+    while count0 < pairanch.len() {
+        let a = pairanch[count0];
+        if a.starti == -1 {
+            count0 += 1;
+            continue;
+        }
+        if count + 2 > MAXSEG_GIVENANCHORS - 3 {
+            eprintln!("TOO MANY SEGMENTS.");
+            std::process::exit(1);
+        }
+        if count == 0 {
+            // Only the first anchor can cut the 5' overhang.
+            if a.starti > getterminalmargin(a.startj, marginfac1, terminalmargin) {
+                eprintln!(
+                    "check 1, because starti={} > startj={} -> {} (clus1={})",
+                    a.starti,
+                    a.startj,
+                    getterminalmargin(a.startj, marginfac1, terminalmargin),
+                    clus1
+                );
+                let cutadd = a.starti - getterminalmargin(a.startj, marginfac1, terminalmargin);
+                eprintln!("cutadd(1)={}", cutadd);
+                cut1[1] = cutadd;
+                cut2[1] = 0;
+                count += 1;
+                alignorcopy[1] = b'A';
+                starttermcut1 = true;
+            } else if a.startj > getterminalmargin(a.starti, marginfac2, terminalmargin) {
+                eprintln!(
+                    "check 2, because startj={} > starti={} -> {} (clus2={})",
+                    a.startj,
+                    a.starti,
+                    getterminalmargin(a.starti, marginfac2, terminalmargin),
+                    clus2
+                );
+                let cutadd = a.startj - getterminalmargin(a.starti, marginfac2, terminalmargin);
+                eprintln!("cutadd(2)={}", cutadd);
+                cut1[1] = 0;
+                cut2[1] = cutadd;
+                count += 1;
+                alignorcopy[1] = b'A';
+                starttermcut2 = true;
+            }
+        }
+
+        cut1[count + 1] = a.starti;
+        cut2[count + 1] = a.startj;
+        alignorcopy[count + 1] = b'c';
+        count += 1;
+
+        // A long anchor is chopped into DIVIDEANCHOR-residue pieces, but only
+        // when both sides are the same length -- the C tests that once, before
+        // the loop, and then never again.
+        if a.endi - cut1[count] == a.endj - cut2[count] {
+            while a.endi + 1 - cut1[count] > DIVIDEANCHOR && a.endj + 1 - cut2[count] > DIVIDEANCHOR
+            {
+                cut1[count + 1] = cut1[count] + DIVIDEANCHOR;
+                cut2[count + 1] = cut2[count] + DIVIDEANCHOR;
+                alignorcopy[count + 1] = b'c';
+                count += 1;
+            }
+        }
+
+        cut1[count + 1] = a.endi + 1;
+        cut2[count + 1] = a.endj + 1;
+        alignorcopy[count + 1] = b'a';
+        count += 1;
+        count0 += 1;
+    }
+    eprintln!();
+
+    alignorcopy[count] = b'a';
+    if count > 1 && (len1 - cut1[count]) > getterminalmargin(len2 - cut2[count], marginfac1, terminalmargin)
+    {
+        let cutadd = len1
+            - 1
+            - ((len1 - cut1[count])
+                - getterminalmargin(len2 - cut2[count], marginfac1, terminalmargin));
+        alignorcopy[count] = b'A';
+        cut1[count + 1] = cutadd;
+        cut2[count + 1] = len2;
+        alignorcopy[count + 1] = b'a';
+        cut1[count + 2] = len1;
+        cut2[count + 2] = len2;
+        alignorcopy[count + 2] = b'c';
+        count += 1;
+        endtermcut1 = true;
+    } else if count > 1
+        && (len2 - cut2[count]) > getterminalmargin(len1 - cut1[count], marginfac2, terminalmargin)
+    {
+        let cutadd = len2
+            - 1
+            - ((len2 - cut2[count])
+                - getterminalmargin(len1 - cut1[count], marginfac2, terminalmargin));
+        alignorcopy[count] = b'A';
+        cut1[count + 1] = len1;
+        cut2[count + 1] = cutadd;
+        alignorcopy[count + 1] = b'a';
+        cut1[count + 2] = len1;
+        cut2[count + 2] = len2;
+        alignorcopy[count + 2] = b'c';
+        count += 1;
+        endtermcut2 = true;
+    }
+
+    if cut1[count] != len1 || cut2[count] != len2 {
+        cut1[count + 1] = len1;
+        cut2[count + 1] = len2;
+        alignorcopy[count + 1] = b'c';
+        count += 1;
+    }
+    count += 1;
+
+    let mut result1: Vec<Vec<u8>> = vec![Vec::new(); clus1];
+    let mut result2: Vec<Vec<u8>> = vec![Vec::new(); clus2];
+    let mut totalscore = 0.0f64;
+    *fftlog = -1;
+    for i in 0..count - 1 {
+        *fftlog += 1;
+        let headgp = if i == 0 || (i == 1 && alignorcopy[1] == b'A') {
+            outgap
+        } else {
+            true
+        };
+        let tailgp = if i == count - 2 || (i == count - 3 && alignorcopy[count - 3] == b'A') {
+            outgap
+        } else {
+            true
+        };
+
+        let sgap1 = if cut1[i] != 0 {
+            getkyokaigap(group1, cut1[i] as usize - 1)
+        } else {
+            vec![b'o'; clus1]
+        };
+        let sgap2 = if cut2[i] != 0 {
+            getkyokaigap(group2, cut2[i] as usize - 1)
+        } else {
+            vec![b'o'; clus2]
+        };
+        let egap1 = if cut1[i + 1] != len1 {
+            getkyokaigap(group1, cut1[i + 1] as usize)
+        } else {
+            vec![b'o'; clus1]
+        };
+        let egap2 = if cut2[i + 1] != len2 {
+            getkyokaigap(group2, cut2[i + 1] as usize)
+        } else {
+            vec![b'o'; clus2]
+        };
+
+        // A cut list is meant to ascend. It does not always: an anchor whose
+        // end position was never range-checked comes back from
+        // `recountpositions` as a column *before* its own start (see
+        // `map_lookup` in anchors.rs), and the two writes above --
+        // `cut1[count+1] = starti`, then `cut1[count+2] = endi+1` -- lay that
+        // inversion straight into the list.
+        //
+        // The C does not survive it. `strncpy( tmpres1[j], seq1[j]+cut1[i],
+        // cut1[i+1]-cut1[i] )` promotes the negative length to `size_t` and
+        // copies about four gigabytes; the store `tmpres1[j][cut1[i+1]-cut1[i]]
+        // = 0` that follows writes at a negative offset. Measured on an eight
+        // -sequence input with `*` characters: the anchor arrives as 125-0 and
+        // the C segfaults on the second block of the last progressive step.
+        // (The author's own `if( cut1[i+1]-cut1[i] <= 0 )` diagnostics are
+        // commented out around those two lines.)
+        //
+        // There is no output to reproduce, so refuse.
+        if cut1[i + 1] < cut1[i] || cut2[i + 1] < cut2[i] {
+            eprintln!(
+                "disttbfast-rs: external anchors gave a descending cut list -- block {} runs\n  \
+                from {} to {} on one side and {} to {} on the other. The C copies that\n  \
+                block with a negative strncpy length and segfaults (Falign.c, the\n  \
+                `strncpy( tmpres1[j], seq1[j]+cut1[i], cut1[i+1]-cut1[i] )` loop).\n  \
+                Refusing rather than inventing an alignment it never produced.\n  \
+                The cause is an anchor end position past the end of its sequence,\n  \
+                which readexternalanchors does not check (io.c:6378).",
+                i,
+                cut1[i],
+                cut1[i + 1],
+                cut2[i],
+                cut2[i + 1]
+            );
+            std::process::exit(1);
+        }
+
+        let mut block1: Vec<Vec<u8>> = group1
+            .iter()
+            .map(|s| s[cut1[i] as usize..cut1[i + 1] as usize].to_vec())
+            .collect();
+        let mut block2: Vec<Vec<u8>> = group2
+            .iter()
+            .map(|s| s[cut2[i] as usize..cut2[i + 1] as usize].to_vec())
+            .collect();
+        let orilen1 = block1[0].len();
+        let orilen2 = block2[0].len();
+
+        // An anchored block whose two sides are already identical is copied
+        // through untouched; everything else goes to the DP.
+        let copy = alignorcopy[i] == b'c'
+            && orilen1 == orilen2
+            && block1[0] == block2[0];
+        if !copy {
+            // `'A'` blocks are the terminal overhangs. They are aligned with a
+            // real extension penalty even when the run set it to zero, so the
+            // overhang cannot be shredded for free.
+            let penalty_ex = if alignorcopy[i] == b'A' {
+                if cn.penalty_ex == 0 {
+                    -179
+                } else {
+                    cn.penalty_ex
+                }
+            } else {
+                cn.penalty_ex
+            };
+            let (sc, _) = ast.a_align(
+                cn,
+                n_dynamicmtx,
+                cn.penalty,
+                penalty_ex,
+                &mut block1,
+                &mut block2,
+                eff1,
+                eff2,
+                headgp,
+                tailgp,
+                Some((&sgap1, &sgap2, &egap1, &egap2)),
+                None,
+                -1,
+                -1,
+                None,
+                None,
+                0.0,
+                0.0,
+                false,
+                newgapstr,
+            );
+            totalscore += sc;
+        }
+
+        // The two terminal-cut blocks stop the loop unless the cut really was
+        // made on the side the C expected; otherwise it warns and carries on.
+        if i == 1 && alignorcopy[i] == b'A' {
+            if starttermcut1 {
+                if block2.iter().any(|s| s.first() != Some(&b'-')) {
+                    eprintln!("There may be a problem at the 5' end (1). Please contact katoh@ifrec.osaka-u.ac.jp");
+                }
+            } else if starttermcut2 {
+                if block1.iter().any(|s| s.first() != Some(&b'-')) {
+                    eprintln!("There may be a problem at the 5' end (2).  Please contact katoh@ifrec.osaka-u.ac.jp");
+                }
+            } else {
+                break;
+            }
+        } else if alignorcopy[i] == b'A' {
+            if endtermcut1 {
+                if block2.iter().any(|s| s.last() != Some(&b'-')) {
+                    eprintln!("There may be a problem at the 3' end (3).  Please contact katoh@ifrec.osaka-u.ac.jp");
+                }
+            } else if endtermcut2 {
+                if block1.iter().any(|s| s.last() != Some(&b'-')) {
+                    eprintln!("There may be a problem at the 3' end (4).  Please contact katoh@ifrec.osaka-u.ac.jp");
+                }
+            } else {
+                break;
+            }
+        }
+
+        for (j, b) in block1.iter().enumerate() {
+            result1[j].extend_from_slice(b);
+        }
+        for (j, b) in block2.iter().enumerate() {
+            result2[j].extend_from_slice(b);
+        }
+    }
+
+    for (j, r) in result1.into_iter().enumerate() {
+        group1[j] = r;
+    }
+    for (j, r) in result2.into_iter().enumerate() {
+        group2[j] = r;
+    }
+    totalscore
+}

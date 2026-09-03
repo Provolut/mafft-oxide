@@ -739,6 +739,8 @@ fn main() {
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
     let mut fs = FalignState::new();
     let opts = TreebaseOpts {
+        extanch: None,
+        terminalmargin: 0,
         mergeoralign: if a.nadd != 0 {
             Some(&mergeoralign)
         } else {

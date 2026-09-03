@@ -242,6 +242,23 @@ fn main() {
     // `--fmodel` reads it.
     let cn = Constants::new_seq(&args, input.dorp, &input.seq);
 
+    // `-l` (`--anchors`): user anchors, read before `constants()` because the
+    // C does, and indexed by the ungapped lengths of the input.
+    let mut extanch: Option<Vec<mafft_rs::anchors::ExtAnch>> = None;
+    let mut anchindex: Vec<Vec<i32>> = Vec::new();
+    if args.useexternalanchors {
+        let nogaplen: Vec<usize> = input
+            .seq
+            .iter()
+            .map(|s| io::gappick0(s).len())
+            .collect();
+        eprintln!("reading anchors");
+        let mut a = mafft_rs::anchors::read_external_anchors(njob, &nogaplen);
+        eprintln!("sorting anchors");
+        anchindex = mafft_rs::anchors::index_anchors(&mut a, njob);
+        extanch = Some(a);
+    }
+
     // `--merge` (-H): the groups that must stay monophyletic.
     let (subtable, preservegaps) = if args.subalignment {
         let (t, p) = io::read_subalignments_table(njob);
@@ -761,6 +778,10 @@ fn main() {
             nguidetree
         );
         let opts = TreebaseOpts {
+            extanch: extanch
+                .as_ref()
+                .map(|e| (e.as_slice(), anchindex.as_slice())),
+            terminalmargin: args.terminalmargin,
             mergeoralign: if args.nadd != 0 || args.subalignment {
                 Some(&mergeoralign)
             } else {
@@ -819,6 +840,12 @@ fn main() {
     if args.oneiteration {
         eprintln!("Iterative refinement (one vs others)");
         let opts = TreebaseOpts {
+            // `-r` re-aligns without anchors, as the C's dooneiteration does
+            // only when `useexternalanchors` is off; with anchors it uses them.
+            extanch: extanch
+                .as_ref()
+                .map(|e| (e.as_slice(), anchindex.as_slice())),
+            terminalmargin: args.terminalmargin,
             mergeoralign: None,
             nadd: 0,
             outgap: args.outgap,
