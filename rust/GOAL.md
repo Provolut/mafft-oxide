@@ -5,9 +5,9 @@ Definition of done: every `mafft` invocation that works with the stock
 swapped in, and nothing is refused but `-C > 0` and the RNA strategies.
 
 The hard constraint does not move: **output must not change.** Anything not
-ported is refused loudly. Verify with `rust/verify.sh`, `rust/verify_tbfast.sh`,
-`rust/verify_e2e.sh`, `cargo test`, and `test/script` — all must stay green, and
-new argument vectors go into the harnesses with the feature.
+ported is refused loudly. `verify.sh`, `verify_tbfast.sh`, `verify_e2e.sh`,
+`cargo test` and `test/script` must stay green, and new argument vectors go
+into the harnesses with the feature.
 
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
