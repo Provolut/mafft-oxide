@@ -85,8 +85,12 @@ ARGSETS=(
   # 10-mer nucleotide tuples (--tuplesize 10); protein refuses it, as in the C
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 10 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   # --allowshift / --unalignlevel: the shift (warp) DP and the per-node
-  # dynamic matrix
+  # dynamic matrix. With -O the C refuses ("headgp and tailgp must be 1")
+  # after writing order, so only the three without it reach the warp DP.
   "-q 0 -E 2 -V -1.53 -s 0.8 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 2.00 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.8 -W 6 -C 0-0 -b 62 -g 0 -f -1.53 -Q 2.00 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.8 -W 6 -C 0-0 -b 62 -g 0 -f -1.53 -Q 2.00 -h 0 -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.8 -W 6 -C 0-0 -b 62 -g -0.1 -f -2.0 -Q 0.5 -h 0 -F -X 0.5 -x 100"
   # -t (--treeout): the Newick file, including the -n name rewriting
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -T -n -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
@@ -200,20 +204,32 @@ for f in "$CORPUS"/*; do
       python3 "$here/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
       kflag=""
       [ "$mode" = "add" ] && kflag="-K"
-      rm -rf "$work/c" "$work/r"
-      mkdir -p "$work/c" "$work/r"
-      ( cd "$work/c" && $CBIN $AARGS -I $nadd $kflag < "$work/pre/in.fa" > out.fa 2> err.log )
-      cst=$?
-      ( cd "$work/r" && $RBIN $AARGS -I $nadd $kflag < "$work/pre/in.fa" > out.fa 2> err.log )
-      rst=$?
-      label="$(basename "$f") [-I $nadd $mode]"
-      if [ $cst -ne $rst ]; then
-        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
-      elif ! cmp -s "$work/c/out.fa" "$work/r/out.fa"; then
-        fail=$((fail+1)); failed="$failed\n  $label (stdout differs)"
-      else
-        pass=$((pass+1))
-      fi
+      # -Y (--keeplength) rides on --add: it cuts the columns the alignment
+      # inserted into the reference back out, and -Z / -z say what that cost.
+      for extra in "" "-Y" "-Y -Z" "-Y -z" "-Y -Z -n"; do
+        rm -rf "$work/c" "$work/r"
+        mkdir -p "$work/c" "$work/r"
+        ( cd "$work/c" && $CBIN $AARGS -I $nadd $kflag $extra < "$work/pre/in.fa" > out.fa 2> err.log )
+        cst=$?
+        ( cd "$work/r" && $RBIN $AARGS -I $nadd $kflag $extra < "$work/pre/in.fa" > out.fa 2> err.log )
+        rst=$?
+        label="$(basename "$f") [-I $nadd $mode $extra]"
+        if [ $cst -ne $rst ]; then
+          fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+          continue
+        fi
+        bad=""
+        for o in out.fa order _deletelist _deletemap; do
+          if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+            cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+          fi
+        done
+        if [ -n "$bad" ]; then
+          fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+        else
+          pass=$((pass+1))
+        fi
+      done
     done
   done
 done

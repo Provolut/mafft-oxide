@@ -157,6 +157,53 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --add / --addprofile (-I n, -K) and --keeplength (-Y) with both --mapout
+# forms. Needs a real alignment to add to, so the C is run once to make one.
+# `disttbfast` builds it: tbfast writes `pre`, not stdout.
+DTB="$(dirname "$CBIN")/disttbfast"
+if [ -x "$DTB" ]; then
+AARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 4 ] || continue
+  rm -rf "$work/pre"; mkdir -p "$work/pre"
+  ( cd "$work/pre" && $DTB $AARGS < "$f" > aligned.fa 2> /dev/null ) || continue
+  [ -s "$work/pre/aligned.fa" ] || continue
+  for nadd in 1 $((n/2)); do
+    for mode in add profile; do
+      python3 "$here/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
+      kflag=""
+      [ "$mode" = "add" ] && kflag="-K"
+      for extra in "" "-Y" "-Y -Z" "-Y -z"; do
+        rm -rf "$work/c" "$work/r"
+        mkdir -p "$work/c" "$work/r"
+        ( cd "$work/c" && $CBIN _ $P _ -+ 2 $T -I $nadd $kflag $extra < "$work/pre/in.fa" > /dev/null 2> err.log )
+        cst=$?
+        ( cd "$work/r" && $RBIN _ $P _ -+ 2 $T -I $nadd $kflag $extra < "$work/pre/in.fa" > /dev/null 2> err.log )
+        rst=$?
+        label="$(basename "$f") [-I $nadd $mode $extra]"
+        if [ $cst -ne $rst ]; then
+          fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+          continue
+        fi
+        bad=""
+        for o in pre order hat2 hat3 _deletelist _deletemap; do
+          if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+            cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+          fi
+        done
+        if [ -n "$bad" ]; then
+          fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+        else
+          pass=$((pass+1))
+        fi
+      done
+    done
+  done
+done
+fi
+
 echo "pass=$pass fail=$fail"
 if [ $fail -ne 0 ]; then
   printf 'FAILED:%b\n' "$failed"

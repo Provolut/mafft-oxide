@@ -95,6 +95,78 @@ for f in "${INPUTS[@]}"; do
   done
 done
 
+# --add / --addprofile / --keeplength take two files, so they need their own
+# loop: align with the C wrapper first, then split the result and add the tail
+# back. `--keeplength` also writes a `.map` file next to the input, which is
+# part of the output and is compared too.
+# `--add <file>` takes its filename immediately, so every other option has to
+# come first. Each entry is "<mode>|<extra options>".
+ADDSTRATS=(
+  "add|"
+  "add|--keeplength"
+  "add|--keeplength --mapout"
+  "add|--localpair --maxiterate 0"
+  "add|--allowshift"
+  "profile|"
+  "profile|--keeplength --mapout"
+)
+for f in "${INPUTS[@]}"; do
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 4 ] || continue
+  MAFFT_BINARIES="$LIBEXEC" "$MAFFT" --retree 2 --maxiterate 0 "$f" > "$work/aligned.fa" 2>/dev/null || continue
+  [ -s "$work/aligned.fa" ] || continue
+  nadd=$(( n / 2 ))
+  for mode in add profile; do
+    python3 "$here/gen_add.py" "$work/aligned.fa" "$nadd" "$mode" > "$work/both.fa" || continue
+    # Split it back into "the existing alignment" and "the sequences to add".
+    python3 - "$work/both.fa" "$nadd" "$work/exist.fa" "$work/new.fa" <<'PYEOF'
+import sys
+recs, name, seq = [], None, []
+for line in open(sys.argv[1]):
+    if line.startswith('>'):
+        if name is not None:
+            recs.append((name, ''.join(seq)))
+        name, seq = line.rstrip('\n'), []
+    else:
+        seq.append(line.strip())
+recs.append((name, ''.join(seq)))
+nadd = int(sys.argv[2])
+for path, part in ((sys.argv[3], recs[:len(recs)-nadd]), (sys.argv[4], recs[len(recs)-nadd:])):
+    with open(path, 'w') as fh:
+        for nm, sq in part:
+            fh.write(nm + '\n' + sq + '\n')
+PYEOF
+    for i in "${!ADDSTRATS[@]}"; do
+      entry="${ADDSTRATS[$i]}"
+      [ "${entry%%|*}" = "$mode" ] || continue
+      extra="${entry#*|}"
+      addopt="--add"
+      [ "$mode" = profile ] && addopt="--addprofile"
+      rm -f "$work/new.fa.map"
+      MAFFT_BINARIES="$LIBEXEC" "$MAFFT" $extra $addopt "$work/new.fa" "$work/exist.fa" > "$work/o.c" 2>/dev/null
+      cst=$?
+      [ -f "$work/new.fa.map" ] && mv "$work/new.fa.map" "$work/map.c"
+      rm -f "$work/new.fa.map"
+      MAFFT_BINARIES="$work/rs" "$MAFFT" $extra $addopt "$work/new.fa" "$work/exist.fa" > "$work/o.r" 2>/dev/null
+      rst=$?
+      [ -f "$work/new.fa.map" ] && mv "$work/new.fa.map" "$work/map.r"
+      label="$(basename "$f") [$addopt $extra, n=$nadd]"
+      if [ $cst -ne 0 ] || [ ! -s "$work/o.c" ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (reference run failed: exit $cst)"
+      elif [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      elif ! cmp -s "$work/o.c" "$work/o.r"; then
+        fail=$((fail+1)); failed="$failed\n  $label (output differs)"
+      elif { [ -f "$work/map.c" ] || [ -f "$work/map.r" ]; } && ! cmp -s "$work/map.c" "$work/map.r"; then
+        fail=$((fail+1)); failed="$failed\n  $label (.map differs)"
+      else
+        pass=$((pass+1))
+      fi
+      rm -f "$work/map.c" "$work/map.r"
+    done
+  done
+done
+
 echo "pass=$pass fail=$fail"
 if [ $fail -ne 0 ]; then
   printf 'FAILED:%b\n' "$failed"

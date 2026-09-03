@@ -305,9 +305,15 @@ pub fn treebase(
         if moa == b'2' {
             let newlen = aseq[mem0[0] as usize].len();
             crate::addfunctions::adjustgapmap(newlen, &mut gapmap, &aseq[mem0[0] as usize].clone());
-            let mut allmem = mem0.clone();
-            allmem.extend_from_slice(&mem1);
-            crate::addfunctions::restorecommongaps(aseq, &allmem, &mut gapmap, b'-');
+            // `restorecommongaps()`'s first act is `if( n0 == 0 ) return;`
+            // with `n0 = njob - (clus1+clus2)`: at a node covering every
+            // sequence there is nothing outside the two groups to keep in
+            // step, so neither the sequences nor `gapmap` are touched.
+            if njob - (clus1 + clus2) != 0 {
+                let mut allmem = mem0.clone();
+                allmem.extend_from_slice(&mem1);
+                crate::addfunctions::restorecommongaps(aseq, &allmem, &mut gapmap, b'-');
+            }
             let g1: Vec<Vec<u8>> = mem0.iter().map(|&m| aseq[m as usize].clone()).collect();
             let gaplen = crate::addfunctions::findnewgaps(&g1, 0);
             crate::addfunctions::insertnewgaps(

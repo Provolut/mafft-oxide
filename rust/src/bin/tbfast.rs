@@ -22,7 +22,7 @@ use mafft_rs::localhom;
 use mafft_rs::pairalign::{self, PairAlg};
 use mafft_rs::params::{atof, atoi, NOTSPECIFIED};
 use mafft_rs::treebase::TreebaseOpts;
-use mafft_rs::{io, tree, treebase};
+use mafft_rs::{addfunctions, io, keeplength, tree, treebase};
 
 /// The subset of `tbfast`'s options this port implements. Anything else is
 /// refused rather than ignored.
@@ -81,6 +81,14 @@ struct TbArgs {
     nthreadtb: i32,
     outgap: bool,
     outnumber: bool,
+    /// `-I <n>` (`--add`): the last `nadd` sequences are appended to the
+    /// alignment formed by the first `njob - nadd`.
+    nadd: usize,
+    /// `-K` clears `addprofile`, which is on by default.
+    addprofile: bool,
+    /// `-Y` (`--keeplength`) and `-Z` / `-z` (`--mapout`).
+    keeplength: bool,
+    mapout: i32,
     fastathreshold: f64,
     sueff_global: f64,
     use_fft: bool,
@@ -130,6 +138,10 @@ impl Default for TbArgs {
             nthreadtb: 1,
             outgap: true,
             outnumber: false,
+            nadd: 0,
+            addprofile: true,
+            keeplength: false,
+            mapout: 0,
             fastathreshold: 0.0,
             sueff_global: 0.1,
             use_fft: false,
@@ -296,6 +308,11 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
                 a.distout = c;
             }
             'n' => a.outnumber = true,
+            'I' => a.nadd = atoi(&take().ok_or("-I needs a value")?) as usize,
+            'K' => a.addprofile = false,
+            'Y' => a.keeplength = true,
+            'Z' => a.mapout = 1,
+            'z' => a.mapout = 2,
             'D' => a.dorp = Some(b'd'),
             'P' => a.dorp = Some(b'p'),
             'a' => a.fmodel = 1,
@@ -319,6 +336,11 @@ fn refuse(a: &TbArgs) -> Option<String> {
     if a.fastathreshold < 0.0001 {
         bad.push("this port only covers the constrained (-l) progressive stage".into());
     }
+    if a.keeplength && a.nadd == 0 {
+        // The C reaches `restoreoriginalgaps( njob, bseq, NULL )` and
+        // segfaults; there is no output to be identical to.
+        bad.push("-Y (--keeplength) without -I <n> crashes the C too".into());
+    }
     if a.treein && a.unalignlevel > 0.0 {
         // The C derives `expdist` from the user tree in that case.
         bad.push("-U with --allowshift is not ported".into());
@@ -339,6 +361,16 @@ fn refuse(a: &TbArgs) -> Option<String> {
     } else {
         Some(bad.join("\n  "))
     }
+}
+
+/// `includemember()`: every member of `mem` is in `cand`.
+fn includemember(mem: &[i32], cand: &[i32]) -> bool {
+    mem.iter().all(|m| cand.contains(m))
+}
+
+/// `samemember()`: the same members, in any order (the live C definition).
+fn samemember(mem: &[i32], cand: &[i32]) -> bool {
+    mem.len() == cand.len() && mem.iter().all(|m| cand.contains(m))
 }
 
 /// Build a `Constants` from one phase's penalty settings by reusing the
@@ -603,16 +635,115 @@ fn main() {
         eprintln!();
         return;
     }
-    let eff = tree::counteff_simple(njob, &mut tr);
+    let mut eff = tree::counteff_simple(njob, &mut tr);
+    // `--add`: tbfast (and only tbfast) discounts the added sequences by two
+    // orders of magnitude, so the reference alignment dominates every node
+    // they join.
+    for e in eff.iter_mut().skip(njob - a.nadd) {
+        *e /= 100.0;
+    }
 
+    // `--add`: what to do at each tree node, and how `aseq` starts out. This
+    // is tbfast's copy of the block, which differs from disttbfast's: there
+    // the per-added-sequence `samemembern` pass is live, here both variants
+    // of it sit inside one `#if 0 ... #elseif 0 ... #endif` -- `#elseif` is
+    // not a directive, so it does not reopen the block -- and only the
+    // `includemember` pass runs.
+    let mut mergeoralign: Vec<u8> = vec![b'a'; njob.saturating_sub(1)];
+    let mut originalgaps: Option<Vec<u8>> = None;
+    let mut addbk: Option<Vec<Vec<u8>>> = None;
+    let mut mapseq: Option<Vec<Vec<u8>>> = None;
     let mut aseq: Vec<Vec<u8>> = bseq.clone();
+    if a.nadd != 0 {
+        let nadd = a.nadd;
+        let alignmentlength = input.seq[0].len();
+        for i in 0..njob - nadd {
+            if input.seq[i].len() != alignmentlength {
+                eprintln!("# The original {:4} sequences must be aligned", njob - nadd);
+                std::process::exit(1);
+            }
+        }
+        if a.keeplength {
+            originalgaps = Some(keeplength::record_original_gaps(njob - nadd, &input.seq));
+            if a.mapout != 0 {
+                addbk = Some(
+                    input.seq[njob - nadd..]
+                        .iter()
+                        .map(|s| io::gappick0(s))
+                        .collect(),
+                );
+            }
+        }
+        let addmem: Vec<i32> = ((njob - nadd)..njob).map(|i| i as i32).collect();
+        if a.addprofile {
+            let alignmentlength = input.seq[njob - nadd].len();
+            for i in (njob - nadd)..njob {
+                if input.seq[i].len() != alignmentlength {
+                    eprintln!("# The {:4} additional sequences must be aligned", nadd);
+                    std::process::exit(1);
+                }
+            }
+            let mut found = false;
+            for i in 0..njob - 1 {
+                let m0 = tree::topolorderz(&tr.topol, &tr.dep, i, 0);
+                let m1 = tree::topolorderz(&tr.topol, &tr.dep, i, 1);
+                if samemember(&m0, &addmem) {
+                    mergeoralign[i] = b'1';
+                    found = true;
+                } else if samemember(&m1, &addmem) {
+                    mergeoralign[i] = b'2';
+                    found = true;
+                } else {
+                    mergeoralign[i] = b'n';
+                }
+            }
+            if !found {
+                eprintln!("# There is no appropriate position to add the {} sequences in the guide tree.", nadd);
+                std::process::exit(1);
+            }
+            let mut tail: Vec<Vec<u8>> = input.seq[njob - nadd..].to_vec();
+            addfunctions::commongappick(&mut tail);
+            mapseq = Some(tail.clone());
+            for (i, s) in tail.into_iter().enumerate() {
+                aseq[njob - nadd + i] = s;
+            }
+        } else {
+            for v in mergeoralign.iter_mut() {
+                *v = b'n';
+            }
+            for i in 0..njob - 1 {
+                let m0 = tree::topolorderz(&tr.topol, &tr.dep, i, 0);
+                let m1 = tree::topolorderz(&tr.topol, &tr.dep, i, 1);
+                let in0 = includemember(&m0, &addmem);
+                let in1 = includemember(&m1, &addmem);
+                if in0 && in1 {
+                    mergeoralign[i] = b'w';
+                } else if in0 {
+                    mergeoralign[i] = b'1';
+                } else if in1 {
+                    mergeoralign[i] = b'2';
+                }
+            }
+            // Already `gappick0`ed into bseq above.
+        }
+        let mut head: Vec<Vec<u8>> = input.seq[..njob - nadd].to_vec();
+        addfunctions::commongappick(&mut head);
+        for (i, s) in head.into_iter().enumerate() {
+            aseq[i] = s;
+        }
+    }
+
     localhom::calcimportance_half(njob, &eff, &aseq, &mut table);
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
     let mut fs = FalignState::new();
     let opts = TreebaseOpts {
-        mergeoralign: None,
-        nadd: 0,
+        mergeoralign: if a.nadd != 0 {
+            Some(&mergeoralign)
+        } else {
+            None
+        },
+        nadd: a.nadd,
         outgap: a.outgap,
         use_fft: a.use_fft,
         force_fft: false,
@@ -626,10 +757,55 @@ fn main() {
         &cn, &opts, njob, &mut aseq, &mut nlen, &tr, &eff, &mut ast, &mut fs,
     );
 
+    // `--keeplength`: as in disttbfast, and in the same place -- before the
+    // alignment is written, since the compact --mapout renames sequences.
+    let mut names = input.name.clone();
+    if a.keeplength {
+        let nadd = a.nadd;
+        let (_ndeleted, deletelist) =
+            keeplength::delete_new_insertions_whole(njob - nadd, nadd, &mut aseq);
+        let mut dlf = String::new();
+        for (i, list) in deletelist.iter().enumerate() {
+            for e in list.iter() {
+                dlf.push_str(&format!("{} {} {}\n", njob - nadd + i, e.pos, e.len));
+            }
+        }
+        std::fs::write("_deletelist", dlf).expect("Cannot open _deletelist");
+        keeplength::restore_original_gaps(njob, &mut aseq, originalgaps.as_ref().unwrap());
+        if a.mapout != 0 {
+            let addbk = addbk.as_ref().unwrap();
+            let map = if a.mapout == 1 {
+                keeplength::reconstruct_delete_map(
+                    addbk,
+                    &deletelist,
+                    &aseq[njob - nadd..],
+                    &input.name[njob - nadd..],
+                    a.outnumber,
+                )
+            } else {
+                let mut tail: Vec<Vec<u8>> = names[njob - nadd..].to_vec();
+                let realn: &[Vec<u8>] = match mapseq.as_ref() {
+                    Some(v) => v,
+                    None => &input.seq[njob - nadd..],
+                };
+                let m = keeplength::reconstruct_delete_map_compact(
+                    addbk,
+                    &deletelist,
+                    realn,
+                    &mut tail,
+                    a.outnumber,
+                );
+                names[njob - nadd..].clone_from_slice(&tail);
+                m
+            };
+            std::fs::write("_deletemap", map).expect("Cannot open _deletemap");
+        }
+    }
+
     // The C writes the alignment to the file `pre` (prep_g), not to stdout,
     // and leaves an empty `hat3` behind; the mafft wrapper reads `pre`.
     let mut out = Vec::new();
-    io::write_data(&mut out, &input.name, &aseq);
+    io::write_data(&mut out, &names, &aseq);
     std::fs::write("pre", &out).expect("write pre");
     if a.iterate == 0 {
         // The C's pairwise stage creates an empty hat3 even when nothing

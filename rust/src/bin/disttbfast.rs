@@ -12,7 +12,7 @@ use mafft_rs::align::AlignState;
 use mafft_rs::constants::{self, Constants};
 use mafft_rs::params::Args;
 use mafft_rs::treebase::TreebaseOpts;
-use mafft_rs::{addfunctions, dist, falign, io, score, tree, treebase};
+use mafft_rs::{addfunctions, dist, falign, io, keeplength, score, tree, treebase};
 
 /// `pickup()`: keep the longest sequence on each side of the last few tree
 /// nodes and write the rest to `notused`.
@@ -144,10 +144,6 @@ fn main() {
     // `constants( njob, seq )` sees the raw input, gaps and all; only
     // `--fmodel` reads it.
     let cn = Constants::new_seq(&args, input.dorp, &input.seq);
-    if cn.trywarp {
-        eprintln!("disttbfast-rs: the shift (warp) DP path is not ported; use -Q >= 10");
-        std::process::exit(1);
-    }
 
     // seqcheck()
     for (i, s) in input.seq.iter().enumerate() {
@@ -206,6 +202,9 @@ fn main() {
     let mut st = AlignState::new();
     let mut fs = falign::FalignState::new();
     let mut bseq: Vec<Vec<u8>> = Vec::new();
+    let mut originalgaps: Option<Vec<u8>> = None;
+    let mut addbk: Option<Vec<Vec<u8>>> = None;
+    let mut mapseq: Option<Vec<Vec<u8>>> = None;
 
     let nguidetree = if args.treein {
         1
@@ -373,6 +372,23 @@ fn main() {
             }
         }
 
+        // `--keeplength`: remember the reference's all-gap columns before the
+        // alignment can add any, and (for --mapout) keep an ungapped copy of
+        // each added sequence to index the map by. Both read the input as it
+        // was read, ahead of every commongappick below.
+        if args.nadd != 0 && args.keeplength {
+            let nadd = args.nadd as usize;
+            originalgaps = Some(keeplength::record_original_gaps(njob - nadd, &input.seq));
+            if args.mapout != 0 {
+                addbk = Some(
+                    input.seq[njob - nadd..]
+                        .iter()
+                        .map(|s| io::gappick0(s))
+                        .collect(),
+                );
+            }
+        }
+
         bseq = input.seq.iter().map(|s| io::gappick0(s)).collect();
         if args.nadd != 0 {
             let nadd = args.nadd as usize;
@@ -382,6 +398,9 @@ fn main() {
             if args.addprofile {
                 let mut tail: Vec<Vec<u8>> = input.seq[njob - nadd..].to_vec();
                 addfunctions::commongappick(&mut tail);
+                // The C collapses these columns in `seq` itself, and the
+                // compact --mapout indexes off `seq`, so it sees them gone.
+                mapseq = Some(tail.clone());
                 for (i, s) in tail.into_iter().enumerate() {
                     bseq[njob - nadd + i] = s;
                 }
@@ -461,6 +480,70 @@ fn main() {
         }
     }
 
-    io::write_data(&mut out, &input.name, &bseq);
+    // `--keeplength`: cut the columns the alignment added to the reference
+    // back out, record what that cost in `_deletelist` (and `_deletemap`),
+    // then put the reference's own all-gap columns back.
+    let mut names = input.name.clone();
+    let mut ndeleted = 0usize;
+    if args.keeplength {
+        let nadd = args.nadd as usize;
+        let (nd, deletelist) = keeplength::delete_new_insertions_whole(njob - nadd, nadd, &mut bseq);
+        ndeleted = nd;
+        let mut dlf = String::new();
+        for (i, list) in deletelist.iter().enumerate() {
+            for e in list.iter() {
+                // 0-origin, as the C writes it.
+                dlf.push_str(&format!("{} {} {}\n", njob - nadd + i, e.pos, e.len));
+            }
+        }
+        std::fs::write("_deletelist", dlf).expect("Cannot open _deletelist");
+
+        keeplength::restore_original_gaps(njob, &mut bseq, originalgaps.as_ref().unwrap());
+
+        if args.mapout != 0 {
+            let addbk = addbk.as_ref().unwrap();
+            // The C indexes the residue-by-residue map by the *aligned*
+            // sequences and the compact one by the input's own, so the two
+            // read different arrays here.
+            let map = if args.mapout == 1 {
+                keeplength::reconstruct_delete_map(
+                    addbk,
+                    &deletelist,
+                    &bseq[njob - nadd..],
+                    &input.name[njob - nadd..],
+                    args.outnumber,
+                )
+            } else {
+                let mut tail: Vec<Vec<u8>> = names[njob - nadd..].to_vec();
+                let realn: &[Vec<u8>] = match mapseq.as_ref() {
+                    Some(v) => v,
+                    None => &input.seq[njob - nadd..],
+                };
+                let m = keeplength::reconstruct_delete_map_compact(
+                    addbk,
+                    &deletelist,
+                    realn,
+                    &mut tail,
+                    args.outnumber,
+                );
+                names[njob - nadd..].clone_from_slice(&tail);
+                m
+            };
+            std::fs::write("_deletemap", map).expect("Cannot open _deletemap");
+        }
+    }
+
+    io::write_data(&mut out, &names, &bseq);
+    if ndeleted > 0 {
+        eprintln!(
+            "\nTo keep the alignment length, {} letters were DELETED.",
+            ndeleted
+        );
+        if args.mapout != 0 {
+            eprintln!("The deleted letters are shown in the (filename).map file.");
+        } else {
+            eprintln!("To know the positions of deleted letters, rerun the same command with the --mapout option.");
+        }
+    }
     std::io::stdout().write_all(&out).unwrap();
 }

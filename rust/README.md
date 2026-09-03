@@ -9,8 +9,8 @@ same argument vector, same input, same output files:
 
 | binary | replaces | strategies |
 |---|---|---|
-| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2 (plain `mafft`, `fftns`, `nwns`) |
-| `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
+| `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift` (plain `mafft`, `fftns`, `nwns`) |
+| `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
 
 Both handle protein and nucleotide input, which the reader tells apart the same
 way the C does.
@@ -111,10 +111,9 @@ quietly returning a different alignment:
 
 - `--aamatrix` (a matrix read from a file) and `--text` (the 256-symbol
   alphabet)
-- `--add` / `--addprofile`, sub-alignments, external anchors
+- sub-alignments (`--merge`), external anchors (`--anchors`)
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- `--keeplength`
 - the memory-saving aligner (`-M`) and the other `alg` values
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
 - **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
@@ -161,7 +160,16 @@ to prune, and it is what `--allowshift` exists for. Half the corpus is
 nucleotide -- families at four divergences, IUPAC codes, `u` for `t`, upper
 case, repeats, and sequences below the tuple length -- because every stage
 branches on the sequence type. Each input is crossed with every argument vector
-the `mafft` wrapper is known to emit for the ported strategies.
+the `mafft` wrapper is known to emit for the ported strategies. `verify.sh`
+then does a second pass for `--add` / `--addprofile`: the C is run first to
+produce a real alignment, `gen_add.py` splits it at several points, and both
+binaries are asked to add the tail back.
+
+Both harnesses resolve their two binary arguments to absolute paths and refuse
+to run a non-executable one. That is not a nicety: they run each case from a
+scratch directory, so relative paths made *both* binaries exit 127, no files
+were produced, and every case scored a pass. Every count these harnesses
+reported before that guard was added is worthless.
 
 `verify_e2e.sh` does the same one level up: it runs the real `mafft` wrapper
 against a stock libexec directory and against a copy with the Rust binaries
@@ -208,7 +216,7 @@ RNA folding programs and fail identically with the stock C binaries.)
 
 ## Notes for anyone extending this
 
-Nine things about the C are load-bearing and easy to "clean up" by accident.
+Ten things about the C are load-bearing and easy to "clean up" by accident.
 Most were found the hard way, by a corpus case rather than by reading.
 
 1. **Scratch buffers are never cleared.** `A__align` and friends keep `static`
@@ -254,6 +262,16 @@ Most were found the hard way, by a corpus case rather than by reading.
    equal-scoring end cell and `Atracking_localhom` the last. Every one of those
    decides ties, and ties are common — the duplicate-sequence corpus exists to
    catch exactly this.
+
+10. **`disttbfast` and `tbfast` are not two copies of one program.** Their
+   `treebase()` and their `--add` setup look alike and are not: `tbfast`
+   divides the added sequences' weights by 100 and skips the
+   per-added-sequence `samemembern` pass that `disttbfast` runs (in `tbfast`
+   both variants of it sit inside one `#if 0 ... #elseif 0 ... #endif`, and
+   `#elseif` is not a directive, so it does not reopen the block). Read the
+   copy you are porting, not the one you ported last week. The same goes for
+   the two definitions of `samemember()` — the live one compares as sets, the
+   `#if 0` one position by position.
 
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a

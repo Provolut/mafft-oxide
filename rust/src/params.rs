@@ -446,8 +446,10 @@ impl Args {
         if self.oneiteration {
             bad.push("-r (one iteration) is not ported");
         }
-        if self.keeplength {
-            bad.push("-Y (--keeplength) is not ported");
+        if self.keeplength && self.nadd == 0 {
+            // The C reaches `restoreoriginalgaps( njob, bseq, NULL )` and
+            // segfaults; there is no output to be identical to.
+            bad.push("-Y (--keeplength) without -I <n> crashes the C too");
         }
         if self.nthread > 0 || self.nthreadpair > 0 || self.nthreadtb > 0 {
             bad.push("threads change the result; run with -C 0-0");
