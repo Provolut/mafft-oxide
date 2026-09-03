@@ -440,11 +440,17 @@ fn main() {
     // there is no *full* matrix, only nearest neighbours.
     let mut compact_mindist: Vec<f64> = Vec::new();
     let mut compact_mindistfrom: Vec<i32> = Vec::new();
+    // `youngestlinkage` recomputes distances at every step, so it needs the
+    // k-mer tables (first pass) or the MSA (second) kept around, not just the
+    // nearest-neighbour summary the other keywords build from.
+    let mut compact_kmer_selfscore: Vec<i32> = Vec::new();
+    let mut compact_tuples: Option<mafft_rs::dist::Tuples> = None;
+    let mut compact_msa: Option<(Vec<Vec<u8>>, Vec<Vec<i32>>, Vec<i32>)> = None;
     let (mut mtx, nogaplen): (Vec<Vec<f64>>, Vec<usize>) = if treein {
         (Vec::new(), input.seq.iter().map(|s| s.len()).collect())
     } else if compacttree != 0 {
         eprintln!("\n\nMaking a distance matrix ..");
-        let (md, mdf, ngl, _partmtx, _selfscore) = mafft_rs::compacttree::compact_distances(
+        let (md, mdf, ngl, _partmtx, kss) = mafft_rs::compacttree::compact_distances(
             &cn,
             &input.seq,
             njob,
@@ -454,6 +460,13 @@ fn main() {
         );
         compact_mindist = md;
         compact_mindistfrom = mdf;
+        compact_kmer_selfscore = kss;
+        compact_tuples = Some(mafft_rs::dist::build_tuples(
+            &cn,
+            &input.seq,
+            njob,
+            args.tuplesize as usize,
+        ));
         (Vec::new(), ngl)
     } else {
         dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize)
@@ -523,17 +536,55 @@ fn main() {
             }
         } else if compacttree != 0 {
             eprintln!("Constructing a tree ... ");
+            let mut return_tree_ct: Option<tree::Tree> = None;
             if compacttree == 4 {
-                // `compacttree_memsaveselectable( ..., howcompact 2, memsave 1 )`
-                eprintln!(
-                    "disttbfast-rs: --treein youngestlinkage needs compacttree_memsaveselectable\n  \
-                     (mltaln9.c:5491), which is not ported. The other compact keywords --\n  \
-                     compact, very compact, stepadd -- go through compacttreegivendist and\n  \
-                     are supported."
-                );
-                std::process::exit(1);
+                // `compacttree_memsaveselectable( ..., howcompact 2, memsave 1 )`.
+                // The first pass scores k-mers, the second the alignment the
+                // first produced -- the C picks on whether `seq` is non-NULL,
+                // having freed `pointt` after the first pass and `bseq` after
+                // the second.
+                let src = match compact_msa.as_ref() {
+                    Some((seq, skiptable, _)) => mafft_rs::compacttree::CompactDist::Msa {
+                        cn: &cn,
+                        seq,
+                        skiptable,
+                    },
+                    None => {
+                        let t = compact_tuples.as_ref().unwrap();
+                        mafft_rs::compacttree::CompactDist::Kmer {
+                            pointt: &t.pointt,
+                            nlen: &t.nogaplen,
+                            tsize: t.tsize,
+                            lenfaca: t.lenfaca,
+                            lenfacb: t.lenfacb,
+                            lenfacc: t.lenfacc,
+                            lenfacd: t.lenfacd,
+                        }
+                    }
+                };
+                let ss: &[i32] = match compact_msa.as_ref() {
+                    Some((_, _, ss)) => ss,
+                    None => &compact_kmer_selfscore,
+                };
+                return_tree_ct = Some(mafft_rs::compacttree::compacttree_memsaveselectable(
+                    njob,
+                    &mut compact_mindistfrom,
+                    &mut compact_mindist,
+                    ss,
+                    &src,
+                    args.sueff_global,
+                    if args.treeout != 0 {
+                        Some(&input.name[..])
+                    } else {
+                        None
+                    },
+                    args.outnumber,
+                    args.treeout != 0,
+                ));
             }
-            mafft_rs::compacttree::compacttreegivendist(
+            match return_tree_ct.take() {
+                Some(t) => t,
+                None => mafft_rs::compacttree::compacttreegivendist(
                 njob,
                 &compact_mindist,
                 &compact_mindistfrom,
@@ -544,7 +595,8 @@ fn main() {
                 },
                 args.outnumber,
                 args.treeout != 0,
-            )
+                ),
+            }
         } else if args.subalignment {
             eprintln!("Constructing a UPGMA tree ... ");
             let (t, f) = tree::upgma_treeout_constrained(
@@ -860,6 +912,12 @@ fn main() {
             );
             compact_mindist = md;
             compact_mindistfrom = mdf;
+            if compacttree == 4 {
+                let skiptable: Vec<Vec<i32>> =
+                    bseq.iter().map(|s| score::makeskiptable(s)).collect();
+                compact_msa = Some((bseq.clone(), skiptable, selfscore.clone()));
+                compact_tuples = None; // the C frees `pointt` after the first pass
+            }
         } else if calcpairdists {
             let skiptable: Vec<Vec<i32>> = bseq.iter().map(|s| score::makeskiptable(s)).collect();
             for i in 0..njob - 1 {

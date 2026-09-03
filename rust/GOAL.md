@@ -27,13 +27,12 @@ both copies: `tbfast`'s `--add` is not `disttbfast`'s.
    files from `gen_anchors.py`. Two C quirks reproduced and one input refused,
    all in issue #4.
 
-2. **The `compacttree*` builders.** `compact` (above its RAM budget), `very
-   compact` and `stepadd` are done: `compacttree.rs` has `preparepartmtx`, the
-   two nearest-neighbour distance passes (k-mer and MSA) and
-   `compacttreegivendist` with `reformattree`. 3096 comparisons byte-identical
-   including `infile.tree`. What is left is `youngestlinkage`, the one keyword
-   whose builder is `compacttree_memsaveselectable` (637 lines, and it
-   recomputes distances rather than reading them); the port refuses there.
+2. ~~**The `compacttree*` builders**~~ done: `compacttree.rs` has
+   `preparepartmtx`, the two nearest-neighbour distance passes (k-mer and
+   MSA), `compacttreegivendist` with `reformattree`, and
+   `compacttree_memsaveselectable` for `youngestlinkage`. All four keywords --
+   `compact`, `very compact`, `stepadd`, `youngestlinkage` -- byte-identical
+   over 3096 comparisons including `infile.tree`.
 
 3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`, ~5600 live lines. An earlier

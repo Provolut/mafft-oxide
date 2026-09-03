@@ -601,6 +601,76 @@ mod tests {
         assert_eq!(t.dep[1].child1, -1);
     }
 
+    fn test_constants() -> crate::constants::Constants {
+        let a = crate::params::Args {
+            nblosum: 62,
+            ppenalty: -1530,
+            ppenalty_ex: 0,
+            poffset: 0,
+            penalty_shift_factor: 100.0,
+            ..Default::default()
+        };
+        crate::constants::Constants::new(&a)
+    }
+
+    #[test]
+    fn memsave_picks_the_smallest_mindist_but_never_the_last_active_element() {
+        // Sequence 3 is the last live element of the chain, and it holds the
+        // globally smallest `mindist`. The C's scan stops *before* the last
+        // element, so the first join is 0-1 -- the smallest among those
+        // actually examined -- not 2-3.
+        let mut md = vec![0.20, 0.30, 0.40, 0.05];
+        let mut nr = vec![1i32, 0, 3, 2];
+        let seq: Vec<Vec<u8>> = vec![b"AA".to_vec(); 4];
+        let skip: Vec<Vec<i32>> = seq.iter().map(|s| crate::score::makeskiptable(s)).collect();
+        let cn = test_constants();
+        let src = CompactDist::Msa { cn: &cn, seq: &seq, skiptable: &skip };
+        let t = compacttree_memsaveselectable(
+            4, &mut nr, &mut md, &[100, 100, 100, 100], &src, 0.1, None, false, false,
+        );
+        assert_eq!(t.topol[0], [0, 1]);
+        assert!((t.dep[0].distfromtip - 0.10).abs() < 1e-12);
+    }
+
+    #[test]
+    fn memsave_names_a_merged_node_by_its_smaller_representative() {
+        let mut md = vec![0.20, 0.20, 0.20, 999.9];
+        let mut nr = vec![1i32, 0, 1, 2];
+        let seq: Vec<Vec<u8>> = vec![b"AA".to_vec(); 4];
+        let skip: Vec<Vec<i32>> = seq.iter().map(|s| crate::score::makeskiptable(s)).collect();
+        let cn = test_constants();
+        let src = CompactDist::Msa { cn: &cn, seq: &seq, skiptable: &skip };
+        let t = compacttree_memsaveselectable(
+            4, &mut nr, &mut md, &[100, 100, 100, 100], &src, 0.1, None, false, false,
+        );
+        assert_eq!(t.topol[0], [0, 1]);
+        // Step 1's first side stands for the 0-1 node, and is named by that
+        // node's smaller member.
+        assert_eq!(t.topol[1][0], 0);
+        assert_eq!(t.dep[1].child0, 0);
+        // The spare row the C allocates is left untouched.
+        assert_eq!(t.topol[3], [-1, -1]);
+    }
+
+    #[test]
+    fn memsave_leaves_the_merged_node_active_and_unlinks_the_larger() {
+        // After every step exactly one sequence leaves the chain, so an
+        // n-sequence run makes n-1 joins and every one of them is a real pair.
+        let mut md = vec![0.10, 0.10, 0.10, 0.10, 0.10];
+        let mut nr = vec![1i32, 0, 3, 2, 0];
+        let seq: Vec<Vec<u8>> = vec![b"AC".to_vec(); 5];
+        let skip: Vec<Vec<i32>> = seq.iter().map(|s| crate::score::makeskiptable(s)).collect();
+        let cn = test_constants();
+        let src = CompactDist::Msa { cn: &cn, seq: &seq, skiptable: &skip };
+        let t = compacttree_memsaveselectable(
+            5, &mut nr, &mut md, &[100; 5], &src, 0.1, None, false, false,
+        );
+        for k in 0..4 {
+            assert!(t.topol[k][0] >= 0 && t.topol[k][1] >= 0, "step {} unfilled", k);
+            assert_ne!(t.topol[k][0], t.topol[k][1], "step {} joins a node to itself", k);
+        }
+    }
+
     #[test]
     fn givendist_orders_each_node_by_representative_not_by_child_order() {
         // reformat_younger0_rec swaps the two sides when rep0 > rep1, and
@@ -618,4 +688,269 @@ mod tests {
             );
         }
     }
+}
+
+/// Where `compacttree_memsaveselectable` gets a pairwise distance when it
+/// needs one. It caches nothing under `howcompact == 2`, so every distance in
+/// the loop below is recomputed from one of these.
+pub enum CompactDist<'a> {
+    /// The first guide-tree pass: k-mer tables, before any alignment exists.
+    Kmer {
+        pointt: &'a [Vec<i32>],
+        nlen: &'a [usize],
+        tsize: usize,
+        lenfaca: f64,
+        lenfacb: f64,
+        lenfacc: f64,
+        lenfacd: f64,
+    },
+    /// The second pass: the alignment the first one produced.
+    Msa {
+        cn: &'a crate::constants::Constants,
+        seq: &'a [Vec<u8>],
+        skiptable: &'a [Vec<i32>],
+    },
+}
+
+/// `compacttree_memsaveselectable()` as `disttbfast` calls it: `howcompact 2`,
+/// `memsave 1`, which is `--treein youngestlinkage`.
+///
+/// This is UPGMA over a matrix that is never stored. Each step takes the
+/// smallest `mindist`, joins it with its `nearest`, and then recomputes the
+/// merged node's distance to every sequence still active -- two real distance
+/// evaluations per surviving sequence per step, instead of a matrix lookup.
+///
+/// Under `howcompact == 2` the C frees the recomputed row instead of keeping
+/// it (`partmtx` stays empty from `preparepartmtx` on, since `compacttree` is
+/// 4), and `continue`s past the whole `resetnearest` section. So `partmtx` is
+/// inert here and is not modelled; its only other use is a progress counter.
+///
+/// Two things the search depends on, both shared with the ordinary UPGMA:
+/// the scan for the smallest `mindist` stops at the *last* active element
+/// rather than passing it, and `im`/`jm` persist across steps, so a step where
+/// nothing beats the running minimum reuses the previous step's pair.
+#[allow(clippy::too_many_arguments)]
+pub fn compacttree_memsaveselectable(
+    nseq: usize,
+    nearest: &mut [i32],
+    mindist: &mut [f64],
+    selfscore: &[i32],
+    src: &CompactDist,
+    sueff_global: f64,
+    names: Option<&[Vec<u8>]>,
+    outnumber: bool,
+    treeout: bool,
+) -> Tree {
+    let sueff1 = 1.0 - sueff_global;
+    let sueff05 = sueff_global * 0.5;
+    // `cluster_mix_double`, the only `treemethod` the C accepts here.
+    let cluster_mix = |d1: f64, d2: f64| -> f64 {
+        let m = if d1 < d2 { d1 } else { d2 };
+        m * sueff1 + (d1 + d2) * sueff05
+    };
+
+    let mut sextet = match src {
+        CompactDist::Kmer { tsize, nlen, .. } => Some(crate::dist::Sextet::new(
+            *tsize,
+            nlen.iter().copied().max().unwrap_or(0),
+        )),
+        CompactDist::Msa { .. } => None,
+    };
+
+    // The two composition tables of the pair being merged, rebuilt each step.
+    let mut table1: Vec<i32> = Vec::new();
+    let mut table2: Vec<i32> = Vec::new();
+    if let CompactDist::Kmer { tsize, .. } = src {
+        table1 = vec![0i32; *tsize];
+        table2 = vec![0i32; *tsize];
+    }
+
+    let mut topol: Vec<[i32; 2]> = vec![[-1, -1]; nseq];
+    let mut len: Vec<[f64; 2]> = vec![[0.0, 0.0]; nseq];
+    let mut dep: Vec<Treedep> = vec![Treedep::default(); nseq];
+
+    // `ac`: the doubly linked list of still-active sequences. Position 0 is
+    // never unlinked -- `jm` is always the larger of the pair, so at least 1 --
+    // which is why the C can write through `ac[jm].prev` unguarded.
+    let mut next: Vec<i32> = (0..nseq as i32).map(|i| i + 1).collect();
+    next[nseq - 1] = -1;
+    let mut prev: Vec<i32> = (0..nseq as i32).map(|i| i - 1).collect();
+
+    let mut tmptmplen = vec![0.0f64; nseq];
+    let mut hist = vec![-1i32; nseq];
+    let mut nmemar = vec![1i32; nseq];
+
+    let mut tree: Vec<Option<String>> = match (treeout, names) {
+        (true, Some(names)) => (0..nseq)
+            .map(|i| Some(format!("\n{}_{}\n", i + 1, crate::tree::newick_name(&names[i], outnumber))))
+            .collect(),
+        _ => vec![None; nseq],
+    };
+    let mut treetmp = String::new();
+
+    // `im` is declared outside the loop and initialised to -1: a step that
+    // finds nothing below 999.9 reuses the previous step's `im` -- including
+    // the value the swap below left there. `jm` is reassigned from
+    // `nearest[im]` before every use, so only `im` has to survive the step.
+    let mut im: i32 = -1;
+
+    for k in 0..nseq - 1 {
+        let mut minscore = 999.9f64;
+        // `for( acpti=ac; acpti->next!=NULL; acpti=acpti->next )`: the last
+        // live element is never examined.
+        let mut p = 0i32;
+        while next[p as usize] != -1 {
+            if mindist[p as usize] < minscore {
+                im = p;
+                minscore = mindist[p as usize];
+            }
+            p = next[p as usize];
+        }
+        let mut jm = nearest[im as usize];
+        if jm < im {
+            std::mem::swap(&mut im, &mut jm);
+        }
+        let (imu, jmu) = (im as usize, jm as usize);
+
+        // `topol[k][side]`, memsave form: a node is named by the smaller of
+        // its previous node's two representatives.
+        let prev0 = hist[imu];
+        dep[k].child0 = prev0;
+        let nmemim = nmemar[imu];
+        topol[k][0] = if prev0 == -1 {
+            im
+        } else {
+            topol[prev0 as usize][0].min(topol[prev0 as usize][1])
+        };
+
+        let prev1 = hist[jmu];
+        dep[k].child1 = prev1;
+        let nmemjm = nmemar[jmu];
+        topol[k][1] = if prev1 == -1 {
+            jm
+        } else {
+            topol[prev1 as usize][0].min(topol[prev1 as usize][1])
+        };
+
+        let minscore = minscore * 0.5;
+        len[k][0] = minscore - tmptmplen[imu];
+        len[k][1] = minscore - tmptmplen[jmu];
+        dep[k].distfromtip = minscore;
+        tmptmplen[imu] = minscore;
+        hist[imu] = k as i32;
+        nmemar[imu] = nmemim + nmemjm;
+        mindist[imu] = 999.9;
+
+        if let CompactDist::Kmer { pointt, .. } = src {
+            table1.iter_mut().for_each(|v| *v = 0);
+            table2.iter_mut().for_each(|v| *v = 0);
+            crate::dist::makecompositiontable_p(&mut table1, &pointt[imu]);
+            crate::dist::makecompositiontable_p(&mut table2, &pointt[jmu]);
+        }
+
+        let mut newarr = vec![0.0f64; nseq];
+        let joblist: Vec<i32> = {
+            let mut v = Vec::new();
+            let mut p = 0i32;
+            while p != -1 {
+                v.push(p);
+                p = next[p as usize];
+            }
+            v
+        };
+
+        // `verycompact{kmer,msa}distarrthreadjoblist`, serial.
+        for &ji in &joblist {
+            let i = ji as usize;
+            if ji == im || ji == jm {
+                continue;
+            }
+            let (d1, d2) = match src {
+                CompactDist::Kmer {
+                    pointt,
+                    nlen,
+                    lenfaca,
+                    lenfacb,
+                    lenfacc,
+                    lenfacd,
+                    ..
+                } => {
+                    let sx = sextet.as_mut().unwrap();
+                    let a = distcompact(
+                        nlen[imu], nlen[i], sx.common(&table1, &pointt[i]),
+                        selfscore[imu], selfscore[i],
+                        *lenfaca, *lenfacb, *lenfacc, *lenfacd,
+                    );
+                    let b = distcompact(
+                        nlen[jmu], nlen[i], sx.common(&table2, &pointt[i]),
+                        selfscore[jmu], selfscore[i],
+                        *lenfaca, *lenfacb, *lenfacc, *lenfacd,
+                    );
+                    (a, b)
+                }
+                CompactDist::Msa { cn, seq, skiptable } => {
+                    let a = distcompact_msa(
+                        crate::score::naivepairscorefast(
+                            cn, &seq[imu], &seq[i], &skiptable[imu], &skiptable[i], cn.penalty_dist,
+                        ),
+                        selfscore[imu],
+                        selfscore[i],
+                    );
+                    let b = distcompact_msa(
+                        crate::score::naivepairscorefast(
+                            cn, &seq[jmu], &seq[i], &skiptable[jmu], &skiptable[i], cn.penalty_dist,
+                        ),
+                        selfscore[jmu],
+                        selfscore[i],
+                    );
+                    (a, b)
+                }
+            };
+            let tmpdouble = cluster_mix(d1, d2);
+            newarr[i] = tmpdouble;
+            if tmpdouble < mindist[i] {
+                mindist[i] = tmpdouble;
+                nearest[i] = im;
+            }
+            if nearest[i] == jm {
+                nearest[i] = im;
+            }
+        }
+
+        // The merged node's own nearest neighbour, in a second pass -- the C
+        // notes it cannot be done inside the worker, which is parallel there.
+        for &ji in &joblist {
+            let i = ji as usize;
+            if ji != im && ji != jm && newarr[i] < mindist[imu] {
+                mindist[imu] = newarr[i];
+                nearest[imu] = ji;
+            }
+        }
+
+        if treeout && names.is_some() {
+            treetmp = format!(
+                "({}:{:7.5},{}:{:7.5})",
+                tree[imu].as_deref().unwrap_or(""),
+                len[k][0],
+                tree[jmu].as_deref().unwrap_or(""),
+                len[k][1]
+            );
+            tree[imu] = Some(treetmp.clone());
+            tree[jmu] = None;
+        }
+
+        // Unlink jm. jm >= 1 always, so `prev[jm]` is a real element.
+        let pj = prev[jmu];
+        let nj = next[jmu];
+        next[pj as usize] = nj;
+        if nj != -1 {
+            prev[nj as usize] = pj;
+        }
+    }
+
+    if treeout && names.is_some() {
+        std::fs::write("infile.tree", format!("{};\n", treetmp)).expect("Cannot open infile.tree");
+    }
+
+    Tree { topol, len, dep }
 }

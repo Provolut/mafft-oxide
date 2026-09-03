@@ -304,13 +304,6 @@ for f in "$CORPUS"/*; do
       # The C aborting, or the port refusing the undefined varpairscore case,
       # is expected and counts as a pass -- but only for auto/test.
       case "$kw" in
-        youngestlinkage)
-          # `compacttree == 4` is the one compact keyword whose builder is
-          # `compacttree_memsaveselectable`, which is not ported.
-          if [ $rst -eq 1 ] && grep -qa "compacttree_memsaveselectable" "$work/r/err.log"; then
-            pass=$((pass+1)); continue
-          fi
-          ;;
         auto*|test*)
           if [ $cst -ge 128 ]; then pass=$((pass+1)); continue; fi
           if [ $rst -eq 1 ] && grep -qa "writes its terminator outside" "$work/r/err.log"; then

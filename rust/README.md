@@ -133,9 +133,6 @@ quietly returning a different alignment:
   the port refuses instead. 78 of the 88 corpus inputs never reach it.
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
   external programs
-- `--treein youngestlinkage`, whose builder is `compacttree_memsaveselectable`
-  (mltaln9.c:5491). The other compact keywords -- `compact`, `very compact`,
-  `stepadd` -- go through `compacttreegivendist` and are ported.
 - the memory-saving aligner and the other `alg` values, both when asked for
   (`-M`, `-&`, `-@`) and when the C reaches for it on its own. That second case
   is the one that matters: past 30000 columns the C sets `alg = 'M'` itself
