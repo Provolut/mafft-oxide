@@ -11,7 +11,7 @@ into the harnesses with the feature.
 
 Done: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`,
 `--legacygapcost`, `-y`/`-T`/`-t`/`-^`/`-U`/`-q`, 10-mer nucleotide tuples,
-`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`).
+`--add`/`--addprofile`/`--keeplength`/`--mapout`, `--allowshift`, `--aamatrix`, `-r`, `--merge` (`-H`), `--text`/`--textmatrix`.
 Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
@@ -24,28 +24,21 @@ before porting: `--allowshift` cost nothing -- the warp DP was already in
 `tbfast`'s `--add` is not `disttbfast`'s (it skips the `samemembern` pass and
 divides the added sequences' weights by 100), which cost a day.
 
-1. **`--text` / `--textmatrix` (`nblosum == -2`).** The 256-symbol alphabet:
-   `nalphabets` and `charsize` become 0x100, so `NALPHABETS` stops being a
-   compile-time constant and every bound derived from it follows. Mechanical,
-   wide, and every site is a chance to break bit-exactness -- but the
-   harnesses would catch it. (`--aamatrix`, `nblosum == -1`, is done: it keeps
-   the 26-letter alphabet and only swaps the table.)
-
-2. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
+1. **External anchors (`-l <file>`)**: `readexternalanchors`, `indexanchors`,
    `Falign_givenanchors` (~670 lines). Blocked, not just big: `anchcomp` and
    `anchscorecomp` break ties on `(int)((void *)p - (void *)q)`, the addresses
    of the two elements *inside the array qsort is permuting*. Matching that
    means reimplementing glibc's qsort, not just the comparator. Decide whether
    to accept a documented divergence before starting.
 
-3. **The generated guide trees `--treein` can ask for** -- `shuffle`,
+2. **The generated guide trees `--treein` can ask for** -- `shuffle`,
    `pileup`, `auto`, `compact`, `stepadd`, `youngestlinkage`, `nodepair`, each
    a separate construction. Refused by name today.
 
-4. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
+3. **`-M` (memsave) and the other `alg` values** (`-&`, `-@`): the linear-space
    aligner in `MSalignmm.c` / `partSalignmm.c`. Largest, lowest demand.
 
-5. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
+4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
    output; porting them is scope growth, not parity.
 

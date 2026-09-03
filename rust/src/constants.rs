@@ -219,7 +219,7 @@ fn mtxmlt_double(mtx1: &mut [[f64; 11]; 11], mtx2: &[[f64; 11]; 11]) {
 /// `ambiguousscore()`: give each IUPAC ambiguity code the mean score of the
 /// bases it stands for. Row `i` is filled first and then mirrored, so the
 /// diagonal entries below are computed from the *unambiguous* diagonal.
-fn ambiguousscore(amino_n: &[i32; CHARSIZE], n_dis: &mut [[i32; NALPHABETS]; NALPHABETS]) {
+fn ambiguousscore(amino_n: &[i32], n_dis: &mut [Vec<i32>]) {
     let ix = |c: u8| amino_n[c as usize] as usize;
     let (a, g, c, t) = (ix(b'a'), ix(b'g'), ix(b'c'), ix(b't'));
     let two: [(u8, usize, usize); 6] = [
@@ -266,7 +266,7 @@ fn ambiguousscore(amino_n: &[i32; CHARSIZE], n_dis: &mut [[i32; NALPHABETS]; NAL
 }
 
 /// `nscore()`: `--anysymbol` for nucleotides, scoring `n` against everything.
-fn nscore(amino_n: &[i32; CHARSIZE], n_dis: &mut [[i32; NALPHABETS]; NALPHABETS]) {
+fn nscore(amino_n: &[i32], n_dis: &mut [Vec<i32>]) {
     let n = amino_n[b'n' as usize] as usize;
     for i in 0..NALPHABETS {
         n_dis[i][n] = shishagonyuu(0.25 * n_dis[i][i] as f64);
@@ -278,16 +278,21 @@ fn nscore(amino_n: &[i32; CHARSIZE], n_dis: &mut [[i32; NALPHABETS]; NALPHABETS]
 
 /// Everything `constants()` publishes as a global.
 pub struct Constants {
+    /// `nalphabets` / `charsize`: 26 and 0x80 for the ordinary alphabets, both
+    /// 0x100 for `--text`. Every matrix below is sized from these, so code that
+    /// walks them must use `cn.nalphabets`, not the `NALPHABETS` default.
+    pub nalphabets: usize,
+    pub charsize: usize,
     /// Residue alphabet, index -> character.
-    pub amino: [u8; NALPHABETS],
-    /// Character -> alphabet index, or -1.
-    pub amino_n: [i32; CHARSIZE],
+    pub amino: Vec<u8>,
+    /// Character -> alphabet index, or -1. `charsize` long.
+    pub amino_n: Vec<i32>,
     /// Character -> residue group (used by the 6-mer distance).
     pub amino_grp: [i32; 0x100],
     /// Integer score matrix over alphabet indices.  The two matrices below are
     /// derived from it; it is kept because it is what the golden test compares.
     #[allow(dead_code)]
-    pub n_dis: [[i32; NALPHABETS]; NALPHABETS],
+    pub n_dis: Vec<Vec<i32>>,
     /// `n_dis` scaled by `consweight_multi` (1.0), used by the profile DP.
     pub n_dis_consweight_multi: Vec<Vec<f64>>,
     /// Score matrix indexed by character, used by the 1-vs-1 DP and by
@@ -376,9 +381,16 @@ impl Constants {
         let dorp = if args.nblosum < 0 { b'p' } else { dorp };
         let trywarp = !(args.penalty_shift_factor >= 10.0);
 
-        let mut amino = [0u8; NALPHABETS];
+        // `--text` (`nblosum == -2`) widens the alphabet to every byte.
+        let nalphabets = if dorp == b'p' && args.scoremtx == 1 && args.nblosum == -2 {
+            0x100
+        } else {
+            NALPHABETS
+        };
+        let charsize = if nalphabets == 0x100 { 0x100 } else { CHARSIZE };
+        let mut amino = vec![0u8; nalphabets];
         let mut amino_grp = [0i32; 0x100];
-        let mut n_dis = [[0i32; NALPHABETS]; NALPHABETS];
+        let mut n_dis = vec![vec![0i32; nalphabets]; nalphabets];
         let penalty;
         let penalty_ex;
         let penalty_dist;
@@ -520,6 +532,129 @@ impl Constants {
             ambiguousscore(&amino_n, &mut n_dis);
             if args.nwildcard {
                 nscore(&amino_n, &mut n_dis);
+            }
+        } else if args.scoremtx == 1 && args.nblosum == -2 {
+            // `--text` / `--textmatrix`: every byte is a letter of its own, so
+            // the alphabet is 0x100 wide and its "residues" are the byte values
+            // themselves. The matrix starts as identity-ish -- 1.0 on the
+            // diagonal, -1.0 everywhere else, where -1.0 doubles as "no score
+            // given" -- and `_aamtx` overrides individual cells.
+            nscored = 0x100;
+            eprintln!("nalphabets = {}", nalphabets);
+
+            let mut ppenalty = args.ppenalty;
+            let mut ppenalty_dist = args.ppenalty_dist;
+            let mut ppenalty_ex = args.ppenalty_ex;
+            let mut poffset = args.poffset;
+            let mut ppenalty_op = args.ppenalty_op;
+            if ppenalty == crate::params::NOTSPECIFIED {
+                ppenalty = DEFAULTGOP_B;
+            }
+            if ppenalty_dist == crate::params::NOTSPECIFIED {
+                ppenalty_dist = ppenalty;
+            }
+            if ppenalty_op == crate::params::NOTSPECIFIED {
+                ppenalty_op = DEFAULTGOP_B;
+            }
+            if ppenalty_ex == crate::params::NOTSPECIFIED {
+                ppenalty_ex = DEFAULTGEP_B;
+            }
+            if poffset == crate::params::NOTSPECIFIED {
+                poffset = DEFAULTOFS_B;
+            }
+            penalty = (600.0 / 1000.0 * ppenalty as f64 + 0.5) as i32;
+            penalty_dist = (600.0 / 1000.0 * ppenalty_dist as f64 + 0.5) as i32;
+            penalty_shift = (args.penalty_shift_factor * penalty as f64) as i32;
+            penalty_op = (600.0 / 1000.0 * ppenalty_op as f64 + 0.5) as i32;
+            penalty_ex = (600.0 / 1000.0 * ppenalty_ex as f64 + 0.5) as i32;
+            offset = (600.0 / 1000.0 * poffset as f64 + 0.5) as i32;
+
+            let mut n_distmp = vec![vec![0.0f64; nalphabets]; nalphabets];
+            let mut freq = vec![0.0f64; nalphabets];
+            let userdefined = crate::blosum::extendedmtx(
+                nalphabets,
+                &mut n_distmp,
+                &mut freq,
+                &mut amino,
+                &mut amino_grp,
+            );
+
+            let mut amino_n = vec![-1i32; 0x100];
+            for i in 0..nalphabets {
+                amino_n[amino[i] as usize] = i as i32;
+            }
+
+            // Unlike every other branch, `--text` always derives the
+            // frequencies: from the data with `--fmodel`, otherwise from which
+            // cells of the matrix were given a score at all.
+            let datafreq = if args.fmodel == 1 {
+                calcfreq_extended(seq, &amino_n, nalphabets)
+            } else {
+                calcfreq_from_scoremtx(&n_distmp, nalphabets)
+            };
+            let freq1 = &datafreq;
+
+            if userdefined {
+                if let Some(c) = checkscoremtx(&n_distmp, seq, &amino_n, nalphabets) {
+                    eprintln!("\n\nAlphabet {} (0x{:x}) is used in the sequence file but no score involving this alphabet is given in the matrix file.", c as u8 as char, c);
+                    eprintln!("Check if the data is as intended.\n\n");
+                    std::process::exit(1);
+                }
+            }
+
+            let mut average = 0.0f64;
+            if args.fmodel != -1 {
+                for i in 0..nalphabets {
+                    for j in 0..nalphabets {
+                        average += n_distmp[i][j] * freq1[i] * freq1[j];
+                    }
+                }
+            }
+            for i in 0..nalphabets {
+                for j in 0..nalphabets {
+                    // -1.0 means "not given", and becomes exactly `-average`
+                    // rather than `-1 - average`.
+                    if n_distmp[i][j] == -1.0 {
+                        n_distmp[i][j] = -average;
+                    } else {
+                        n_distmp[i][j] -= average;
+                    }
+                }
+            }
+
+            let mut average = 0.0f64;
+            for i in 0..nalphabets {
+                average += n_distmp[i][i] * freq1[i];
+            }
+            if average < 0.0 {
+                eprintln!("\nUnrealistic scoring matrix.  Give larger positive values to matches (A/A, B/B, etc).\n");
+                std::process::exit(1);
+            }
+            for i in 0..nalphabets {
+                for j in 0..nalphabets {
+                    n_distmp[i][j] *= 600.0 / average;
+                }
+            }
+            for i in 0..nalphabets {
+                for j in 0..nalphabets {
+                    n_distmp[i][j] -= offset as f64;
+                }
+            }
+            for i in 0..nalphabets {
+                for j in 0..nalphabets {
+                    n_distmp[i][j] = shishagonyuu(n_distmp[i][j]) as f64;
+                }
+            }
+            for i in 0..nalphabets {
+                for j in 0..nalphabets {
+                    n_dis[i][j] = n_distmp[i][j] as i32;
+                }
+            }
+            // The gap row and column are zeroed afterwards.
+            let gap = amino_n[b'-' as usize] as usize;
+            for i in 0..nalphabets {
+                n_dis[i][gap] = 0;
+                n_dis[gap][i] = 0;
             }
         } else if args.scoremtx != 1 {
             // The C's final `else`: JTT or transmembrane, selected by `-j` /
@@ -776,16 +911,16 @@ impl Constants {
         }
 
         // --- common tail of constants() ---
-        let mut amino_n = [-1i32; CHARSIZE];
-        for i in 0..NALPHABETS {
+        let mut amino_n = vec![-1i32; charsize];
+        for i in 0..nalphabets {
             amino_n[amino[i] as usize] = i as i32;
         }
 
-        let mut amino_dis = vec![vec![0i32; CHARSIZE]; CHARSIZE];
-        let mut n_dis_consweight_multi = vec![vec![0.0f64; NALPHABETS]; NALPHABETS];
-        let mut amino_dis_consweight_multi = vec![vec![0.0f64; CHARSIZE]; CHARSIZE];
-        for i in 0..NALPHABETS {
-            for j in 0..NALPHABETS {
+        let mut amino_dis = vec![vec![0i32; charsize]; charsize];
+        let mut n_dis_consweight_multi = vec![vec![0.0f64; nalphabets]; nalphabets];
+        let mut amino_dis_consweight_multi = vec![vec![0.0f64; charsize]; charsize];
+        for i in 0..nalphabets {
+            for j in 0..nalphabets {
                 amino_dis[amino[i] as usize][amino[j] as usize] = n_dis[i][j];
                 n_dis_consweight_multi[i][j] = n_dis[i][j] as f64 * CONSWEIGHT_MULTI;
                 amino_dis_consweight_multi[amino[i] as usize][amino[j] as usize] =
@@ -795,7 +930,7 @@ impl Constants {
 
         // offsetFFT = (int)( 600.0 / 1000.0 * (-0) + 0.5 ) == 0
         let offset_fft = (600.0 / 1000.0 * (-0.0f64) + 0.5) as i32;
-        let mut n_dis_fft = vec![vec![0i32; NALPHABETS]; NALPHABETS];
+        let mut n_dis_fft = vec![vec![0i32; nalphabets]; nalphabets];
         for i in 0..nscored {
             for j in 0..nscored {
                 n_dis_fft[i][j] = n_dis[i][j] + offset - offset_fft;
@@ -818,6 +953,8 @@ impl Constants {
         };
 
         Constants {
+            nalphabets,
+            charsize,
             amino_dis_consweight_multi,
             n_dis_fft,
             polarity: normalise(&POLARITY_),
@@ -982,27 +1119,110 @@ pub fn makedynamicmtx(
     out: &mut [Vec<f64>],
     input: &[Vec<f64>],
     offset: f64,
-    amino: &[u8; NALPHABETS],
+    amino: &[u8],
     specificityconsideration: f64,
 ) {
+    let nalphabets = input.len();
     let offset = dist2offset(offset * 2.0, specificityconsideration);
-    for i in 0..NALPHABETS {
-        for j in 0..NALPHABETS {
+    for i in 0..nalphabets {
+        for j in 0..nalphabets {
             out[i][j] = input[i][j];
         }
     }
     if offset == 0.0 {
         return;
     }
-    for i in 0..NALPHABETS {
+    for i in 0..nalphabets {
         if amino[i] == b'-' {
             continue;
         }
-        for j in 0..NALPHABETS {
+        for j in 0..nalphabets {
             if amino[j] == b'-' {
                 continue;
             }
             out[i][j] = input[i][j] + offset * 600.0;
         }
     }
+}
+
+/// `calcfreq_extended()`: residue frequencies from the data, `--text`'s form.
+/// Unlike [`calcfreq`] there is no 0.0001 floor, so a letter absent from the
+/// input keeps a frequency of exactly zero.
+fn calcfreq_extended(seq: &[Vec<u8>], amino_n: &[i32], nscored: usize) -> Vec<f64> {
+    let mut datafreq = vec![0.0f64; nscored];
+    for s in seq {
+        for &c in s {
+            let aan = amino_n[c as usize];
+            if aan >= 0 && (aan as usize) < nscored && c != b'-' {
+                datafreq[aan as usize] += 1.0;
+            }
+        }
+    }
+    let mut total = 0.0f64;
+    for v in datafreq.iter() {
+        total += *v;
+    }
+    for v in datafreq.iter_mut() {
+        *v /= total;
+    }
+    let mut total = 0.0f64;
+    for v in datafreq.iter() {
+        total += *v;
+    }
+    for v in datafreq.iter_mut() {
+        *v /= total;
+    }
+    datafreq
+}
+
+/// `calcfreq_from_scoremtx()`: without `--fmodel`, `--text` weights every
+/// letter that appears anywhere in the *matrix* equally, and the rest zero.
+fn calcfreq_from_scoremtx(n_distmp: &[Vec<f64>], nalphabets: usize) -> Vec<f64> {
+    let mut datafreq = vec![0.0f64; nalphabets];
+    let mut nused = 0usize;
+    for i in 0..nalphabets {
+        for j in 0..i {
+            if n_distmp[i][j] != -1.0 {
+                if datafreq[i] == 0.0 {
+                    nused += 1;
+                }
+                if datafreq[j] == 0.0 {
+                    nused += 1;
+                }
+                datafreq[i] = 1.0;
+                datafreq[j] = 1.0;
+            }
+        }
+    }
+    for v in datafreq.iter_mut() {
+        *v /= nused as f64;
+    }
+    eprintln!("nused=");
+    datafreq
+}
+
+/// `checkscoremtx()`: the first alphabet index that appears in the data but
+/// has no score at all in the matrix, if any.
+fn checkscoremtx(
+    n_distmp: &[Vec<f64>],
+    seq: &[Vec<u8>],
+    amino_n: &[i32],
+    nalphabets: usize,
+) -> Option<usize> {
+    for s in seq {
+        for &c in s {
+            let aan = amino_n[c as usize];
+            if aan < 0 {
+                continue;
+            }
+            let aan = aan as usize;
+            if !(0..nalphabets).any(|k| n_distmp[k][aan] != -1.0) {
+                // The C returns `aan`, and 0 doubles as "nothing found".
+                if aan != 0 {
+                    return Some(aan);
+                }
+            }
+        }
+    }
+    None
 }

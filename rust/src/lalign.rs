@@ -18,7 +18,7 @@
 //!   computed as a prefix scan ahead of the cells that consume it. Same
 //!   operations in the same order; every value is an exact integer here.
 
-use crate::constants::{Constants, NALPHABETS};
+use crate::constants::Constants;
 use crate::warp::Warp;
 
 /// The scratch buffers `L__align11` and friends keep in `static`s.
@@ -124,8 +124,8 @@ impl LalignState {
 
 /// Fill a 256x256 character-indexed matrix from the alphabet-indexed one.
 fn fill_amino_dynamicmtx(cn: &Constants, dst: &mut [Vec<f64>], src: &[Vec<f64>]) {
-    for i in 0..NALPHABETS {
-        for j in 0..NALPHABETS {
+    for i in 0..cn.nalphabets {
+        for j in 0..cn.nalphabets {
             dst[cn.amino[i] as usize][cn.amino[j] as usize] = src[i][j];
         }
     }

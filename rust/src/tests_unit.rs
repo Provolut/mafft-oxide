@@ -206,7 +206,7 @@ fn dynamic_matrix_shifts_uniformly() {
 #[test]
 fn fasta_reader_filters_and_upcases() {
     let inp = b">a\nac-de\n>b\nAC*DE\n>c\nac de 1 2\n".to_vec();
-    let r = io::read_data(inp, None, false);
+    let r = io::read_data(inp, None, false, false);
     assert_eq!(r.njob, 3);
     assert_eq!(r.dorp, b'p');
     assert_eq!(r.seq[0], b"AC-DE");
@@ -223,7 +223,7 @@ fn fasta_reader_filters_and_upcases() {
 fn long_names_are_truncated_like_the_c() {
     let long = "N".repeat(400);
     let inp = format!(">{}\nACDE\n>b\nACDE\n", long).into_bytes();
-    let r = io::read_data(inp, None, false);
+    let r = io::read_data(inp, None, false, false);
     assert_eq!(r.name[0].len(), 1 + (io::B - 2));
     assert_eq!(r.name[0][0], b'=');
     let mut out = Vec::new();
@@ -235,10 +235,10 @@ fn long_names_are_truncated_like_the_c() {
 #[test]
 fn nucleotide_input_is_detected() {
     let inp = b">a\nacgtacgtacgtacgt\n>b\nacgtacgtacgtacgt\n".to_vec();
-    assert_eq!(io::read_data(inp, None, false).dorp, b'd');
+    assert_eq!(io::read_data(inp, None, false, false).dorp, b'd');
     // ...unless the caller forces the type.
     let inp = b">a\nacgtacgtacgtacgt\n>b\nacgtacgtacgtacgt\n".to_vec();
-    assert_eq!(io::read_data(inp, Some(b'p'), false).dorp, b'p');
+    assert_eq!(io::read_data(inp, Some(b'p'), false, false).dorp, b'p');
 }
 
 #[test]
@@ -250,10 +250,10 @@ fn write_data_round_trips_through_read_data() {
         src.extend_from_slice(s);
         src.push(b'\n');
     }
-    let r = io::read_data(src, None, false);
+    let r = io::read_data(src, None, false, false);
     let mut out = Vec::new();
     io::write_data(&mut out, &r.name, &r.seq);
-    let r2 = io::read_data(out, None, false);
+    let r2 = io::read_data(out, None, false, false);
     assert_eq!(r.name, r2.name);
     assert_eq!(r.seq, r2.seq);
 }
@@ -1385,8 +1385,8 @@ fn dna_ambiguity_codes_are_dropped_from_tuples() {
 #[test]
 fn reader_lower_cases_nucleotides_only() {
     let fasta = b">a\nACGTacgtACGT\n>b\nacgtACGTacgt\n".to_vec();
-    let d = io::read_data(fasta.clone(), Some(b'd'), false);
-    let p = io::read_data(fasta, Some(b'p'), false);
+    let d = io::read_data(fasta.clone(), Some(b'd'), false, false);
+    let p = io::read_data(fasta, Some(b'p'), false, false);
     assert_eq!(d.dorp, b'd');
     assert_eq!(p.dorp, b'p');
     for (ds, ps) in d.seq.iter().zip(p.seq.iter()) {
@@ -1399,9 +1399,9 @@ fn reader_lower_cases_nucleotides_only() {
 #[test]
 fn sequence_type_is_detected_from_composition() {
     let dna = b">a\nacgtacgtacgtacgtacgt\n>b\nacgtacgtacgtacgtacgt\n".to_vec();
-    assert_eq!(io::read_data(dna, None, false).dorp, b'd');
+    assert_eq!(io::read_data(dna, None, false, false).dorp, b'd');
     let prot = b">a\nMKWVTFISLLLLFSSAYS\n>b\nMKWVTFISLLLLFSSAYS\n".to_vec();
-    assert_eq!(io::read_data(prot, None, false).dorp, b'p');
+    assert_eq!(io::read_data(prot, None, false, false).dorp, b'p');
 }
 
 /// A nucleotide alignment still preserves its inputs, and the DNA branch is

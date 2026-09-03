@@ -135,12 +135,41 @@ fn filter_seq(raw: &[u8], lower: bool) -> Vec<u8> {
     out
 }
 
-/// `load1SeqWithoutName_realloc()`: read residues up to the next record.
-fn load1_seq_without_name(fp: &mut CFile) -> Vec<u8> {
-    load1_seq_without_name_case(fp, false)
+/// How the reader cleans up a record's body. `--text` (`nblosum == -2`) keeps
+/// every byte and only drops whitespace, where the ordinary modes keep letters
+/// and case-fold.
+#[derive(Clone, Copy, PartialEq)]
+pub enum SeqFilter {
+    Upper,
+    Lower,
+    /// `charfilter()`.
+    Text,
 }
 
-fn load1_seq_without_name_case(fp: &mut CFile, lower: bool) -> Vec<u8> {
+/// `charfilter()`: drop LF, space and CR; keep everything else, whatever it is.
+/// `=`, `<` and `>` are refused because the reader uses them as markers.
+fn charfilter(raw: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(raw.len());
+    for &c in raw {
+        if c == b'=' || c == b'<' || c == b'>' {
+            eprintln!();
+            eprintln!("Characters '= < >' can be used only in the title lines in the --anysymbol or --text mode.");
+            eprintln!();
+            std::process::exit(1);
+        }
+        if c != 0x0a && c != 0x20 && c != 0x0d {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// `load1SeqWithoutName_realloc()`: read residues up to the next record.
+fn load1_seq_without_name(fp: &mut CFile) -> Vec<u8> {
+    load1_seq_without_name_case(fp, SeqFilter::Upper)
+}
+
+fn load1_seq_without_name_case(fp: &mut CFile, filter: SeqFilter) -> Vec<u8> {
     let mut raw = Vec::new();
     let mut b = b'\n';
     loop {
@@ -160,7 +189,11 @@ fn load1_seq_without_name_case(fp: &mut CFile, lower: bool) -> Vec<u8> {
             }
         }
     }
-    filter_seq(&raw, lower)
+    match filter {
+        SeqFilter::Text => charfilter(&raw),
+        SeqFilter::Lower => filter_seq(&raw, true),
+        SeqFilter::Upper => filter_seq(&raw, false),
+    }
 }
 
 /// `countATGC()`: (nucleotide-ish characters, total alphabetic characters).
@@ -193,7 +226,7 @@ pub struct Input {
 /// `getnumlen()` + `readData_pointer()`.
 ///
 /// `dorp_in` is the sequence type forced on the command line, if any.
-pub fn read_data(bytes: Vec<u8>, dorp_in: Option<u8>, outnumber: bool) -> Input {
+pub fn read_data(bytes: Vec<u8>, dorp_in: Option<u8>, outnumber: bool, text: bool) -> Input {
     let mut fp = CFile::new(bytes);
 
     // --- getnumlen() ---
@@ -204,7 +237,13 @@ pub fn read_data(bytes: Vec<u8>, dorp_in: Option<u8>, outnumber: bool) -> Input 
     let mut total = 0i64;
     for _ in 0..njob {
         let _ = myfgets(&mut fp, 5_000_000 - 1);
-        let tmpseq = load1_seq_without_name(&mut fp);
+        // `getnumlen` runs before `constants()`, so `dorp` is still unset and
+        // the ordinary path upper-cases; only `--text` differs here.
+        let tmpseq = if text {
+            load1_seq_without_name_case(&mut fp, SeqFilter::Text)
+        } else {
+            load1_seq_without_name(&mut fp)
+        };
         if tmpseq.len() > nlenmax {
             nlenmax = tmpseq.len();
         }
@@ -236,7 +275,14 @@ pub fn read_data(bytes: Vec<u8>, dorp_in: Option<u8>, outnumber: bool) -> Input 
         let mut nm = vec![b'='];
         nm.extend_from_slice(&myfgets(&mut fp, B - 2));
         name.push(nm);
-        seq.push(load1_seq_without_name_case(&mut fp, dorp == b'd'));
+        let filter = if text {
+            SeqFilter::Text
+        } else if dorp == b'd' {
+            SeqFilter::Lower
+        } else {
+            SeqFilter::Upper
+        };
+        seq.push(load1_seq_without_name_case(&mut fp, filter));
     }
 
     if outnumber {
@@ -499,5 +545,37 @@ mod subaln_tests {
         assert_eq!(atoi_bytes(b"7 8"), 7);
         assert_eq!(atoi_bytes(b"x9"), 0);
         assert_eq!(atoi_bytes(b""), 0);
+    }
+}
+
+#[cfg(test)]
+mod charfilter_tests {
+    use super::*;
+
+    /// `--text` keeps every byte the ordinary reader would drop.
+    #[test]
+    fn the_text_filter_keeps_punctuation_and_digits() {
+        let fasta = b">a\n!$%&@01\n>b\n{}[]~+/\n".to_vec();
+        let r = read_data(fasta, Some(b'p'), false, true);
+        assert_eq!(r.njob, 2);
+        assert_eq!(r.seq[0], b"!$%&@01".to_vec());
+        assert_eq!(r.seq[1], b"{}[]~+/".to_vec());
+    }
+
+    /// Only LF, space and CR go; case is left alone, unlike every other mode.
+    #[test]
+    fn the_text_filter_drops_only_whitespace_and_keeps_case() {
+        let fasta = b">a\nAb Cd\tEf\n".to_vec();
+        let r = read_data(fasta, Some(b'p'), false, true);
+        // The tab is not in the C's drop list, so it survives.
+        assert_eq!(r.seq[0], b"AbCd\tEf".to_vec());
+    }
+
+    /// The ordinary reader would have dropped all of that.
+    #[test]
+    fn the_ordinary_filter_still_drops_non_letters() {
+        let fasta = b">a\nAb Cd!1\n".to_vec();
+        let r = read_data(fasta, Some(b'p'), false, false);
+        assert_eq!(r.seq[0], b"ABCD".to_vec());
     }
 }

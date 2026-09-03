@@ -376,7 +376,7 @@ pub fn blosum_mtx(
     dorp: u8,
     matrix: &mut [[f64; 20]; 20],
     freq: &mut [f64; 20],
-    amino: &mut [u8; 26],
+    amino: &mut [u8],
     amino_grp: &mut [i32; 0x100],
 ) -> bool {
     // `BLOSUMmtx()`'s dispatch. `n == -1` is `--aamatrix`: the table comes
@@ -544,5 +544,203 @@ mod aamtx_tests {
         // A stray 'e' with no exponent digits is not part of the number.
         assert_eq!(atof_at(b"3e", 0), 3.0);
         assert_eq!(atof_at(b"abc", 3), 0.0);
+    }
+}
+
+/// `checkchar()`: which byte values `_aamtx` may not name in `--text` mode.
+fn checkchar(i: u32) -> bool {
+    i > 0xff
+        || i == 0
+        || i == 0x3E
+        || i == 0x3D
+        || i == 0x3C
+        || i == 0x2D
+        || i == 0x20
+        || i == 0x0d
+        || i == 0x0a
+}
+
+/// `overridematrix()`: `--textmatrix`'s `_aamtx`, one `<hex> <hex> <score>`
+/// per line. A missing file is a warning, not an error.
+///
+/// Returns whether any cell was actually overridden, which is what gates the
+/// "alphabet used but unscored" check.
+fn overridematrix(matrix: &mut [Vec<f64>]) -> bool {
+    let text = match std::fs::read("_aamtx") {
+        Ok(t) => t,
+        Err(_) => {
+            eprintln!("warning: cannot open scorematrix. Use the default one.");
+            return false;
+        }
+    };
+    let mut userdefined = false;
+    for raw in text.split_inclusive(|&c| c == b'\n') {
+        if raw.last() != Some(&b'\n') {
+            // `fgets` then `feof`: a last line with no newline is not read.
+            break;
+        }
+        // `#` truncates the line wherever it appears.
+        let line: &[u8] = match raw.iter().position(|&c| c == b'#') {
+            Some(p) => &raw[..p],
+            None => raw,
+        };
+        let mut it = line
+            .split(|c: &u8| c.is_ascii_whitespace())
+            .filter(|t| !t.is_empty());
+        let (t1, t2, t3) = (it.next(), it.next(), it.next());
+        // `sscanf` returning EOF (nothing at all on the line) is skipped;
+        // anything else short of three fields is fatal.
+        if t1.is_none() {
+            continue;
+        }
+        let parse_hex = |t: Option<&[u8]>| -> Option<u32> {
+            let t = t?;
+            let s = std::str::from_utf8(t).ok()?;
+            let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+            u32::from_str_radix(s, 16).ok()
+        };
+        let i1 = parse_hex(t1);
+        let i2 = parse_hex(t2);
+        let v = t3
+            .and_then(|t| std::str::from_utf8(t).ok())
+            .and_then(|s| s.parse::<f64>().ok());
+        let (i1, i2, v) = match (i1, i2, v) {
+            (Some(a), Some(b), Some(c)) => (a, b, c),
+            _ => {
+                eprintln!("Format error in this line?");
+                eprintln!("{}", String::from_utf8_lossy(raw).trim_end());
+                std::process::exit(1);
+            }
+        };
+        if checkchar(i1) {
+            eprintln!("{}=0x{:x} cannot be used (1)", i1 as u8 as char, i1);
+            std::process::exit(1);
+        }
+        if checkchar(i2) {
+            eprintln!("{}=0x{:x} cannot be used (2)", i2 as u8 as char, i2);
+            std::process::exit(1);
+        }
+        matrix[i1 as usize][i2 as usize] = v;
+        matrix[i2 as usize][i1 as usize] = v;
+        userdefined = true;
+    }
+    userdefined
+}
+
+/// `extendedmtx()`: the `--text` alphabet is the byte values themselves, with
+/// a flat 1.0/-1.0 matrix that `_aamtx` then overrides.
+pub fn extendedmtx(
+    nalphabets: usize,
+    matrix: &mut [Vec<f64>],
+    freq: &mut [f64],
+    amino: &mut [u8],
+    amino_grp: &mut [i32; 0x100],
+) -> bool {
+    for i in 0..nalphabets {
+        amino[i] = i as u8;
+    }
+    for i in 0..nalphabets {
+        amino_grp[amino[i] as usize] = (i % 6) as i32;
+    }
+    for f in freq.iter_mut().take(nalphabets) {
+        *f = 1.0 / nalphabets as f64;
+    }
+    for i in 0..nalphabets {
+        for j in 0..=i {
+            matrix[i][j] = -1.0;
+            matrix[j][i] = -1.0;
+        }
+    }
+    for i in 0..nalphabets {
+        matrix[i][i] = 1.0;
+    }
+    overridematrix(matrix)
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+    use std::io::Write as _;
+
+    fn in_dir<T>(tag: &str, aamtx: Option<&str>, f: impl FnOnce() -> T) -> T {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let d = std::env::temp_dir().join(format!("mafft-rs-text-{}-{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let _ = std::fs::create_dir_all(&d);
+        if let Some(c) = aamtx {
+            let mut fh = std::fs::File::create(d.join("_aamtx")).unwrap();
+            fh.write_all(c.as_bytes()).unwrap();
+        }
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&d).unwrap();
+        let r = f();
+        std::env::set_current_dir(old).unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+        r
+    }
+
+    fn blank() -> (Vec<Vec<f64>>, Vec<f64>, Vec<u8>, [i32; 0x100]) {
+        (
+            vec![vec![0.0; 0x100]; 0x100],
+            vec![0.0; 0x100],
+            vec![0u8; 0x100],
+            [0i32; 0x100],
+        )
+    }
+
+    /// Without `_aamtx` the alphabet is the byte values, the matrix is 1.0 on
+    /// the diagonal and -1.0 elsewhere, and nothing is "user defined".
+    #[test]
+    fn the_default_text_matrix_is_identity_ish() {
+        let (mut m, mut f, mut a, mut g) = blank();
+        let user = in_dir("default", None, || extendedmtx(0x100, &mut m, &mut f, &mut a, &mut g));
+        assert!(!user);
+        for i in 0..0x100 {
+            assert_eq!(a[i], i as u8);
+            assert_eq!(g[i], (i % 6) as i32);
+            assert!((f[i] - 1.0 / 256.0).abs() < 1e-15);
+            assert_eq!(m[i][i], 1.0);
+        }
+        assert_eq!(m[b'a' as usize][b'b' as usize], -1.0);
+    }
+
+    /// `_aamtx` overrides cells symmetrically, and `#` ends a line.
+    #[test]
+    fn the_matrix_file_overrides_cells_both_ways() {
+        let (mut m, mut f, mut a, mut g) = blank();
+        let file = "# a comment\n0x41 0x42 7.5\n0x41 0x41 -3 # trailing comment\n";
+        let user = in_dir("over", Some(file), || {
+            extendedmtx(0x100, &mut m, &mut f, &mut a, &mut g)
+        });
+        assert!(user);
+        assert_eq!(m[0x41][0x42], 7.5);
+        assert_eq!(m[0x42][0x41], 7.5);
+        assert_eq!(m[0x41][0x41], -3.0);
+        // Untouched cells keep the defaults.
+        assert_eq!(m[0x43][0x43], 1.0);
+        assert_eq!(m[0x43][0x44], -1.0);
+    }
+
+    /// A last line with no newline is not read, matching `fgets` + `feof`.
+    #[test]
+    fn a_final_line_without_a_newline_is_dropped() {
+        let (mut m, mut f, mut a, mut g) = blank();
+        in_dir("nonl", Some("0x41 0x42 7\n0x43 0x44 9"), || {
+            extendedmtx(0x100, &mut m, &mut f, &mut a, &mut g)
+        });
+        assert_eq!(m[0x41][0x42], 7.0);
+        assert_eq!(m[0x43][0x44], -1.0, "the unterminated line is ignored");
+    }
+
+    #[test]
+    fn checkchar_rejects_the_reserved_bytes() {
+        // '=' '<' '>' '-' ' ' CR LF and 0, plus anything past a byte.
+        for c in [0x3d, 0x3c, 0x3e, 0x2d, 0x20, 0x0d, 0x0a, 0x00, 0x100] {
+            assert!(checkchar(c), "0x{c:x} should be rejected");
+        }
+        for c in [0x41u32, 0x7e, 0xff, 0x01] {
+            assert!(!checkchar(c), "0x{c:x} should be allowed");
+        }
     }
 }

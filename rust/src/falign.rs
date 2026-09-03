@@ -19,7 +19,7 @@
 //! over from a previous call.
 
 use crate::align::AlignState;
-use crate::constants::{Constants, NALPHABETS};
+use crate::constants::Constants;
 use crate::fft::{calc_naiseki, Cpx, Fft};
 
 /// `NKOUHO` from `fft.h`: how many correlation peaks to try.
@@ -114,12 +114,13 @@ fn alignable_reagion(
         }
     }
 
-    let mut hat1 = [0i32; NALPHABETS + 1];
-    let mut hat2 = [0i32; NALPHABETS + 1];
+    let na = cn.nalphabets;
+    let mut hat1 = vec![0i32; na + 1];
+    let mut hat2 = vec![0i32; na + 1];
 
     for i in 0..len {
-        let mut prf1 = [0.0f64; NALPHABETS];
-        let mut prf2 = [0.0f64; NALPHABETS];
+        let mut prf1 = vec![0.0f64; na];
+        let mut prf2 = vec![0.0f64; na];
         for j in 0..clus1 {
             prf1[cn.amino_n[seq1[j][i] as usize] as usize] += eff1[j];
         }
@@ -127,9 +128,11 @@ fn alignable_reagion(
             prf2[cn.amino_n[seq2[j][i] as usize] as usize] += eff2[j];
         }
 
-        // Linked lists over the occupied letters, highest index first.
-        let mut pre1 = NALPHABETS;
-        let mut pre2 = NALPHABETS;
+        // Linked lists over the occupied letters, highest index first. The
+        // C's bound is a literal 25, not `nalphabets-1`, so under `--text`
+        // every letter above index 25 is silently left out of this score.
+        let mut pre1 = na;
+        let mut pre2 = na;
         for j in (0..=25usize).rev() {
             if prf1[j] != 0.0 {
                 hat1[pre1] = j as i32;
@@ -144,9 +147,9 @@ fn alignable_reagion(
         hat2[pre2] = -1;
 
         let mut s = 0.0f64;
-        let mut k = hat1[NALPHABETS];
+        let mut k = hat1[na];
         while k != -1 {
-            let mut j = hat2[NALPHABETS];
+            let mut j = hat2[na];
             while j != -1 {
                 s += cn.n_dis_fft[k as usize][j as usize] as f64
                     * prf1[k as usize]

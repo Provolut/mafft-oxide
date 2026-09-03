@@ -10,7 +10,7 @@
 //! is supplied, and `treebase()` always supplies one, so nothing in the ported
 //! path can reach them.
 
-use crate::constants::{Constants, NALPHABETS};
+use crate::constants::Constants;
 
 /// `cpmx_calc_new()`: weighted residue composition, `cpmx[letter][column]`.
 ///
@@ -24,7 +24,7 @@ pub fn cpmx_calc_new(
     lgth: usize,
     clus: usize,
 ) {
-    for row in cpmx.iter_mut().take(NALPHABETS) {
+    for row in cpmx.iter_mut().take(cn.nalphabets) {
         for v in row.iter_mut().take(lgth) {
             *v = 0.0;
         }
@@ -157,7 +157,7 @@ pub fn cpmx_calc_add(
     let neweff = eff[clus - 1];
     let orieff = 1.0 - neweff;
     for j in 0..lgth {
-        for row in cpmx.iter_mut().take(NALPHABETS) {
+        for row in cpmx.iter_mut().take(cn.nalphabets) {
             row[j] *= orieff;
         }
         cpmx[cn.amino_n[seq[newmem][j] as usize] as usize][j] += neweff;

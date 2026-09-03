@@ -271,6 +271,86 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --text / --textmatrix (-b -2): the alphabet becomes every byte, so the
+# corpus does not apply -- gen_text.py makes inputs out of characters the
+# ordinary reader would refuse, plus the `_aamtx` that scores them.
+# `minusone` sets a letter's diagonal to -1, which is how `constants()` spells
+# "no score given", and the C then refuses the run; both binaries must agree.
+for variant in full sparse nomatrix unscored minusone; do
+  for seed in 1 2 3 4 5 6 7 8; do
+    for extra in "" "-a" "-F"; do
+      rm -rf "$work/c" "$work/r"
+      mkdir -p "$work/c" "$work/r"
+      python3 "$here/gen_text.py" "$seed" "$variant" "$work/c" || continue
+      cp "$work/c/in.fa" "$work/r/in.fa"
+      [ -f "$work/c/_aamtx" ] && cp "$work/c/_aamtx" "$work/r/_aamtx"
+      TARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -2 -P -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 $extra"
+      ( cd "$work/c" && $CBIN $TARGS < in.fa > out.fa 2> err.log )
+      cst=$?
+      ( cd "$work/r" && $RBIN $TARGS < in.fa > out.fa 2> err.log )
+      rst=$?
+      label="text/$variant/$seed [$extra]"
+      if [ $cst -ne $rst ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+        continue
+      fi
+      bad=""
+      for o in out.fa order hat2; do
+        if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+          cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+        fi
+      done
+      if [ -n "$bad" ]; then
+        fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+      else
+        pass=$((pass+1))
+      fi
+    done
+  done
+done
+
+# --merge (-H): sub-alignments that must come out monophyletic. The groups
+# have to be aligned already, so the C is run once to produce an alignment and
+# gen_merge.py splits it -- `interleave` picks groups the unconstrained UPGMA
+# would split, which is what exercises the veto-and-rescan path.
+HARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+for f in "$CORPUS"/*; do
+  [ -f "$f" ] || continue
+  n=$(grep -c '^>' "$f")
+  [ "$n" -ge 6 ] || continue
+  rm -rf "$work/pre"; mkdir -p "$work/pre"
+  ( cd "$work/pre" && $CBIN $HARGS < "$f" > aligned.fa 2> /dev/null ) || continue
+  [ -s "$work/pre/aligned.fa" ] || continue
+  for spec in "2" "3" "2 interleave" "3 interleave" "4 interleave" "2 interleave preservegaps"; do
+    python3 "$here/gen_merge.py" "$work/pre/aligned.fa" $spec > "$work/pre/st.txt" || continue
+    [ -s "$work/pre/st.txt" ] || continue
+    rm -rf "$work/c" "$work/r"
+    mkdir -p "$work/c" "$work/r"
+    cp "$work/pre/st.txt" "$work/c/_subalignmentstable"
+    cp "$work/pre/st.txt" "$work/r/_subalignmentstable"
+    ( cd "$work/c" && $CBIN $HARGS -H 0 < "$work/pre/aligned.fa" > out.fa 2> err.log )
+    cst=$?
+    ( cd "$work/r" && $RBIN $HARGS -H 0 < "$work/pre/aligned.fa" > out.fa 2> err.log )
+    rst=$?
+    label="$(basename "$f") [-H $spec]"
+    if [ $cst -ne $rst ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      continue
+    fi
+    bad=""
+    for o in out.fa order infile.tree; do
+      if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+        cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+      fi
+    done
+    if [ -n "$bad" ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+    else
+      pass=$((pass+1))
+    fi
+  done
+done
+
 # --add / --addprofile (-I n, -K): the first njob-n sequences are an existing
 # alignment whose columns must survive. The input has to be built from a real
 # alignment, so the C is run once first to produce one.

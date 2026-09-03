@@ -7,7 +7,7 @@
 //! alignment as constraints for the progressive stage.
 
 use crate::align::AlignState;
-use crate::constants::{dist2offset, makedynamicmtx, Constants, NALPHABETS};
+use crate::constants::{dist2offset, makedynamicmtx, Constants};
 use crate::genalign::GenalignState;
 use crate::lalign::LalignState;
 use crate::localhom::{putlocalhom2, LocalHomTable};
@@ -93,7 +93,7 @@ pub fn pairalign(
         }
     }
 
-    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];
+    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; cn.nalphabets]; cn.nalphabets];
     let spec = cn.specificityconsideration;
 
     let mut selfscore = vec![0.0f64; njob];

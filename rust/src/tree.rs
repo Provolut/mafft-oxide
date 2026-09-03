@@ -829,7 +829,7 @@ pub fn upgma_treeout_constrained(
 
         // `topol[k][side]` keeps the full member list here: the smaller-headed
         // child's members first, then the other's.
-        let mut build = |side: usize| -> Vec<i32> {
+        let build = |side: usize| -> Vec<i32> {
             let prevnode = hist[side];
             if prevnode == -1 {
                 vec![side as i32]

@@ -13,7 +13,7 @@
 //! an accident of the port — several loops in `A__align` index one element past
 //! the current length.
 
-use crate::constants::{Constants, NALPHABETS};
+use crate::constants::Constants;
 use crate::profile;
 use crate::warp::Warp;
 
@@ -157,10 +157,13 @@ fn match_calc(
     intwork: &mut [Vec<i32>],
     initialize: bool,
 ) {
+    // The alphabet size is however many rows the matrix has: 26 normally,
+    // 0x100 under `--text`.
+    let nalphabets = n_dynamicmtx.len();
     if initialize {
         for j in 0..lgth2 {
             let mut count = 0usize;
-            for l in 0..NALPHABETS {
+            for l in 0..nalphabets {
                 if cpmx2[l][j] != 0.0 {
                     doublework[j][count] = cpmx2[l][j];
                     intwork[j][count] = l as i32;
@@ -171,10 +174,10 @@ fn match_calc(
         }
     }
 
-    let mut scarr = [0.0f64; NALPHABETS];
+    let mut scarr = vec![0.0f64; nalphabets];
     for (l, sc) in scarr.iter_mut().enumerate() {
         let mut s = 0.0;
-        for j in 0..NALPHABETS {
+        for j in 0..nalphabets {
             s += n_dynamicmtx[j][l] * cpmx1[j][i1];
         }
         *sc = s;
@@ -348,7 +351,9 @@ fn create_cpmx_result(
     gt2: &[u8],
 ) -> Vec<Vec<f64>> {
     let alen = gt1.len();
-    let mut out = vec![vec![0.0f64; limk + 1]; NALPHABETS];
+    // `nalphabets + 3`: the profile rows plus gapfreq, opening and final gap
+    // counts, which the caller appends. Only the profile rows are built here.
+    let mut out = vec![vec![0.0f64; limk + 1]; cpmx1.len()];
     for (i, row) in out.iter_mut().enumerate() {
         let mut p = 0usize;
         for j in 0..alen {
@@ -567,15 +572,15 @@ impl AlignState {
             self.fgcp1o = vec![0.0; ll1 + 2];
             self.fgcp2 = vec![0.0; ll2 + 2];
             self.fgcp2o = vec![0.0; ll2 + 2];
-            self.cpmx1 = vec![vec![0.0; ll1 + 2]; NALPHABETS];
-            self.cpmx2 = vec![vec![0.0; ll2 + 2]; NALPHABETS];
+            self.cpmx1 = vec![vec![0.0; ll1 + 2]; cn.nalphabets];
+            self.cpmx2 = vec![vec![0.0; ll2 + 2]; cn.nalphabets];
             self.previousfirstlen = -1;
             self.previousicyc = -1;
             self.gapfreq1 = vec![0.0; ll1 + 2];
             self.gapfreq2 = vec![0.0; ll2 + 2];
             let mw = max_usize(ll1, ll2) + 2;
-            self.doublework = vec![vec![0.0; NALPHABETS]; mw];
-            self.intwork = vec![vec![0; NALPHABETS + 1]; mw];
+            self.doublework = vec![vec![0.0; cn.nalphabets]; mw];
+            self.intwork = vec![vec![0; cn.nalphabets + 1]; mw];
             self.orlgth1 = ll1 - 100;
             self.orlgth2 = ll2 - 100;
         }
@@ -658,11 +663,11 @@ impl AlignState {
             headgapfreq1 = 1.0;
             headgapfreq2 = 1.0;
             match hist1.as_mut() {
-                Some(h) => h[NALPHABETS][lgth1] = 1.0,
+                Some(h) => h[cn.nalphabets][lgth1] = 1.0,
                 None => gapfreq1[lgth1] = 1.0,
             }
             match hist2.as_mut() {
-                Some(h) => h[NALPHABETS][lgth2] = 1.0,
+                Some(h) => h[cn.nalphabets][lgth2] = 1.0,
                 None => gapfreq2[lgth2] = 1.0,
             }
         } else {
@@ -742,20 +747,20 @@ impl AlignState {
         let (cpmx1v, gapfreq1v, ogcp1ov, fgcp1ov): (&[Vec<f64>], &[f64], &[f64], &[f64]) =
             match hist1.as_ref() {
                 Some(h) => (
-                    &h[0..NALPHABETS],
-                    &h[NALPHABETS],
-                    &h[NALPHABETS + 1],
-                    &h[NALPHABETS + 2],
+                    &h[0..cn.nalphabets],
+                    &h[cn.nalphabets],
+                    &h[cn.nalphabets + 1],
+                    &h[cn.nalphabets + 2],
                 ),
                 None => (&cpmx1[..], &gapfreq1[..], &ogcp1o[..], &fgcp1o[..]),
             };
         let (cpmx2v, gapfreq2v, ogcp2ov, fgcp2ov): (&[Vec<f64>], &[f64], &[f64], &[f64]) =
             match hist2.as_ref() {
                 Some(h) => (
-                    &h[0..NALPHABETS],
-                    &h[NALPHABETS],
-                    &h[NALPHABETS + 1],
-                    &h[NALPHABETS + 2],
+                    &h[0..cn.nalphabets],
+                    &h[cn.nalphabets],
+                    &h[cn.nalphabets + 1],
+                    &h[cn.nalphabets + 2],
                 ),
                 None => (&cpmx2[..], &gapfreq2[..], &ogcp2o[..], &fgcp2o[..]),
             };
@@ -1095,8 +1100,8 @@ impl AlignState {
             self.g_orlgth1 = ll1 - 100;
             self.g_orlgth2 = ll2 - 100;
         }
-        for i in 0..NALPHABETS {
-            for j in 0..NALPHABETS {
+        for i in 0..cn.nalphabets {
+            for j in 0..cn.nalphabets {
                 self.g_amino_dynamicmtx[cn.amino[i] as usize][cn.amino[j] as usize] =
                     n_dynamicmtx[i][j];
             }

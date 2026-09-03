@@ -15,7 +15,7 @@
 use std::io::Read;
 
 use mafft_rs::align::AlignState;
-use mafft_rs::constants::{self, Constants};
+use mafft_rs::constants::Constants;
 use mafft_rs::falign::FalignState;
 use mafft_rs::lalign::LalignState;
 use mafft_rs::localhom;
@@ -349,8 +349,8 @@ fn refuse(a: &TbArgs) -> Option<String> {
         bad.push("threads change the result; run with -C 0".into());
     }
     // -b is ignored for nucleotides, whose matrix comes from Kimura's model.
-    // -1 is --aamatrix, a table read from `_aamtx`.
-    let known = |n: i32| matches!(n, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1);
+    // -1 is --aamatrix and -2 is --text; both read `_aamtx`.
+    let known = |n: i32| matches!(n, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1 | -2);
     if a.dorp != Some(b'd')
         && ((a.scoremtx == 1 && !known(a.nblosum))
             || (a.pair_scoremtx == 1 && !known(a.pair_nblosum)))
@@ -468,7 +468,7 @@ fn main() {
     std::io::stdin()
         .read_to_end(&mut bytes)
         .expect("read stdin");
-    let input = io::read_data(bytes, a.dorp, a.outnumber);
+    let input = io::read_data(bytes, a.dorp, a.outnumber, a.nblosum == -2);
     let njob = input.njob;
     if njob < 2 {
         eprintln!("At least 2 sequences should be input!");
@@ -499,7 +499,7 @@ fn main() {
 
     for (i, s) in input.seq.iter().enumerate() {
         for (p, &c) in s.iter().enumerate() {
-            if (c as usize) >= constants::CHARSIZE || pair_cn.amino_n[c as usize] == -1 {
+            if (c as usize) >= pair_cn.charsize || pair_cn.amino_n[c as usize] == -1 {
                 eprintln!("Illegal character {}", c as char);
                 eprintln!("=== Please check site {} in sequence {}.", p + 1, i + 1);
                 std::process::exit(1);

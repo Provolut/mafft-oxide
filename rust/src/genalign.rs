@@ -20,7 +20,7 @@
 //!   `+= fpenalty_EX` lines are commented out in the C, which is what makes
 //!   the unaligned run free after its opening cost.
 
-use crate::constants::{Constants, NALPHABETS};
+use crate::constants::Constants;
 
 fn max_usize(a: usize, b: usize) -> usize {
     if a > b {
@@ -31,8 +31,8 @@ fn max_usize(a: usize, b: usize) -> usize {
 }
 
 fn fill_amino_dynamicmtx(cn: &Constants, dst: &mut [Vec<f64>], src: &[Vec<f64>]) {
-    for i in 0..NALPHABETS {
-        for j in 0..NALPHABETS {
+    for i in 0..cn.nalphabets {
+        for j in 0..cn.nalphabets {
             dst[cn.amino[i] as usize][cn.amino[j] as usize] = src[i][j];
         }
     }

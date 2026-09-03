@@ -6,7 +6,7 @@
 //! position-specific constraints from the pairwise stage are applied.
 
 use crate::align::{AlignState, CpmxHist};
-use crate::constants::{makedynamicmtx, Constants, NALPHABETS};
+use crate::constants::{makedynamicmtx, Constants};
 use crate::falign::{falign, FalignState};
 use crate::localhom::{fastshrinklocalhom_half, fillimp, LocalHomTable};
 use crate::tree::Tree;
@@ -95,7 +95,7 @@ pub fn treebase(
     let mut fftlog = vec![1i32; njob];
     let mut impmtx: Vec<Vec<f64>> = Vec::new();
     let mut impalloclen = 0usize;
-    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];
+    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; cn.nalphabets]; cn.nalphabets];
 
     for l in 0..njob - 1 {
         let moa = opts.mergeoralign.map(|m| m[l]).unwrap_or(b'a');
@@ -363,7 +363,7 @@ pub fn dooneiteration(
     const ITERATIVECYCLE: usize = 2;
     let outgap = opts.outgap;
     let mut fftlog = vec![1i32; njob];
-    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; NALPHABETS]; NALPHABETS];
+    let mut dynmtx: Vec<Vec<f64>> = vec![vec![0.0; cn.nalphabets]; cn.nalphabets];
 
     for ll in 0..njob * ITERATIVECYCLE {
         let l = ll % njob;

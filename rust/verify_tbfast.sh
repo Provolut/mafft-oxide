@@ -200,6 +200,39 @@ for f in "$CORPUS"/*; do
   done
 done
 
+# --text / --textmatrix (-b -2), through both phases.
+for variant in full sparse nomatrix; do
+  for seed in 1 2 3 4 5 6; do
+    rm -rf "$work/c" "$work/r"
+    mkdir -p "$work/c" "$work/r"
+    python3 "$here/gen_text.py" "$seed" "$variant" "$work/c" || continue
+    cp "$work/c/in.fa" "$work/r/in.fa"
+    [ -f "$work/c/_aamtx" ] && cp "$work/c/_aamtx" "$work/r/_aamtx"
+    TP="-u 0.0 -l 2.7 -C 0 -b -2 -P -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L"
+    TT="-W 0.00001 -V -1.53 -s 0.0 -C 0 -b -2 -P -f -1.53 -Q 100.0 -h 0 -l 2.7 -X 0.1 -O"
+    ( cd "$work/c" && $CBIN _ $TP _ -+ 2 $TT < in.fa > /dev/null 2> err.log )
+    cst=$?
+    ( cd "$work/r" && $RBIN _ $TP _ -+ 2 $TT < in.fa > /dev/null 2> err.log )
+    rst=$?
+    label="text/$variant/$seed"
+    if [ $cst -ne $rst ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
+      continue
+    fi
+    bad=""
+    for o in pre order hat2 hat3; do
+      if [ -f "$work/c/$o" ] || [ -f "$work/r/$o" ]; then
+        cmp -s "$work/c/$o" "$work/r/$o" || bad="$bad $o"
+      fi
+    done
+    if [ -n "$bad" ]; then
+      fail=$((fail+1)); failed="$failed\n  $label (differs:$bad)"
+    else
+      pass=$((pass+1))
+    fi
+  done
+done
+
 # --add / --addprofile (-I n, -K) and --keeplength (-Y) with both --mapout
 # forms. Needs a real alignment to add to, so the C is run once to make one.
 # `disttbfast` builds it: tbfast writes `pre`, not stdout.

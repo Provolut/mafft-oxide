@@ -9,7 +9,7 @@
 use std::io::{Read, Write};
 
 use mafft_rs::align::AlignState;
-use mafft_rs::constants::{self, Constants};
+use mafft_rs::constants::Constants;
 use mafft_rs::params::Args;
 use mafft_rs::treebase::TreebaseOpts;
 use mafft_rs::{addfunctions, dist, falign, io, keeplength, score, tree, treebase};
@@ -129,7 +129,7 @@ fn main() {
         }
     }
 
-    let input = io::read_data(bytes, args.dorp, args.outnumber);
+    let input = io::read_data(bytes, args.dorp, args.outnumber, args.nblosum == -2);
     let njob = input.njob;
     let mut out = Vec::new();
 
@@ -157,7 +157,7 @@ fn main() {
     // seqcheck()
     for (i, s) in input.seq.iter().enumerate() {
         for (p, &c) in s.iter().enumerate() {
-            if (c as usize) >= constants::CHARSIZE || cn.amino_n[c as usize] == -1 {
+            if (c as usize) >= cn.charsize || cn.amino_n[c as usize] == -1 {
                 eprintln!("Illegal character {}", c as char);
                 eprintln!("=== Please check site {} in sequence {}.", p + 1, i + 1);
                 std::process::exit(1);
