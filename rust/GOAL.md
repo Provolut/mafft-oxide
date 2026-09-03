@@ -23,28 +23,31 @@ refusal too: `--allowshift` cost nothing, only a stale `exit(1)`. And check
 both copies: `tbfast`'s `--add` is not `disttbfast`'s.
 
 1. ~~**External anchors (`-l`)**~~ done: `anchors.rs` plus
-   `Falign_givenanchors`. 1376 comparisons byte-identical. Two C quirks
-   reproduced and one input refused, all in issue #4.
+   `Falign_givenanchors`. 1376 comparisons. Two C quirks reproduced and one
+   input refused, all in issue #4.
 
 2. ~~**The `compacttree*` builders**~~ done: `compacttree.rs`. All four
    keywords -- `compact`, `very compact`, `stepadd`, `youngestlinkage` --
    byte-identical over 3096 comparisons including `infile.tree`.
 
-3. **The `alg` values.** `-M` (memsave) done: `msalign.rs` has `MSalignmm`,
-   `falign.rs` has `Falign_udpari_long` as a mode, `treebase` makes the C's
-   own 30000-column switch. 688 comparisons plus `mafft --memsave` end to end;
-   peak RSS on four 31000-column sequences 6.4GB -> 55.9MB (C: 32.7MB).
-   `-&` (`Aalign`) done: 344 comparisons. Two upstream defects found and
-   reproduced here, both in issue #4.
-   Left: **`-@` (`--sp`)**, `D__align`. Measured, not guessed: 734 live
-   non-comment lines in the DP, of which 232 touch the `Gaplen` structure,
-   plus ~700 lines of `Gaplen` helpers it actually calls
-   (`extendgaplencompactx`, `copygaplenrestricted`, `duplicategaplencompactx`
-   and friends). The hard part is not the size but the representation: the C
-   carries six `Gaplen***` cubes through the DP with raw-pointer *aliasing*
-   and a `(Gaplen *)1` sentinel, and `freegaplenpartly`/`duplicate...` make
-   the sharing load-bearing. Port it as an arena with indices, not as clones,
-   or the aliasing will not reproduce.
+3. **The `alg` values.** `-M` (memsave) done: `msalign.rs`, plus
+   `Falign_udpari_long` as a mode of `falign.rs`, plus the C's own
+   30000-column switch in `treebase`. 688 comparisons and `mafft --memsave`
+   end to end; peak RSS on four 31000-column sequences 6.4GB -> 55.9MB (C:
+   32.7MB). `-&` (`Aalign`) done: 344 comparisons. Two upstream defects found
+   here, both in issue #4.
+   Left: **`-@` (`--sp`)**, `D__align`: the generalized-affine DP, which
+   carries a per-column distribution of gap *lengths* through the DP instead
+   of two running gap scores. ~730 live lines in the DP plus ~700 in the
+   `Gaplen` helpers it calls (`extendgaplencompactx`, `copygaplenrestricted`,
+   `duplicategaplencompactx` and friends).
+   Representation, checked not assumed: columns never alias. A `Gaplen*` is
+   NULL, an owned array terminated by `idatnext == -1` with `[0].npat` as its
+   count, or the `(Gaplen *)1` sentinel -- a *barrier* stopping the partial
+   free and duplicate loops, not a shared pointer. So
+   `enum Col { Null, Barrier, Data(Vec<Gaplen>) }` reproduces it and no arena
+   is needed. Watch `copygaplencompactx` instead: it writes into an existing
+   destination without checking its length.
 
 4. **Optional, separate binaries.** `dvtditr` (`--maxiterate`), `splittbfast`,
    `addsingle`, `makedirectionlist`. All work today on our byte-identical
