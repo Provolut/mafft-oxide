@@ -7,7 +7,36 @@
 //!
 //! `Dalignmm.c` compiles with `USEGAPLENMTX 0` and `USEGAPLENHALF 0`, so the
 //! `idatend` field and the `copygaplenrestricted*` helpers are not in the
-//! build at all; what is live is the "compactx" family below.
+//! build at all; what is live is the "compactx" family below. Those two zeros
+//! also kill every `if( pfac != pfactmp )` cross-check in the DP, so
+//! `PFACERROR` is always 0 -- which matters, because the `WMCHECK` block at
+//! the end of `D__align` *is* live and tests it.
+//!
+//! ## The six cubes, for whoever writes the DP
+//!
+//! `D__align` threads six `Gaplen ***` through the DP, each `[pos][col]`, and
+//! half of them are stored *relative to* `pos` rather than from column 0. The
+//! allocation sizes are what say which is which, and the C's `// half`
+//! comments agree:
+//!
+//! | cube                | rows      | columns per row | indexing        |
+//! |---------------------|-----------|-----------------|-----------------|
+//! | `gaplen1ibestkamo`  | `ll1+2`   | `ll1+2-i`       | half, offset i  |
+//! | `gaplen2ibestkamo`  | `ll1+2`   | `ll2+2`         | full            |
+//! | `gaplen1icurr`      | `ll1+2`   | `ll1+2-i`       | half, offset i  |
+//! | `gaplen2icurr`      | `ll1+2`   | `ll2+2`         | full            |
+//! | `gaplen1jbestkamo`  | `ll2+2`   | `ll1+2`         | full            |
+//! | `gaplen2jbestkamo`  | `ll2+2`   | `ll2+2-j`       | half, offset j  |
+//! | `gaplen1jbest`      | `ll2+2`   | `ll1+2`         | full            |
+//! | `gaplen2jbest`      | `ll2+2`   | `ll2+2-j`       | half, offset j  |
+//! | `gaplen1jcurr`      | `ll2+2`   | `ll1+2`         | full            |
+//! | `gaplen2jcurr`      | `ll2+2`   | `ll2+2-j`       | half, offset j  |
+//! | `gaplen1jprev`      | `ll2+2`   | `ll1+2`         | full            |
+//! | `gaplen2jprev`      | `ll2+2`   | `ll2+2-j`       | half, offset j  |
+//!
+//! Every row ends with a `Col::Barrier` one past its last real column, which
+//! is what stops `duplicategaplencompactx` and `freegaplenpartly` at the row
+//! end without either of them being told the length.
 
 /// One gap-length pattern at a column: `len` residues of gap, seen with
 /// weight `freq`, and this column sits `relend` positions before its end.
