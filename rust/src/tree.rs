@@ -96,7 +96,7 @@ fn setnearest(ac: &Chain, eff: &[Vec<f64>], pos: usize) -> (f64, i32) {
 /// `eff` is the half distance matrix and is consumed (the C frees rows as it
 /// goes, and overwrites surviving ones in place).
 pub fn upgma(nseq: usize, eff: &mut Vec<Vec<f64>>, sueff_global: f64) -> Tree {
-    upgma_treeout(nseq, eff, sueff_global, None, false)
+    upgma_treeout(nseq, eff, sueff_global, None, false, false)
 }
 
 /// `..._treeout_memsave()`: the same UPGMA, plus a Newick string per live
@@ -113,6 +113,7 @@ pub fn upgma_treeout(
     sueff_global: f64,
     names: Option<&[Vec<u8>]>,
     outnumber: bool,
+    nodeout: bool,
 ) -> Tree {
     let sueff1 = 1.0 - sueff_global;
     let sueff05 = sueff_global * 0.5;
@@ -149,6 +150,14 @@ pub fn upgma_treeout(
             .map(|i| format!("\n{}_{}\n", i + 1, newick_name(&name[i], outnumber)))
             .collect();
     }
+
+    // `-^`: how much of the matrix each sequence is close to, measured once on
+    // the full live chain before any merging.
+    let density: Vec<f64> = if nodeout {
+        (0..nseq).map(|i| setdensity(&ac, eff, i)).collect()
+    } else {
+        Vec::new()
+    };
 
     for k in 0..nseq - 1 {
         let mut minscore = 999.9f64;
@@ -269,7 +278,32 @@ pub fn upgma_treeout(
             .find(|t| !t.is_empty())
             .cloned()
             .unwrap_or_default();
-        std::fs::write("infile.tree", format!("{};\n", last)).expect("write infile.tree");
+        let mut body = format!("{};\n", last);
+        if nodeout {
+            use std::fmt::Write as _;
+            let _ = write!(body, "\nDensity:");
+            for k in 0..nseq {
+                let _ = write!(body, "\nSequence {}, {:7.4}", k + 1, density[k]);
+            }
+            let _ = write!(body, "\n\nNode info:");
+            for k in 0..nseq - 1 {
+                let _ = write!(
+                    body,
+                    "\nNode {}, Height={}\n",
+                    k + 1,
+                    fmt_f(dep[k].distfromtip)
+                );
+                for child in 0..2 {
+                    let mem = topolorderz(&topol, &dep, k, child);
+                    let _ = write!(body, "{}:", getdensest(&mem, &density) + 1);
+                    for &m in mem.iter() {
+                        let _ = write!(body, " {}", m + 1);
+                    }
+                    let _ = writeln!(body);
+                }
+            }
+        }
+        std::fs::write("infile.tree", body).expect("write infile.tree");
     }
 
     Tree { topol, len, dep }
@@ -410,6 +444,51 @@ pub fn load_tree(nseq: usize, names: Option<&[Vec<u8>]>, outnumber: bool) -> Res
     }
 
     Ok(Tree { topol, len, dep })
+}
+
+/// `setdensity()`: how many of the still-live pairs `pos` is closer than 1.0
+/// to, weighted by how much closer.
+fn setdensity(ac: &Chain, eff: &[Vec<f64>], pos: usize) -> f64 {
+    let mut tmp = 0.0f64;
+    let mut j = ac.next[pos];
+    while j != -1 {
+        let ju = j as usize;
+        if eff[pos][ju - pos] < 1.0 {
+            tmp += 2.0 - eff[pos][ju - pos];
+        }
+        j = ac.next[ju];
+    }
+    // The second pass walks from the head until it reaches `pos`.
+    let mut j = 0i32;
+    while j != -1 && j as usize != pos {
+        let ju = j as usize;
+        if eff[ju][pos - ju] < 1.0 {
+            tmp += 2.0 - eff[ju][pos - ju];
+        }
+        j = ac.next[ju];
+    }
+    tmp
+}
+
+/// `getdensest()`: the member of `m` with the highest density.
+fn getdensest(m: &[i32], d: &[f64]) -> i32 {
+    let mut dmax = -100.0f64;
+    let mut pmax = -1i32;
+    for &i in m.iter() {
+        if i < 0 {
+            break;
+        }
+        if d[i as usize] > dmax {
+            dmax = d[i as usize];
+            pmax = i;
+        }
+    }
+    pmax
+}
+
+/// C's `%f` for a double: six decimals.
+fn fmt_f(v: f64) -> String {
+    format!("{:.6}", v)
 }
 
 /// `topolorder_lessargs()`: in-order list of the leaves under `pos`.

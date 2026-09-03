@@ -449,9 +449,6 @@ impl Args {
         if self.oneiteration {
             bad.push("-r (one iteration) is not ported");
         }
-        if self.sparsepickup != 0 {
-            bad.push("-q (sparse pickup) is not ported");
-        }
         if self.keeplength {
             bad.push("-Y (--keeplength) is not ported");
         }
@@ -468,9 +465,6 @@ impl Args {
         }
         if self.scoremtx == 2 {
             bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");
-        }
-        if self.treeout == 2 {
-            bad.push("-^ (--nodeout) is not ported");
         }
 
         if bad.is_empty() {

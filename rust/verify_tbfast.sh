@@ -51,6 +51,7 @@ ARGSETS=(
   "_ $P -L _ -+ 0 $T -O -t"
   "_ $P -L _ -+ 2 $T -O -t -T"
   "_ $P -L _ -+ 0 $T -O -T"
+  "_ $P -L _ -+ 2 $T -O -^"
   # --legacygapcost in the progressive stage
   "_ $P -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -L -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
   # --fmodel and JTT on both stages

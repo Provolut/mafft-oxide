@@ -279,9 +279,6 @@ fn refuse(a: &TbArgs) -> Option<String> {
     if a.fastathreshold < 0.0001 {
         bad.push("this port only covers the constrained (-l) progressive stage".into());
     }
-    if a.treeout == 2 {
-        bad.push("-^ (--nodeout) is not ported".into());
-    }
     if a.treein && a.unalignlevel > 0.0 {
         // The C derives `expdist` from the user tree in that case.
         bad.push("-U with --allowshift is not ported".into());
@@ -504,7 +501,7 @@ fn main() {
     let mut tr = if a.treein {
         match tree::load_tree(
             njob,
-            if a.treeout == 1 {
+            if a.treeout != 0 {
                 Some(&input.name[..])
             } else {
                 None
@@ -517,13 +514,14 @@ fn main() {
                 std::process::exit(1);
             }
         }
-    } else if a.treeout == 1 {
+    } else if a.treeout != 0 {
         tree::upgma_treeout(
             njob,
             &mut iscore,
             a.sueff_global,
             Some(&input.name),
             a.outnumber,
+            a.treeout == 2,
         )
     } else {
         tree::upgma(njob, &mut iscore, a.sueff_global)

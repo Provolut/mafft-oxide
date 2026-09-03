@@ -14,6 +14,72 @@ use mafft_rs::params::Args;
 use mafft_rs::treebase::TreebaseOpts;
 use mafft_rs::{dist, falign, io, score, tree, treebase};
 
+/// `pickup()`: keep the longest sequence on each side of the last few tree
+/// nodes and write the rest to `notused`.
+///
+/// The C's comment says it is not adapted to memsave, and it is not: with the
+/// memsave `topol` each side holds a single member, so the "longest" search
+/// runs over one candidate. Two more quirks come with it -- `m` counts loop
+/// iterations while each iteration selects two sequences, and `m` is then used
+/// as the record count for stdout, so the file can be shorter than the
+/// selection.
+fn pickup(
+    n: usize,
+    sparsepickup: i32,
+    seqlen: &[usize],
+    tr: &tree::Tree,
+    name: &[Vec<u8>],
+    seq: &[Vec<u8>],
+) {
+    let mut longestseq = vec![[-1i32, -1i32]; n.saturating_sub(1)];
+    let mut select = vec![false; n];
+    for i in 0..n - 1 {
+        for side in 0..2 {
+            // memsave: one member, then the -1 terminator, so the C's search
+            // for the longest compares a single candidate against -1.
+            let m = tr.topol[i][side];
+            if m != -1 && seqlen[m as usize] as i64 > -1 {
+                longestseq[i][side] = m;
+            }
+        }
+    }
+    let mut m = 1i32;
+    for i in (0..n - 1).rev() {
+        for side in 0..2 {
+            let p = longestseq[i][side];
+            if p >= 0 {
+                select[p as usize] = true;
+            }
+        }
+        m += 1;
+        if m >= sparsepickup {
+            break;
+        }
+    }
+
+    let mut nameout = Vec::new();
+    let mut seqout = Vec::new();
+    let mut namenot = Vec::new();
+    let mut seqnot = Vec::new();
+    for i in 0..n {
+        if select[i] {
+            nameout.push(name[i].clone());
+            seqout.push(seq[i].clone());
+        } else {
+            namenot.push(name[i].clone());
+            seqnot.push(seq[i].clone());
+        }
+    }
+    let mut out = Vec::new();
+    let keep = (m as usize).min(nameout.len());
+    io::write_data(&mut out, &nameout[..keep], &seqout[..keep]);
+    std::io::stdout().write_all(&out).unwrap();
+    let mut nu = Vec::new();
+    let keepn = (n - m as usize).min(namenot.len());
+    io::write_data(&mut nu, &namenot[..keepn], &seqnot[..keepn]);
+    std::fs::write("notused", nu).expect("write notused");
+}
+
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(&argv) {
@@ -111,10 +177,10 @@ fn main() {
     }
 
     // With a user tree there is no distance matrix at all.
-    let mut mtx: Vec<Vec<f64>> = if args.treein {
-        Vec::new()
+    let (mut mtx, nogaplen): (Vec<Vec<f64>>, Vec<usize>) = if args.treein {
+        (Vec::new(), input.seq.iter().map(|s| s.len()).collect())
     } else {
-        dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize).0
+        dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize)
     };
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
@@ -146,7 +212,7 @@ fn main() {
         let mut tr = if args.treein {
             match tree::load_tree(
                 njob,
-                if args.treeout == 1 {
+                if args.treeout != 0 {
                     Some(&input.name[..])
                 } else {
                     None
@@ -159,17 +225,33 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-        } else if args.treeout == 1 {
+        } else if args.treeout != 0 {
             tree::upgma_treeout(
                 njob,
                 &mut mtx,
                 args.sueff_global,
                 Some(&input.name),
                 args.outnumber,
+                args.treeout == 2,
             )
         } else {
             tree::upgma(njob, &mut mtx, args.sueff_global)
         };
+
+        // `-q N`: keep a sparse subset and stop, before `order` is written.
+        if args.sparsepickup != 0 && iguidetree == nguidetree - 1 {
+            eprintln!("Sparsepickup! ");
+            pickup(
+                njob,
+                args.sparsepickup,
+                &nogaplen,
+                &tr,
+                &input.name,
+                &input.seq,
+            );
+            eprintln!("done. ");
+            return;
+        }
 
         // The `order` file the mafft wrapper uses for --reorder / clustal out.
         {

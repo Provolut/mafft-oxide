@@ -197,8 +197,8 @@ Current status, on this source tree:
 
 | check | result |
 |---|---|
-| `verify.sh`, generated corpus (88 inputs × 34 argument sets, plus `--treein`) | 3344/3344 identical |
-| `verify_tbfast.sh`, generated corpus (40 inputs × 18, plus `--treein`) | 880/880 identical |
+| `verify.sh`, generated corpus (88 inputs × 36 argument sets, plus `--treein`) | 3520/3520 identical |
+| `verify_tbfast.sh`, generated corpus (40 inputs × 19, plus `--treein`) | 920/920 identical |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
 | `cargo test` | 66/66 |

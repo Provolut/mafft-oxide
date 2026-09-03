@@ -70,6 +70,10 @@ ARGSETS=(
   # -t (--treeout): the Newick file, including the -n name rewriting
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -t -T -n -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # -^ (--nodeout): the tree plus per-sequence density and per-node membership
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -^ -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # -q N (sparse pickup): keep a subset, write the rest to `notused`, and stop
+  "-q 8 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
 )
 
 gen_corpus() {
@@ -108,7 +112,7 @@ for f in "$CORPUS"/*; do
       continue
     fi
     bad=""
-    for out in order hat2 infile.tree; do
+    for out in order hat2 infile.tree notused; do
       if [ -f "$work/c/$out" ] || [ -f "$work/r/$out" ]; then
         cmp -s "$work/c/$out" "$work/r/$out" || bad="$bad $out"
       fi
