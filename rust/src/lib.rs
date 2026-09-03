@@ -13,6 +13,7 @@ pub mod falign;
 pub mod fft;
 pub mod genalign;
 pub mod io;
+pub mod jtt;
 pub mod lalign;
 pub mod localhom;
 pub mod pairalign;

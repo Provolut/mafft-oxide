@@ -39,6 +39,21 @@ ARGSETS=(
   # --anysymbol: a no-op for protein, but it rewrites the `n` row and column of
   # the nucleotide matrix (nscore())
   "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -: -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # the other built-in BLOSUM tables (--bl); -b is ignored for nucleotides
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 30 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 45 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 80 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 100 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # JTT (--jtt) and transmembrane (--tm); a negative PAM distance skips the
+  # recentring step (makeaverage0)
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -j 200 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -j 100 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -m 200 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -j -200 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  # --fmodel (-a): residue frequencies taken from the input rather than the
+  # table's, which changes the matrix for all three model families
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -a -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
+  "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -j 200 -a -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100"
 )
 
 gen_corpus() {

@@ -110,6 +110,97 @@ fn generatenuc1pam(kimura_r: i32, freq: &[f64; 4]) -> [[f64; 11]; 11] {
     pam1
 }
 
+/// `calcfreq_nuc()`: base frequencies of the input, used by `--fmodel`.
+///
+/// `u` (index 4) is folded into `t` (index 3), and only the four unambiguous
+/// bases are counted.
+fn calcfreq_nuc(seq: &[Vec<u8>], amino_n: &[i32; CHARSIZE]) -> [f64; 4] {
+    let mut datafreq = [0.0f64; 4];
+    for s in seq {
+        for &c in s {
+            let mut aan = amino_n[c as usize];
+            if aan == 4 {
+                aan = 3;
+            }
+            if (0..4).contains(&aan) {
+                datafreq[aan as usize] += 1.0;
+            }
+        }
+    }
+    let mut total = 0.0f64;
+    for v in datafreq.iter() {
+        total += *v;
+    }
+    for v in datafreq.iter_mut() {
+        *v /= total;
+    }
+    for v in datafreq.iter_mut() {
+        if *v < 0.0001 {
+            *v = 0.0001;
+        }
+    }
+    let mut total = 0.0f64;
+    for v in datafreq.iter() {
+        total += *v;
+    }
+    for v in datafreq.iter_mut() {
+        *v /= total;
+    }
+    datafreq
+}
+
+/// `calcfreq()`: residue frequencies of the input, used by `--fmodel`.
+///
+/// `nscored` is 20 for protein and 10 for nucleotides; the C's own loop bound
+/// is `nscoredalphabets`, and a frequency below 1e-4 is clamped up to it before
+/// the vector is renormalised a second time.
+fn calcfreq(seq: &[Vec<u8>], amino_n: &[i32; CHARSIZE], nscored: usize) -> Vec<f64> {
+    let mut datafreq = vec![0.0f64; nscored];
+    for s in seq {
+        for &c in s {
+            let aan = amino_n[c as usize];
+            if aan >= 0 && (aan as usize) < nscored && c != b'-' {
+                datafreq[aan as usize] += 1.0;
+            }
+        }
+    }
+    let mut total = 0.0f64;
+    for v in datafreq.iter() {
+        total += *v;
+    }
+    for v in datafreq.iter_mut() {
+        *v /= total;
+    }
+    for v in datafreq.iter_mut() {
+        if *v < 0.0001 {
+            *v = 0.0001;
+        }
+    }
+    let mut total = 0.0f64;
+    for v in datafreq.iter() {
+        total += *v;
+    }
+    for v in datafreq.iter_mut() {
+        *v /= total;
+    }
+    datafreq
+}
+
+/// `MtxmltDouble( mtx1, mtx2, 20 )`: `mtx1 <- mtx1 * mtx2`.
+fn mtxmlt_double20(mtx1: &mut [[f64; 20]; 20], mtx2: &[[f64; 20]; 20]) {
+    let mut tmp = [0.0f64; 20];
+    for i in 0..20 {
+        tmp.copy_from_slice(&mtx1[i]);
+        for j in 0..20 {
+            let mut sum = 0.0f64;
+            for k in 0..20 {
+                sum += tmp[k] * mtx2[k][j];
+            }
+            mtx1[i][j] = sum;
+        }
+    }
+}
+
 /// `MtxmltDouble( mtx1, mtx2, 4 )`: `mtx1 <- mtx1 * mtx2`, top-left 4x4 only.
 fn mtxmlt_double(mtx1: &mut [[f64; 11]; 11], mtx2: &[[f64; 11]; 11]) {
     let mut tmp = [0.0f64; 4];
@@ -244,6 +335,10 @@ const DEFAULTGOP_N: i32 = -1530;
 const DEFAULTGEP_N: i32 = 0;
 const DEFAULTOFS_N: i32 = -369;
 const DEFAULTPAMN: i32 = 200;
+// Defaults from JTT.c.
+const DEFAULTGOP_J: i32 = -1530;
+const DEFAULTGEP_J: i32 = 0;
+const DEFAULTOFS_J: i32 = -123;
 const CONSWEIGHT_MULTI: f64 = 1.0;
 
 impl Constants {
@@ -253,8 +348,14 @@ impl Constants {
         Constants::new_dorp(args, b'p')
     }
 
-    /// `constants()`, for either sequence type.
+    /// `constants()`, for either sequence type, without the input sequences.
+    /// Only `--fmodel` needs them, and it is refused when they are absent.
     pub fn new_dorp(args: &Args, dorp: u8) -> Constants {
+        Constants::new_seq(args, dorp, &[])
+    }
+
+    /// `constants( nseq, seq )`.
+    pub fn new_seq(args: &Args, dorp: u8, seq: &[Vec<u8>]) -> Constants {
         let trywarp = !(args.penalty_shift_factor >= 10.0);
 
         let mut amino = [0u8; NALPHABETS];
@@ -319,8 +420,11 @@ impl Constants {
                 amino_grp[amino[i] as usize] = LOCGRPN[i];
             }
 
-            // fmodel != 1 is refused, so the frequencies are flat.
-            let freq = [0.25f64; 4];
+            let freq = if args.fmodel == 1 {
+                calcfreq_nuc(seq, &amino_n)
+            } else {
+                [0.25f64; 4]
+            };
 
             // `pamx` is an 11x11 calloc'd matrix; only [0,10)x[0,10) is read
             // back, and the halves that neither branch below writes stay zero.
@@ -399,6 +503,150 @@ impl Constants {
             if args.nwildcard {
                 nscore(&amino_n, &mut n_dis);
             }
+        } else if args.scoremtx != 1 {
+            // The C's final `else`: JTT or transmembrane, selected by `-j` /
+            // `-m`, which set `scoremtx = 0`. A PAM matrix raised to `pamN`,
+            // logged and rescaled -- the same shape as the nucleotide branch.
+            // (`scoremtx == 2`, Miyata-Yasunaga, exits in the C and is refused
+            // before we get here.)
+            nscored = 20;
+            let mut ppenalty = args.ppenalty;
+            let mut ppenalty_dist = args.ppenalty_dist;
+            let mut ppenalty_ex = args.ppenalty_ex;
+            let mut poffset = args.poffset;
+            if ppenalty == crate::params::NOTSPECIFIED {
+                ppenalty = DEFAULTGOP_J;
+            }
+            if ppenalty_dist == crate::params::NOTSPECIFIED {
+                ppenalty_dist = ppenalty;
+            }
+            if ppenalty_ex == crate::params::NOTSPECIFIED {
+                ppenalty_ex = DEFAULTGEP_J;
+            }
+            if poffset == crate::params::NOTSPECIFIED {
+                poffset = DEFAULTOFS_J;
+            }
+            let mut ppenalty_op = args.ppenalty_op;
+            if ppenalty_op == crate::params::NOTSPECIFIED {
+                ppenalty_op = DEFAULTGOP_J;
+            }
+            let mut pam_n = if args.pam_n == crate::params::NOTSPECIFIED {
+                DEFAULTPAMN
+            } else {
+                args.pam_n
+            };
+            if pam_n == 0 {
+                eprintln!("pamN={}??", pam_n);
+                std::process::exit(1);
+            }
+            // A negative PAM distance means "do not recentre".
+            let makeaverage0 = pam_n >= 0;
+            if pam_n < 0 {
+                pam_n *= -1;
+            }
+
+            penalty = (600.0 / 1000.0 * ppenalty as f64 + 0.5) as i32;
+            penalty_dist = (600.0 / 1000.0 * ppenalty_dist as f64 + 0.5) as i32;
+            penalty_shift = (args.penalty_shift_factor * penalty as f64) as i32;
+            penalty_ex = (600.0 / 1000.0 * ppenalty_ex as f64 + 0.5) as i32;
+            penalty_op = (600.0 / 1000.0 * ppenalty_op as f64 + 0.5) as i32;
+            offset = (600.0 / 1000.0 * poffset as f64 + 0.5) as i32;
+
+            let (rsr, freq) = crate::jtt::jtt_mtx(args.tm_or_jtt == crate::params::TM);
+            amino.copy_from_slice(crate::blosum::LOCAMINOD);
+            for i in 0..NALPHABETS {
+                amino_grp[amino[i] as usize] = crate::blosum::LOCGRPD[i];
+            }
+            let datafreq;
+            let freq1: &[f64; 20] = if args.fmodel == 1 {
+                let mut an = [-1i32; CHARSIZE];
+                for i in 0..NALPHABETS {
+                    an[amino[i] as usize] = i as i32;
+                }
+                let f = calcfreq(seq, &an, 20);
+                let mut arr = [0.0f64; 20];
+                arr.copy_from_slice(&f);
+                datafreq = arr;
+                &datafreq
+            } else {
+                &freq
+            };
+
+            let mut mutab = [0.0f64; 20];
+            let mut tmp = 0.0f64;
+            for i in 0..20 {
+                mutab[i] = 0.0;
+                for j in 0..20 {
+                    mutab[i] += rsr[i][j] * freq1[j];
+                }
+                tmp += mutab[i] * freq1[i];
+            }
+            let delta = 0.01 / tmp;
+            let mut pam1 = [[0.0f64; 20]; 20];
+            for i in 0..20 {
+                for j in 0..20 {
+                    if i != j {
+                        pam1[i][j] = delta * rsr[i][j] * freq1[j];
+                    } else {
+                        pam1[i][j] = 1.0 - delta * mutab[i];
+                    }
+                }
+            }
+
+            let mut pamx = [[0.0f64; 20]; 20];
+            for (i, row) in pamx.iter_mut().enumerate() {
+                row[i] = 1.0;
+            }
+            for _ in 0..pam_n {
+                mtxmlt_double20(&mut pamx, &pam1);
+            }
+            for i in 0..20 {
+                for j in 0..20 {
+                    pamx[i][j] /= freq1[j];
+                }
+            }
+            for i in 0..20 {
+                for j in 0..20 {
+                    if pamx[i][j] == 0.0 {
+                        pamx[i][j] = 0.00001;
+                    }
+                    pamx[i][j] = pamx[i][j].log10() * 1000.0;
+                }
+            }
+            // Three averages are computed and discarded before the one that
+            // is used; only the last assignment survives.
+            let mut average = 0.0f64;
+            for i in 0..20 {
+                for j in 0..20 {
+                    average += pamx[i][j] * freq1[i] * freq1[j];
+                }
+            }
+            if makeaverage0 {
+                for i in 0..20 {
+                    for j in 0..20 {
+                        pamx[i][j] -= average;
+                    }
+                }
+            }
+            let mut average = 0.0f64;
+            for i in 0..20 {
+                average += pamx[i][i] * freq1[i];
+            }
+            for i in 0..20 {
+                for j in 0..20 {
+                    pamx[i][j] *= 600.0 / average;
+                }
+            }
+            for i in 0..20 {
+                for j in 0..20 {
+                    pamx[i][j] -= offset as f64;
+                }
+            }
+            for i in 0..20 {
+                for j in 0..20 {
+                    n_dis[i][j] = shishagonyuu(pamx[i][j]);
+                }
+            }
         } else {
             nscored = 20;
             let mut ppenalty = args.ppenalty;
@@ -439,8 +687,20 @@ impl Constants {
                 &mut amino_grp,
             );
 
-            // freq1 = freq, since fmodel != 1 is enforced by check_supported().
-            let freq1 = &freq;
+            let datafreq;
+            let freq1: &[f64; 20] = if args.fmodel == 1 {
+                let mut an = [-1i32; CHARSIZE];
+                for i in 0..NALPHABETS {
+                    an[amino[i] as usize] = i as i32;
+                }
+                let f = calcfreq(seq, &an, 20);
+                let mut arr = [0.0f64; 20];
+                arr.copy_from_slice(&f);
+                datafreq = arr;
+                &datafreq
+            } else {
+                &freq
+            };
 
             let mut average = 0.0f64;
             for i in 0..20 {

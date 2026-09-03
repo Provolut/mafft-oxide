@@ -31,8 +31,9 @@ cd rust && cargo build --release
 | stage | C source | Rust |
 |---|---|---|
 | FASTA reading, type detection, writing | `io.c` | `io.rs` |
-| BLOSUM62 tables | `blosum.c` | `blosum.rs` |
-| score matrix, gap penalties, FFT scales, `makedynamicmtx` | `constants.c`, `mltaln9.c`, `miyata.h`, `DNA.h` | `constants.rs` |
+| BLOSUM tables (30/45/50/62/80/90/100) | `blosum.c` | `blosum.rs` |
+| JTT and transmembrane substitution counts | `JTT.c` | `jtt.rs` |
+| score matrix (BLOSUM, JTT/TM, nucleotide), gap penalties, `--fmodel`, FFT scales, `makedynamicmtx` | `constants.c`, `mltaln9.c`, `miyata.h`, `DNA.h` | `constants.rs` |
 | 6-mer ("ktuples") distance matrix, protein and nucleotide | `disttbfast.c`, `mltaln9.c` | `dist.rs` |
 | UPGMA guide tree, sequence weights | `mltaln9.c` | `tree.rs` |
 | profile statistics | `tddis.c`, `mltaln9.c` | `profile.rs` |
@@ -108,7 +109,8 @@ scores.
 Refused loudly rather than approximated, so an unsupported run fails instead of
 quietly returning a different alignment:
 
-- matrices other than BLOSUM62 for protein (`--aamatrix`, `--text`), `--fmodel`
+- `--aamatrix` (a matrix read from a file) and `--text` (the 256-symbol
+  alphabet)
 - `--add` / `--addprofile`, sub-alignments, `--treein`, external anchors
 - 10-mer nucleotide distances (`--tuplesize 10`, used only by `--parttree`)
 - RNA secondary-structure strategies (`--qinsi`, `--xinsi`), which call out to
@@ -196,9 +198,8 @@ Current status, on this source tree:
 
 | check | result |
 |---|---|
-| `verify.sh`, generated corpus (88 inputs × 16 argument sets) | 1408/1408 identical |
-| `verify.sh`, 7 larger inputs up to 300 sequences × 16 | 112/112 identical |
-| `verify_tbfast.sh`, generated corpus (40 inputs × 12 argument sets) | 480/480 identical |
+| `verify.sh`, generated corpus (88 inputs × 26 argument sets) | 2288/2288 identical |
+| `verify_tbfast.sh`, generated corpus (40 inputs × 14 argument sets) | 560/560 identical |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
 | `cargo test` | 66/66 |

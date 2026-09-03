@@ -9,20 +9,16 @@ ported is refused loudly. `verify.sh`, `verify_tbfast.sh`, `verify_e2e.sh`,
 `cargo test` and `test/script` must stay green, and new argument vectors go
 into the harnesses with the feature.
 
-E-INS-i is done (`genalign.rs`, commit below). Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
+Done so far: E-INS-i, every built-in BLOSUM table, JTT/TM, `--fmodel`.
+Inventory: issue #2. C quirks to reproduce, not fix: issue #3 and
 `README.md`'s "Notes for anyone extending this".
 
 ## Work, roughly in order of value
 
-1. **Scoring configurations.** Cheap, mostly `constants.rs`:
-   - other BLOSUM tables (`-b 45`, `-b 80`); `blosum.rs` already parses the
-     format, the refusal is conservative rather than structural;
-   - `--jtt` / `--tm` (`JTTmtx` in `core/JTT.c`, one flag apart), same shape as
-     the DNA branch: a PAM matrix raised to a power, logged, rescaled;
-   - `--fmodel` (`-a`): use `calcfreq`/`calcfreq_nuc` over the input instead of
-     the table's frequencies;
-   - `--text` (`nblosum == -2`): the 256-symbol alphabet, `nalphabets = 0x100`,
-     `charsize = 0x100`. Touches every place that assumes 26.
+1. **`--text` (`nblosum == -2`)**, the 256-symbol alphabet: `nalphabets` and
+   `charsize` become 0x100. Touches every place that assumes 26, so it is the
+   one scoring item left and the one that is not cheap. `--aamatrix` (a matrix
+   read from a file, `n == -1`) rides along with it.
 
 2. **`--legacygapcost` (`-L`).** The pre-7.110 gap scoring, a separate branch
    inside `A__align`.

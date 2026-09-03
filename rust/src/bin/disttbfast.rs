@@ -56,7 +56,9 @@ fn main() {
         return;
     }
 
-    let cn = Constants::new_dorp(&args, input.dorp);
+    // `constants( njob, seq )` sees the raw input, gaps and all; only
+    // `--fmodel` reads it.
+    let cn = Constants::new_seq(&args, input.dorp, &input.seq);
     if cn.trywarp {
         eprintln!("disttbfast-rs: the shift (warp) DP path is not ported; use -Q >= 10");
         std::process::exit(1);

@@ -6,6 +6,10 @@
 //! and rejected later by [`Args::check_supported`], so that an unsupported run
 //! fails loudly instead of quietly producing a different alignment.
 
+/// `TMorJTT` values from `mltaln.h`.
+pub const JTT: i32 = 0;
+pub const TM: i32 = 1;
+
 pub const NOTSPECIFIED: i32 = 100009;
 
 /// `atof()` semantics: parse the longest numeric prefix, 0.0 on failure.
@@ -126,6 +130,8 @@ pub struct Args {
     pub poffset: i32,
     pub kimura_r: i32,
     pub pam_n: i32,
+    /// `JTT` (0) or `TM` (1); `-j` selects the first, `-m` the second.
+    pub tm_or_jtt: i32,
     pub fft_win_size: i32,
     pub fft_threshold: i32,
     pub scoreout: bool,
@@ -189,6 +195,7 @@ impl Default for Args {
             poffset: -123,
             kimura_r: NOTSPECIFIED,
             pam_n: NOTSPECIFIED,
+            tm_or_jtt: JTT,
             fft_win_size: NOTSPECIFIED,
             fft_threshold: NOTSPECIFIED,
             scoreout: false,
@@ -285,12 +292,14 @@ impl Args {
                     'j' => {
                         a.pam_n = atoi(&val!());
                         a.scoremtx = 0;
+                        a.tm_or_jtt = JTT;
                         i += 1;
                         continue 'outer;
                     }
                     'm' => {
                         a.pam_n = atoi(&val!());
                         a.scoremtx = 0;
+                        a.tm_or_jtt = TM;
                         i += 1;
                         continue 'outer;
                     }
@@ -451,11 +460,14 @@ impl Args {
         }
         // For nucleotides `constants()` ignores -b and derives the matrix from
         // Kimura's model instead, so the BLOSUM check applies to protein only.
-        if self.dorp != Some(b'd') && (self.scoremtx != 1 || self.nblosum != 62) {
-            bad.push("only the BLOSUM62 protein matrix (-b 62) is ported");
+        if self.dorp != Some(b'd')
+            && self.scoremtx == 1
+            && !matches!(self.nblosum, 30 | 45 | 50 | 62 | 80 | 90 | 100)
+        {
+            bad.push("only the built-in BLOSUM tables are ported (-b 30/45/50/62/80/90/100)");
         }
-        if self.fmodel != 0 {
-            bad.push("-a (--fmodel) is not ported");
+        if self.scoremtx == 2 {
+            bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");
         }
         if self.legacygapcost {
             bad.push("-L (--legacygapcost) is not ported");

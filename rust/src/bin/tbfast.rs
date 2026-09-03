@@ -38,6 +38,8 @@ struct TbArgs {
     pair_ppenalty_ex2: i32,
     /// `-Z`: overwrite the pairwise score with `naivepairscore11`.
     usenaivescore: bool,
+    /// `-a` (`--fmodel`): take residue frequencies from the input.
+    fmodel: i32,
     pair_poffset: i32,
     pair_shift_factor: f64,
     pair_nblosum: i32,
@@ -74,6 +76,7 @@ impl Default for TbArgs {
             pair_ppenalty_op: NOTSPECIFIED,
             pair_ppenalty_ex2: NOTSPECIFIED,
             usenaivescore: false,
+            fmodel: 0,
             pair_poffset: NOTSPECIFIED,
             pair_shift_factor: 1000.0,
             pair_nblosum: 62,
@@ -191,6 +194,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'P' => a.dorp = Some(b'p'),
             // `--anysymbol`; only affects the nucleotide score matrix, so it
             // is a no-op for protein input.
+            'a' => a.fmodel = 1,
             ':' => {}
             other => a.unsupported.push(format!("pair option -{}", other)),
         }
@@ -224,6 +228,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'n' => a.outnumber = true,
             'D' => a.dorp = Some(b'd'),
             'P' => a.dorp = Some(b'p'),
+            'a' => a.fmodel = 1,
             'v' | 'B' | 'N' | ':' => {}
             other => a.unsupported.push(format!("option -{}", other)),
         }
@@ -247,8 +252,9 @@ fn refuse(a: &TbArgs) -> Option<String> {
         bad.push("threads change the result; run with -C 0".into());
     }
     // -b is ignored for nucleotides, whose matrix comes from Kimura's model.
-    if a.dorp != Some(b'd') && (a.nblosum != 62 || a.pair_nblosum != 62) {
-        bad.push("only the BLOSUM62 protein matrix is ported".into());
+    let known = |n: i32| matches!(n, 30 | 45 | 50 | 62 | 80 | 90 | 100);
+    if a.dorp != Some(b'd') && (!known(a.nblosum) || !known(a.pair_nblosum)) {
+        bad.push("only the built-in BLOSUM tables are ported".into());
     }
     if bad.is_empty() {
         None
@@ -260,7 +266,9 @@ fn refuse(a: &TbArgs) -> Option<String> {
 /// Build a `Constants` from one phase's penalty settings by reusing the
 /// `disttbfast` argument struct, which `constants()` reads.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn constants_for(
+    seq: &[Vec<u8>],
     dorp: u8,
     nblosum: i32,
     ppenalty: i32,
@@ -270,6 +278,7 @@ fn constants_for(
     ppenalty_op: i32,
     shift_factor: f64,
     specificityconsideration: f64,
+    fmodel: i32,
 ) -> Constants {
     let mut ca = mafft_rs::params::Args {
         nblosum,
@@ -280,10 +289,11 @@ fn constants_for(
         ppenalty_op,
         penalty_shift_factor: shift_factor,
         specificityconsideration,
+        fmodel,
         ..Default::default()
     };
     ca.scoremtx = 1;
-    Constants::new_dorp(&ca, dorp)
+    Constants::new_seq(&ca, dorp, seq)
 }
 
 /// `hat3`: one line per constraint block, read back by `dvtditr`.
@@ -374,6 +384,7 @@ fn main() {
     }
     // --- pairwise phase ---
     let pair_cn = constants_for(
+        &input.seq,
         input.dorp,
         a.pair_nblosum,
         a.pair_ppenalty,
@@ -383,6 +394,7 @@ fn main() {
         a.pair_ppenalty_op,
         a.pair_shift_factor,
         a.pair_unalignlevel,
+        a.fmodel,
     );
     // `initFiles()` runs here in the C, before `seqcheck()`, so an aborted run
     // still leaves an empty `pre` behind rather than no file at all.
@@ -446,6 +458,7 @@ fn main() {
 
     // --- progressive phase (its own scoring parameters) ---
     let cn = constants_for(
+        &input.seq,
         input.dorp,
         a.nblosum,
         a.ppenalty,
@@ -455,6 +468,7 @@ fn main() {
         mafft_rs::params::NOTSPECIFIED,
         a.shift_factor,
         a.unalignlevel,
+        a.fmodel,
     );
 
     let mut tr = tree::upgma(njob, &mut iscore, a.sueff_global);

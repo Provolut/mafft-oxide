@@ -46,6 +46,10 @@ ARGSETS=(
   "_ $PE _ -+ 0 $TE"
   "_ $PE _ -+ 2 $TE"
   "_ $PEO _ -+ 0 $TE"
+  # --fmodel and JTT on both stages
+  "_ -u 0.0 -l 2.7 -C 0 -j 200 -a -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -j 200 -a -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
+  # a non-default BLOSUM table on both stages
+  "_ -u 0.0 -l 2.7 -C 0 -b 80 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 80 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
 )
 
 if [ -z "$CORPUS" ]; then

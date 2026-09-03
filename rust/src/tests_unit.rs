@@ -909,15 +909,28 @@ fn clustered_flags_parse_like_the_c() {
 #[test]
 fn unsupported_configurations_are_refused() {
     let base = ["-C".into(), "0-0".into()];
+    // BLOSUM45 is a built-in table and is now supported...
     let mut argv: Vec<String> = base.to_vec();
-    argv.extend(["-b".into(), "45".into()]); // a matrix that is not BLOSUM62
+    argv.extend(["-b".into(), "45".into()]);
+    assert!(Args::parse(&argv).unwrap().check_supported().is_ok());
+
+    // ...but a table that does not exist is refused.
+    let mut argv: Vec<String> = base.to_vec();
+    argv.extend(["-b".into(), "77".into()]);
     assert!(Args::parse(&argv).unwrap().check_supported().is_err());
 
-    // ...but -b is ignored for nucleotides, whose matrix comes from Kimura's
-    // model, so the same flag must not refuse a nucleotide run.
+    // `-b` is ignored for nucleotides, whose matrix comes from Kimura's model,
+    // so even a nonsense table must not refuse a nucleotide run.
     let mut argv: Vec<String> = base.to_vec();
-    argv.extend(["-D".into(), "-b".into(), "45".into()]);
+    argv.extend(["-D".into(), "-b".into(), "77".into()]);
     assert!(Args::parse(&argv).unwrap().check_supported().is_ok());
+
+    // JTT and transmembrane are supported now too.
+    for flag in ["-j", "-m"] {
+        let mut argv: Vec<String> = base.to_vec();
+        argv.extend([flag.into(), "200".into()]);
+        assert!(Args::parse(&argv).unwrap().check_supported().is_ok());
+    }
 
     let mut argv: Vec<String> = base.to_vec();
     argv.push("-Y".into()); // --keeplength
