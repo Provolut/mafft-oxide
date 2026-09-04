@@ -480,6 +480,27 @@ fn main() {
         eprintln!("At least 2 sequences should be input!");
         std::process::exit(1);
     }
+    // `-b` is only meaningful for protein: for nucleotides `constants()`
+    // ignores it and derives the matrix from Kimura's model, so any value is
+    // accepted there. Checked here rather than at parse time because the
+    // sequence type is not known until the input has been read -- see
+    // `Args::check_blosum`, which does the same for `disttbfast`. Both stages'
+    // `-b` values are checked, since they are parsed separately.
+    for (stage, nblosum, scoremtx) in [
+        ("pairwise", a.pair_nblosum, a.pair_scoremtx),
+        ("progressive", a.nblosum, a.scoremtx),
+    ] {
+        if input.dorp != b'd'
+            && scoremtx == 1
+            && !matches!(nblosum, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1 | -2)
+        {
+            eprintln!(
+                "tbfast-rs: unsupported configuration:\n  unknown -b value in the {} stage",
+                stage
+            );
+            std::process::exit(1);
+        }
+    }
     // --- pairwise phase ---
     let pair_cn = constants_for(
         &input.seq,
@@ -705,7 +726,10 @@ fn main() {
                 }
             }
             if !found {
-                eprintln!("# There is no appropriate position to add the {} sequences in the guide tree.", nadd);
+                eprintln!(
+                    "# There is no appropriate position to add the {} sequences in the guide tree.",
+                    nadd
+                );
                 std::process::exit(1);
             }
             let mut tail: Vec<Vec<u8>> = input.seq[njob - nadd..].to_vec();

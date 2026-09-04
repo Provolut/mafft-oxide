@@ -18,7 +18,14 @@ use crate::constants::Constants;
 /// Not `cpmx_calc_new`: this one divides by `totaleff` and accumulates
 /// column-outer, member-inner. Both differences are visible in the last bits
 /// of the result, so the two are not interchangeable.
-fn cpmx_calc(cn: &Constants, seq: &[&[u8]], cpmx: &mut [Vec<f64>], eff: &[f64], lgth: usize, clus: usize) {
+fn cpmx_calc(
+    cn: &Constants,
+    seq: &[&[u8]],
+    cpmx: &mut [Vec<f64>],
+    eff: &[f64],
+    lgth: usize,
+    clus: usize,
+) {
     let totaleff: f64 = eff.iter().take(clus).sum();
     for row in cpmx.iter_mut().take(cn.nalphabets) {
         for v in row.iter_mut().take(lgth) {
@@ -228,8 +235,28 @@ pub fn aalign(
     cpmx_calc(cn, &g1, &mut cpmx1, eff1, lgth1, icyc);
     cpmx_calc(cn, &g2, &mut cpmx2, eff2, lgth2, jcyc);
 
-    match_calc(cn, &mut initverticalw, &cpmx2, &cpmx1, 0, lgth1, &mut doublework, &mut intwork, true);
-    match_calc(cn, &mut currentw, &cpmx1, &cpmx2, 0, lgth2, &mut doublework, &mut intwork, true);
+    match_calc(
+        cn,
+        &mut initverticalw,
+        &cpmx2,
+        &cpmx1,
+        0,
+        lgth1,
+        &mut doublework,
+        &mut intwork,
+        true,
+    );
+    match_calc(
+        cn,
+        &mut currentw,
+        &cpmx1,
+        &cpmx2,
+        0,
+        lgth2,
+        &mut doublework,
+        &mut intwork,
+        true,
+    );
 
     if outgap {
         for i in 1..lgth1 + 1 {
@@ -266,7 +293,17 @@ pub fn aalign(
         // `doublencpy`: a copy, not the pointer swap the other aligners use.
         previousw[..lgth2 + 1].copy_from_slice(&currentw[..lgth2 + 1]);
         previousw[0] = initverticalw[i - 1];
-        match_calc(cn, &mut currentw, &cpmx1, &cpmx2, i, lgth2, &mut doublework, &mut intwork, false);
+        match_calc(
+            cn,
+            &mut currentw,
+            &cpmx1,
+            &cpmx2,
+            i,
+            lgth2,
+            &mut doublework,
+            &mut intwork,
+            false,
+        );
         currentw[0] = initverticalw[i];
 
         let mut mi = previousw[0] + fpenalty_half;
@@ -304,7 +341,15 @@ pub fn aalign(
     }
 
     let (m1, m2) = atracking(
-        &currentw, &lastverticalw, group1, group2, &mut ijp, icyc, jcyc, outgap, newgapstr,
+        &currentw,
+        &lastverticalw,
+        group1,
+        group2,
+        &mut ijp,
+        icyc,
+        jcyc,
+        outgap,
+        newgapstr,
     );
     for (i, s) in group1.iter_mut().enumerate() {
         *s = m1[i].clone();
@@ -355,7 +400,11 @@ mod tests {
         assert_eq!(g1[0].iter().filter(|&&c| c == b'-').count(), 3);
         assert_eq!(g2[0].iter().filter(|&&c| c == b'-').count(), 0);
         assert_eq!(
-            g1[0].iter().filter(|&&c| c != b'-').copied().collect::<Vec<u8>>(),
+            g1[0]
+                .iter()
+                .filter(|&&c| c != b'-')
+                .copied()
+                .collect::<Vec<u8>>(),
             short
         );
     }

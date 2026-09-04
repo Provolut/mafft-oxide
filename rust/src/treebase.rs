@@ -184,7 +184,11 @@ pub fn treebase(
 
         // A merge marks the columns it inserts with `'='` so they can be told
         // from the alignment's own gaps and propagated afterwards.
-        let newgapstr = if moa == b'1' || moa == b'2' { b'=' } else { b'-' };
+        let newgapstr = if moa == b'1' || moa == b'2' {
+            b'='
+        } else {
+            b'-'
+        };
 
         // Collapse the all-gap columns of the side being merged *into*, so the
         // DP does not have to reproduce them, and remember where they were.
@@ -333,7 +337,13 @@ pub fn treebase(
                 // `case( 'a' )`: like `'M'`, no 1x1 shortcut.
                 fftlog[m1] = 0;
                 crate::saalign::aalign(
-                    cn, &mut group1, &mut group2, &effarr1, &effarr2, outgap, newgapstr,
+                    cn,
+                    &mut group1,
+                    &mut group2,
+                    &effarr1,
+                    &effarr2,
+                    outgap,
+                    newgapstr,
                 );
             } else if clus1 == 1 && clus2 == 1 {
                 fftlog[m1] = 0;
@@ -530,7 +540,15 @@ pub fn dooneiteration(
                 let mut s1 = std::mem::take(&mut group1[0]);
                 let mut s2 = std::mem::take(&mut group2[0]);
                 st.g_align11(
-                    cn, &dynmtx, cn.penalty, cn.penalty_ex, &mut s1, &mut s2, outgap, outgap, b'-',
+                    cn,
+                    &dynmtx,
+                    cn.penalty,
+                    cn.penalty_ex,
+                    &mut s1,
+                    &mut s2,
+                    outgap,
+                    outgap,
+                    b'-',
                 );
                 group1[0] = s1;
                 group2[0] = s2;

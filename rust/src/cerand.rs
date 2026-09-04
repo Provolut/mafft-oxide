@@ -38,7 +38,11 @@ impl CRand {
         for i in 34..344 {
             r[i] = r[i - 31].wrapping_add(r[i - 3]);
         }
-        CRand { r, f: 344 - 31, rr: 344 - 3 }
+        CRand {
+            r,
+            f: 344 - 31,
+            rr: 344 - 3,
+        }
     }
 
     /// `rand()`.

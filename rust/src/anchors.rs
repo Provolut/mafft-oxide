@@ -70,7 +70,11 @@ pub fn read_external_anchors(nseq: usize, nogaplen: &[usize]) -> Vec<ExtAnch> {
         let mut f = raw
             .split(|c: &u8| c.is_ascii_whitespace())
             .filter(|t| !t.is_empty())
-            .map(|t| std::str::from_utf8(t).ok().and_then(|s| s.parse::<i32>().ok()));
+            .map(|t| {
+                std::str::from_utf8(t)
+                    .ok()
+                    .and_then(|s| s.parse::<i32>().ok())
+            });
         // `sscanf` leaves unmatched fields untouched; the C zeroes i and j
         // first and leaves the rest at whatever the previous line put there.
         // Every real file gives all seven, so take them straight.
@@ -151,26 +155,18 @@ pub fn check_anchors_strongest_first(a: &mut Vec<ExtAnch>) {
             }
             if a[p].endi < a[q].starti && a[p].endj < a[q].startj {
                 // consistent
-            } else if a[p].endi == a[q].starti
-                && a[p].endj < a[q].startj
-                && a[q].starti < a[q].endi
+            } else if a[p].endi == a[q].starti && a[p].endj < a[q].startj && a[q].starti < a[q].endi
             {
                 a[q].starti += 1;
-            } else if a[p].endi < a[q].starti
-                && a[p].endj == a[q].startj
-                && a[q].startj < a[q].endj
+            } else if a[p].endi < a[q].starti && a[p].endj == a[q].startj && a[q].startj < a[q].endj
             {
                 a[q].startj += 1;
             } else if a[q].endi < a[p].starti && a[q].endj < a[p].startj {
                 // consistent
-            } else if a[q].endi == a[p].starti
-                && a[q].endj < a[p].startj
-                && a[q].starti < a[q].endi
+            } else if a[q].endi == a[p].starti && a[q].endj < a[p].startj && a[q].starti < a[q].endi
             {
                 a[q].endi -= 1;
-            } else if a[q].endi < a[p].starti
-                && a[q].endj == a[p].startj
-                && a[q].startj < a[q].endj
+            } else if a[q].endi < a[p].starti && a[q].endj == a[p].startj && a[q].startj < a[q].endj
             {
                 a[q].endj -= 1;
             } else {
@@ -359,10 +355,7 @@ mod tests {
     #[test]
     fn strongest_first_keeps_consistent_anchors_and_reorders_by_start() {
         // Disjoint and in the same order in both sequences, so both survive.
-        let mut a = vec![
-            anch(0, 1, 40, 49, 40, 49, 5),
-            anch(0, 1, 0, 9, 0, 9, 90),
-        ];
+        let mut a = vec![anch(0, 1, 40, 49, 40, 49, 5), anch(0, 1, 0, 9, 0, 9, 90)];
         check_anchors_strongest_first(&mut a);
         assert_eq!(a[0].starti, 0);
         assert_eq!(a[1].starti, 40);
@@ -373,10 +366,7 @@ mod tests {
     fn strongest_first_drops_the_weaker_of_a_crossing_pair() {
         // The weak anchor runs backwards relative to the strong one: ahead in
         // sequence i, behind in sequence j. Nothing can repair that.
-        let mut a = vec![
-            anch(0, 1, 40, 49, 0, 9, 5),
-            anch(0, 1, 0, 9, 40, 49, 90),
-        ];
+        let mut a = vec![anch(0, 1, 40, 49, 0, 9, 5), anch(0, 1, 0, 9, 40, 49, 90)];
         check_anchors_strongest_first(&mut a);
         let dead = a.iter().find(|e| e.starti == -1).expect("one is dropped");
         assert_eq!(dead.score, 5);
@@ -392,10 +382,7 @@ mod tests {
     fn strongest_first_repairs_a_single_shared_endpoint() {
         // The weak anchor starts exactly where the strong one ends in i, and
         // strictly after it in j: one residue of overlap, so its start moves.
-        let mut a = vec![
-            anch(0, 1, 9, 19, 30, 39, 5),
-            anch(0, 1, 0, 9, 0, 9, 90),
-        ];
+        let mut a = vec![anch(0, 1, 9, 19, 30, 39, 5), anch(0, 1, 0, 9, 0, 9, 90)];
         check_anchors_strongest_first(&mut a);
         let weak = a.iter().find(|e| e.score == 5).unwrap();
         assert_eq!(weak.starti, 10);
@@ -409,10 +396,7 @@ mod tests {
         // Both anchors here are mutually consistent, so ordering is all that
         // is observable -- and the final sort is by starti, so give them the
         // same start and read the scores back through `endi`.
-        let mut a = vec![
-            anch(0, 1, 0, 100, 0, 9, 7),
-            anch(0, 1, 0, 200, 0, 9, 7),
-        ];
+        let mut a = vec![anch(0, 1, 0, 100, 0, 9, 7), anch(0, 1, 0, 200, 0, 9, 7)];
         // Only the score sort is under test; make them conflict so the second
         // in score order is the one dropped.
         check_anchors_strongest_first(&mut a);

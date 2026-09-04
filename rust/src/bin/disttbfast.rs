@@ -248,11 +248,7 @@ fn main() {
     let mut extanch: Option<Vec<mafft_rs::anchors::ExtAnch>> = None;
     let mut anchindex: Vec<Vec<i32>> = Vec::new();
     if args.useexternalanchors {
-        let nogaplen: Vec<usize> = input
-            .seq
-            .iter()
-            .map(|s| io::gappick0(s).len())
-            .collect();
+        let nogaplen: Vec<usize> = input.seq.iter().map(|s| io::gappick0(s).len()).collect();
         eprintln!("reading anchors");
         let mut a = mafft_rs::anchors::read_external_anchors(njob, &nogaplen);
         eprintln!("sorting anchors");
@@ -278,6 +274,11 @@ fn main() {
                 std::process::exit(1);
             }
         }
+    }
+
+    if let Err(u) = args.check_blosum(cn.dorp) {
+        eprintln!("disttbfast-rs: unsupported configuration:\n  {}", u.0);
+        std::process::exit(1);
     }
 
     if cn.dorp == b'p' && args.tuplesize != 6 {
@@ -314,7 +315,11 @@ fn main() {
             });
         if let Some(rest) = first.strip_prefix("shuffle") {
             // `sscanf( string+7, "%d", seed )` -- absent leaves it at 0.
-            randomseed = rest.split_whitespace().next().and_then(|t| t.parse().ok()).unwrap_or(0);
+            randomseed = rest
+                .split_whitespace()
+                .next()
+                .and_then(|t| t.parse().ok())
+                .unwrap_or(0);
             eprintln!("shuffle, seed={}", randomseed);
             treekind = b's';
         } else if first.starts_with("pileup") {
@@ -324,7 +329,7 @@ fn main() {
             // The C accepts the keyword and then falls off the end of its own
             // dispatch, so this is its behaviour, not a refusal of ours.
             eprintln!("Use nodepair.");
-            eprintln!("Error. treein = {} or {}", b'n', 'n');
+            eprintln!("Error. treein = {} or n", b'n');
             std::process::exit(1);
         } else if first.starts_with("auto") || first.starts_with("test") {
             let test = first.starts_with("test");
@@ -407,7 +412,9 @@ fn main() {
     if treekind == b't' || treekind == b'a' {
         let mut lst = LalignState::new();
         if treekind == b't' {
-            varpairscore(&cn, &mut lst, njob, npickx, &input.seq, randomseed, &mut out);
+            varpairscore(
+                &cn, &mut lst, njob, npickx, &input.seq, randomseed, &mut out,
+            );
             std::io::stdout().write_all(&out).unwrap();
             std::process::exit(1);
         }
@@ -416,7 +423,9 @@ fn main() {
             treekind = b's';
             nguidetree_override = Some(1);
         } else if njob < 100
-            || varpairscore(&cn, &mut lst, njob, npickx, &input.seq, randomseed, &mut out) == b't'
+            || varpairscore(
+                &cn, &mut lst, njob, npickx, &input.seq, randomseed, &mut out,
+            ) == b't'
         {
             eprintln!("Tree!");
             treekind = b'l';
@@ -586,16 +595,16 @@ fn main() {
             match return_tree_ct.take() {
                 Some(t) => t,
                 None => mafft_rs::compacttree::compacttreegivendist(
-                njob,
-                &compact_mindist,
-                &compact_mindistfrom,
-                if args.treeout != 0 {
-                    Some(&input.name[..])
-                } else {
-                    None
-                },
-                args.outnumber,
-                args.treeout != 0,
+                    njob,
+                    &compact_mindist,
+                    &compact_mindistfrom,
+                    if args.treeout != 0 {
+                        Some(&input.name[..])
+                    } else {
+                        None
+                    },
+                    args.outnumber,
+                    args.treeout != 0,
                 ),
             }
         } else if args.subalignment {
@@ -805,12 +814,16 @@ fn main() {
                         mergeoralign[j] = b'n';
                     }
                 }
-                let found = (0..njob - 1).any(|j| {
-                    samemember(&subfull[j][0], g) || samemember(&subfull[j][1], g)
-                });
+                let found = (0..njob - 1)
+                    .any(|j| samemember(&subfull[j][0], g) || samemember(&subfull[j][1], g));
                 if !found {
-                    eprintln!("# Subalignment {} does not seem to form a monophyletic cluster", i + 1);
-                    eprintln!("# in the guide tree ('GuideTree' in this directory) internally computed.");
+                    eprintln!(
+                        "# Subalignment {} does not seem to form a monophyletic cluster",
+                        i + 1
+                    );
+                    eprintln!(
+                        "# in the guide tree ('GuideTree' in this directory) internally computed."
+                    );
                     let _ = std::fs::copy("infile.tree", "GuideTree");
                     std::process::exit(1);
                 }
@@ -995,7 +1008,8 @@ fn main() {
     let mut ndeleted = 0usize;
     if args.keeplength {
         let nadd = args.nadd as usize;
-        let (nd, deletelist) = keeplength::delete_new_insertions_whole(njob - nadd, nadd, &mut bseq);
+        let (nd, deletelist) =
+            keeplength::delete_new_insertions_whole(njob - nadd, nadd, &mut bseq);
         ndeleted = nd;
         let mut dlf = String::new();
         for (i, list) in deletelist.iter().enumerate() {

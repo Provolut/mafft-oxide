@@ -194,7 +194,14 @@ mod tests {
             for i in 0..20 {
                 assert_eq!(r[i][i], 0.0, "diagonal {} (tm={})", i, tm);
                 for j in 0..20 {
-                    assert_eq!(r[i][j].to_bits(), r[j][i].to_bits(), "({},{}) tm={}", i, j, tm);
+                    assert_eq!(
+                        r[i][j].to_bits(),
+                        r[j][i].to_bits(),
+                        "({},{}) tm={}",
+                        i,
+                        j,
+                        tm
+                    );
                 }
             }
         }

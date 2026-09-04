@@ -268,7 +268,16 @@ pub fn build_tuples(cn: &Constants, seq: &[Vec<u8>], njob: usize, tuplesize: usi
             pointt.push(makepointtable(&grpseq));
         }
     }
-    Tuples { pointt, nogaplen, tsize, maxl, lenfaca, lenfacb, lenfacc, lenfacd }
+    Tuples {
+        pointt,
+        nogaplen,
+        tsize,
+        maxl,
+        lenfaca,
+        lenfacb,
+        lenfacc,
+        lenfacd,
+    }
 }
 
 pub fn distance_matrix(
@@ -277,8 +286,16 @@ pub fn distance_matrix(
     njob: usize,
     tuplesize: usize,
 ) -> (Vec<Vec<f64>>, Vec<usize>) {
-    let Tuples { pointt, nogaplen, tsize, maxl, lenfaca, lenfacb, lenfacc, lenfacd } =
-        build_tuples(cn, seq, njob, tuplesize);
+    let Tuples {
+        pointt,
+        nogaplen,
+        tsize,
+        maxl,
+        lenfaca,
+        lenfacb,
+        lenfacc,
+        lenfacd,
+    } = build_tuples(cn, seq, njob, tuplesize);
 
     let mut sextet = Sextet::new(tsize, maxl);
     let mut mtx: Vec<Vec<f64>> = (0..njob).map(|i| vec![0.0; njob - i]).collect();

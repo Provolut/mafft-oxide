@@ -453,16 +453,6 @@ impl Args {
         if self.nthread > 0 || self.nthreadpair > 0 || self.nthreadtb > 0 {
             bad.push("threads change the result; run with -C 0-0");
         }
-        // For nucleotides `constants()` ignores -b and derives the matrix from
-        // Kimura's model instead, so the BLOSUM check applies to protein only.
-        if self.dorp != Some(b'd')
-            && self.scoremtx == 1
-            && !matches!(self.nblosum, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1 | -2)
-        {
-            // -1 is --aamatrix, a table read from `_aamtx`; -2 is --text,
-            // which also widens the alphabet to every byte.
-            bad.push("unknown -b value");
-        }
         if self.scoremtx == 2 {
             bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");
         }
@@ -472,5 +462,26 @@ impl Args {
         } else {
             Err(Unsupported(bad.join("\n  ")))
         }
+    }
+
+    /// The `-b` check, which cannot run until the sequence type is known.
+    ///
+    /// For nucleotides `constants()` ignores `-b` entirely and derives the
+    /// matrix from Kimura's model, so any value is accepted there -- including
+    /// values that would be an error for protein. Running this from
+    /// `check_supported()` off the *command line's* `dorp` refused
+    /// `-b 47` on nucleotide input that the C aligns happily, because without
+    /// an explicit `-D` the flag is not yet set. Call it once the input has
+    /// been read, with the detected type.
+    pub fn check_blosum(&self, dorp: u8) -> Result<(), Unsupported> {
+        if dorp != b'd'
+            && self.scoremtx == 1
+            && !matches!(self.nblosum, 30 | 45 | 50 | 62 | 80 | 90 | 100 | -1 | -2)
+        {
+            // -1 is --aamatrix, a table read from `_aamtx`; -2 is --text,
+            // which also widens the alphabet to every byte.
+            return Err(Unsupported("unknown -b value".to_string()));
+        }
+        Ok(())
     }
 }

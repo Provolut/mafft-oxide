@@ -138,7 +138,12 @@ fn read(dir: &std::path::Path, name: &str) -> String {
 #[test]
 fn linsi_matches_golden() {
     let d = tempdir("linsi");
-    run_tbfast(P_LOCAL, &["-L"], &[&["-+", "2"][..], T_STAGE, &["-O"]].concat(), &d);
+    run_tbfast(
+        P_LOCAL,
+        &["-L"],
+        &[&["-+", "2"][..], T_STAGE, &["-O"]].concat(),
+        &d,
+    );
     assert_eq!(read(&d, "pre"), include_str!("golden/sample.linsi.pre"));
     assert_eq!(read(&d, "order"), include_str!("golden/sample.linsi.order"));
 }

@@ -287,12 +287,28 @@ fn msalignmm_tanni(
     let mut wm = 0.0f64;
 
     match_calc_alphabet_seq(
-        n_dynamicmtx, &mut initverticalw, cpmx2, cpmx1, jst, ist, lgth1,
-        &mut doublework, &mut intwork, true,
+        n_dynamicmtx,
+        &mut initverticalw,
+        cpmx2,
+        cpmx1,
+        jst,
+        ist,
+        lgth1,
+        &mut doublework,
+        &mut intwork,
+        true,
     );
     match_calc_alphabet_seq(
-        n_dynamicmtx, &mut w1, cpmx1, cpmx2, ist, jst, lgth2,
-        &mut doublework, &mut intwork, true,
+        n_dynamicmtx,
+        &mut w1,
+        cpmx1,
+        cpmx2,
+        ist,
+        jst,
+        lgth2,
+        &mut doublework,
+        &mut intwork,
+        true,
     );
 
     if headgp || ist != 0 {
@@ -328,8 +344,16 @@ fn msalignmm_tanni(
         };
         previousw[0] = initverticalw[i - 1];
         match_calc_alphabet_seq(
-            n_dynamicmtx, currentw, cpmx1, cpmx2, ist + i, jst, lgth2,
-            &mut doublework, &mut intwork, false,
+            n_dynamicmtx,
+            currentw,
+            cpmx1,
+            cpmx2,
+            ist + i,
+            jst,
+            lgth2,
+            &mut doublework,
+            &mut intwork,
+            false,
         );
         currentw[0] = initverticalw[i];
 
@@ -372,8 +396,22 @@ fn msalignmm_tanni(
 
     let currentw: &[f64] = if cur_is_w1 { &w1 } else { &w2 };
     let (gt1, gt2) = atracking(
-        currentw, &lastverticalw, seq1, seq2, mseq1, mseq2, &mut ijp, icyc, jcyc,
-        ist, ien, jst, jen, fulllen1, fulllen2, tailgp,
+        currentw,
+        &lastverticalw,
+        seq1,
+        seq2,
+        mseq1,
+        mseq2,
+        &mut ijp,
+        icyc,
+        jcyc,
+        ist,
+        ien,
+        jst,
+        jen,
+        fulllen1,
+        fulllen2,
+        tailgp,
     );
     (wm, gt1, gt2)
 }
@@ -452,9 +490,26 @@ fn msalignmm_rec(
 
     if lgth1 < DPTANNI || lgth2 < DPTANNI {
         let (value, gt1, gt2) = msalignmm_tanni(
-            n_dynamicmtx, icyc, jcyc, seq1, seq2, cpmx1, cpmx2, ist, ien, jst, jen,
-            fulllen1, fulllen2, &mut mseq1, &mut mseq2, gi, headgp, tailgp,
-            headgapfreq1_g, headgapfreq2_g,
+            n_dynamicmtx,
+            icyc,
+            jcyc,
+            seq1,
+            seq2,
+            cpmx1,
+            cpmx2,
+            ist,
+            ien,
+            jst,
+            jen,
+            fulllen1,
+            fulllen2,
+            &mut mseq1,
+            &mut mseq2,
+            gi,
+            headgp,
+            tailgp,
+            headgapfreq1_g,
+            headgapfreq2_g,
         );
         return (value, mseq1, mseq2, gt1, gt2);
     }
@@ -481,12 +536,28 @@ fn msalignmm_rec(
 
     let mut cur_is_w1 = true;
     match_calc_alphabet_seq(
-        n_dynamicmtx, &mut initverticalw, cpmx2, cpmx1, jst, ist, lgth1,
-        &mut doublework, &mut intwork, true,
+        n_dynamicmtx,
+        &mut initverticalw,
+        cpmx2,
+        cpmx1,
+        jst,
+        ist,
+        lgth1,
+        &mut doublework,
+        &mut intwork,
+        true,
     );
     match_calc_alphabet_seq(
-        n_dynamicmtx, &mut w1, cpmx1, cpmx2, ist, jst, lgth2,
-        &mut doublework, &mut intwork, true,
+        n_dynamicmtx,
+        &mut w1,
+        cpmx1,
+        cpmx2,
+        ist,
+        jst,
+        lgth2,
+        &mut doublework,
+        &mut intwork,
+        true,
     );
 
     // Unlike `_tanni`, the recursive step always charges the head gaps.
@@ -517,8 +588,16 @@ fn msalignmm_rec(
         };
         previousw[0] = initverticalw[i - 1];
         match_calc_alphabet_seq(
-            n_dynamicmtx, currentw, cpmx1, cpmx2, ist + i, jst, lgth2,
-            &mut doublework, &mut intwork, false,
+            n_dynamicmtx,
+            currentw,
+            cpmx1,
+            cpmx2,
+            ist + i,
+            jst,
+            lgth2,
+            &mut doublework,
+            &mut intwork,
+            false,
         );
         currentw[0] = initverticalw[i];
 
@@ -563,14 +642,30 @@ fn msalignmm_rec(
 
     // ---- the backward DP ----
     match_calc_alphabet_seq(
-        n_dynamicmtx, &mut initverticalw, cpmx2, cpmx1, jst + lgth2 - 1, ist, lgth1,
-        &mut doublework, &mut intwork, true,
+        n_dynamicmtx,
+        &mut initverticalw,
+        cpmx2,
+        cpmx1,
+        jst + lgth2 - 1,
+        ist,
+        lgth1,
+        &mut doublework,
+        &mut intwork,
+        true,
     );
     {
         let currentw = if cur_is_w1 { &mut w1 } else { &mut w2 };
         match_calc_alphabet_seq(
-            n_dynamicmtx, currentw, cpmx1, cpmx2, ist + lgth1 - 1, jst, lgth2,
-            &mut doublework, &mut intwork, true,
+            n_dynamicmtx,
+            currentw,
+            cpmx1,
+            cpmx2,
+            ist + lgth1 - 1,
+            jst,
+            lgth2,
+            &mut doublework,
+            &mut intwork,
+            true,
         );
         for j in 0..lgth2 - 1 {
             currentw[j] += fg2[lgth2 - 1] * gf1[lgth1] + og2[j + 1] * gf1[lgth1 - 1];
@@ -597,8 +692,16 @@ fn msalignmm_rec(
         let iu = i as usize;
         previousw[lgth2 - 1] = initverticalw[iu + 1];
         match_calc_alphabet_seq(
-            n_dynamicmtx, currentw, cpmx1, cpmx2, ist + iu, jst, lgth2,
-            &mut doublework, &mut intwork, false,
+            n_dynamicmtx,
+            currentw,
+            cpmx1,
+            cpmx2,
+            ist + iu,
+            jst,
+            lgth2,
+            &mut doublework,
+            &mut intwork,
+            false,
         );
         currentw[lgth2 - 1] = initverticalw[iu];
 
@@ -710,9 +813,25 @@ fn msalignmm_rec(
 
     // ---- the two halves, and the straight segment between them ----
     let (mut value, mut a1, mut a2, mut g1, mut g2) = msalignmm_rec(
-        n_dynamicmtx, icyc, jcyc, seq1, seq2, cpmx1, cpmx2,
-        ist, ist + jumpi as usize, jst, jst + jumpj as usize,
-        fulllen1, fulllen2, gi, headgp, tailgp, headgapfreq1_g, headgapfreq2_g, newgapstr,
+        n_dynamicmtx,
+        icyc,
+        jcyc,
+        seq1,
+        seq2,
+        cpmx1,
+        cpmx2,
+        ist,
+        ist + jumpi as usize,
+        jst,
+        jst + jumpj as usize,
+        fulllen1,
+        fulllen2,
+        gi,
+        headgp,
+        tailgp,
+        headgapfreq1_g,
+        headgapfreq2_g,
+        newgapstr,
     );
 
     let l = jmid - jumpj - 1;
@@ -745,9 +864,25 @@ fn msalignmm_rec(
     }
 
     let (v2, b1, b2, h1, h2) = msalignmm_rec(
-        n_dynamicmtx, icyc, jcyc, seq1, seq2, cpmx1, cpmx2,
-        ist + imid as usize, ien, jst + jmid as usize, jen,
-        fulllen1, fulllen2, gi, headgp, tailgp, headgapfreq1_g, headgapfreq2_g, newgapstr,
+        n_dynamicmtx,
+        icyc,
+        jcyc,
+        seq1,
+        seq2,
+        cpmx1,
+        cpmx2,
+        ist + imid as usize,
+        ien,
+        jst + jmid as usize,
+        jen,
+        fulllen1,
+        fulllen2,
+        gi,
+        headgp,
+        tailgp,
+        headgapfreq1_g,
+        headgapfreq2_g,
+        newgapstr,
     );
     value += v2;
     for (i, s) in a1.iter_mut().enumerate().take(icyc) {
@@ -953,9 +1088,25 @@ pub fn msalignmm(
     };
 
     let (wm, m1, m2, mgt1, mgt2) = msalignmm_rec(
-        n_dynamicmtx, icyc, jcyc, group1, group2, &cpmx1, &cpmx2,
-        0, lgth1 - 1, 0, lgth2 - 1, lgth1, lgth2, &gi, headgp, tailgp,
-        headgapfreq1, headgapfreq2, newgapstr,
+        n_dynamicmtx,
+        icyc,
+        jcyc,
+        group1,
+        group2,
+        &cpmx1,
+        &cpmx2,
+        0,
+        lgth1 - 1,
+        0,
+        lgth2 - 1,
+        lgth1,
+        lgth2,
+        &gi,
+        headgp,
+        tailgp,
+        headgapfreq1,
+        headgapfreq2,
+        newgapstr,
     );
 
     // `if( icyc + jcyc > 20 )`: below that the parent recomputes its own
@@ -978,9 +1129,16 @@ pub fn msalignmm(
         let te1 = totaleff1 * orieff1 / (orieff1 + orieff2);
         let te2 = totaleff2 * orieff2 / (orieff1 + orieff2);
         let limk = mgt1.len();
-        let mut out = crate::align::create_cpmx_result(limk, te1, te2, &cpmx1, &cpmx2, &mgt1, &mgt2);
+        let mut out =
+            crate::align::create_cpmx_result(limk, te1, te2, &cpmx1, &cpmx2, &mgt1, &mgt2);
         out.push(crate::align::create_gapfreq_result(
-            limk, te1, te2, &gi.gapfreq1, &gi.gapfreq2, &mgt1, &mgt2,
+            limk,
+            te1,
+            te2,
+            &gi.gapfreq1,
+            &gi.gapfreq2,
+            &mgt1,
+            &mgt2,
         ));
         // The C passes `ogcp1o`/`fgcp1o` here, not `ogcp1opt`/`fgcp1opt` --
         // Salignmm.c:2119 passes the `opt` pointers in the same place, and
@@ -990,10 +1148,26 @@ pub fn msalignmm(
         // Reproduced, not fixed: it changes the alignment (measured on 5 of
         // the 86 corpus inputs, wherever a node has more than 20 members).
         out.push(crate::align::create_og_result(
-            limk, te1, te2, &ogcp1o, &ogcp2o, &gi.gapfreq1, &gi.gapfreq2, &mgt1, &mgt2,
+            limk,
+            te1,
+            te2,
+            &ogcp1o,
+            &ogcp2o,
+            &gi.gapfreq1,
+            &gi.gapfreq2,
+            &mgt1,
+            &mgt2,
         ));
         out.push(crate::align::create_fg_result(
-            limk, te1, te2, &fgcp1o, &fgcp2o, &gi.gapfreq1, &gi.gapfreq2, &mgt1, &mgt2,
+            limk,
+            te1,
+            te2,
+            &fgcp1o,
+            &fgcp2o,
+            &gi.gapfreq1,
+            &gi.gapfreq2,
+            &mgt1,
+            &mgt2,
         ));
         result = Some(out);
     }
@@ -1043,16 +1217,46 @@ mod tests {
             let mut g1 = vec![a.to_vec()];
             let mut g2 = vec![b.to_vec()];
             let (sm, _) = msalignmm(
-                &cn, &dyn_mtx, &mut g1, &mut g2, &[1.0], &[1.0], true, true,
-                None, None, None, 1.0, 1.0, false, b'-',
+                &cn,
+                &dyn_mtx,
+                &mut g1,
+                &mut g2,
+                &[1.0],
+                &[1.0],
+                true,
+                true,
+                None,
+                None,
+                None,
+                1.0,
+                1.0,
+                false,
+                b'-',
             );
             let mut h1 = vec![a.to_vec()];
             let mut h2 = vec![b.to_vec()];
             let mut st = crate::align::AlignState::new();
             let (sa, _) = st.a_align(
-                &cn, &dyn_mtx, cn.penalty, cn.penalty_ex, &mut h1, &mut h2,
-                &[1.0], &[1.0], true, true, None, None, -1, 0, None, None, 1.0, 1.0,
-                false, b'-',
+                &cn,
+                &dyn_mtx,
+                cn.penalty,
+                cn.penalty_ex,
+                &mut h1,
+                &mut h2,
+                &[1.0],
+                &[1.0],
+                true,
+                true,
+                None,
+                None,
+                -1,
+                0,
+                None,
+                None,
+                1.0,
+                1.0,
+                false,
+                b'-',
             );
             assert_eq!(
                 (g1[0].clone(), g2[0].clone()),
@@ -1068,13 +1272,35 @@ mod tests {
     fn output_rows_stay_the_same_length_and_keep_every_residue() {
         let cn = cn_prot();
         let dyn_mtx = cn.n_dis_consweight_multi.clone();
-        let mut g1 = vec![b"MNGTEGDNFYVPFSNKTGLRSPYEYPQ".to_vec(), b"MNGTEGDNFYVPF--KTGLRSPYEYPQ".to_vec()];
+        let mut g1 = vec![
+            b"MNGTEGDNFYVPFSNKTGLRSPYEYPQ".to_vec(),
+            b"MNGTEGDNFYVPF--KTGLRSPYEYPQ".to_vec(),
+        ];
         let mut g2 = vec![b"MNGTEGPNFYVPFSNITGVVRSPFEQPQYY".to_vec()];
-        let before1: Vec<usize> = g1.iter().map(|s| s.iter().filter(|&&c| c != b'-').count()).collect();
-        let before2: Vec<usize> = g2.iter().map(|s| s.iter().filter(|&&c| c != b'-').count()).collect();
+        let before1: Vec<usize> = g1
+            .iter()
+            .map(|s| s.iter().filter(|&&c| c != b'-').count())
+            .collect();
+        let before2: Vec<usize> = g2
+            .iter()
+            .map(|s| s.iter().filter(|&&c| c != b'-').count())
+            .collect();
         msalignmm(
-            &cn, &dyn_mtx, &mut g1, &mut g2, &[0.5, 0.5], &[1.0], true, true,
-            None, None, None, 1.0, 1.0, false, b'-',
+            &cn,
+            &dyn_mtx,
+            &mut g1,
+            &mut g2,
+            &[0.5, 0.5],
+            &[1.0],
+            true,
+            true,
+            None,
+            None,
+            None,
+            1.0,
+            1.0,
+            false,
+            b'-',
         );
         let alen = g1[0].len();
         for s in g1.iter().chain(g2.iter()) {
@@ -1098,12 +1324,30 @@ mod tests {
         let dyn_mtx = cn.n_dis_consweight_multi.clone();
         let unit = b"MNGTEGDNFYVPFSNKTGLRSPYEYPQYYLEPWKYSLYMFFLILVGFPVNFLTLFVTVQH";
         for reps in [1usize, 3] {
-            let seq: Vec<u8> = unit.iter().cycle().take(unit.len() * reps).copied().collect();
+            let seq: Vec<u8> = unit
+                .iter()
+                .cycle()
+                .take(unit.len() * reps)
+                .copied()
+                .collect();
             let mut g1 = vec![seq.clone()];
             let mut g2 = vec![seq.clone()];
             msalignmm(
-                &cn, &dyn_mtx, &mut g1, &mut g2, &[1.0], &[1.0], true, true,
-                None, None, None, 1.0, 1.0, false, b'-',
+                &cn,
+                &dyn_mtx,
+                &mut g1,
+                &mut g2,
+                &[1.0],
+                &[1.0],
+                true,
+                true,
+                None,
+                None,
+                None,
+                1.0,
+                1.0,
+                false,
+                b'-',
             );
             // Two identical sequences align without a single gap, whether or
             // not the block was split.

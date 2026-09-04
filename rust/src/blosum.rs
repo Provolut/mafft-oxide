@@ -229,10 +229,7 @@ pub fn loadaamtx(dorp: u8) -> (Vec<f64>, bool) {
         }
         let mut p = 0usize;
         for j in 0..=i {
-            while p < line.len()
-                && !line[p].is_ascii_digit()
-                && line[p] != b'-'
-                && line[p] != b'.'
+            while p < line.len() && !line[p].is_ascii_digit() && line[p] != b'-' && line[p] != b'.'
             {
                 p += 1;
             }
@@ -446,7 +443,8 @@ mod aamtx_tests {
         // Serialise: the working directory is process-wide.
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("mafft-rs-aamtx-{}-{}", name, std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mafft-rs-aamtx-{}-{}", name, std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let mut fh = std::fs::File::create(dir.join("_aamtx")).unwrap();
         fh.write_all(contents.as_bytes()).unwrap();
@@ -466,7 +464,13 @@ mod aamtx_tests {
     fn triangle(order: &str, extra: &str) -> String {
         let idx = |c: char| AA.find(c).unwrap() as i32;
         let mut s = String::from("# test\n   ");
-        s.push_str(&order.chars().map(|c| c.to_string()).collect::<Vec<_>>().join("  "));
+        s.push_str(
+            &order
+                .chars()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join("  "),
+        );
         s.push('\n');
         for (i, a) in order.chars().enumerate() {
             s.push(a);
@@ -525,7 +529,11 @@ mod aamtx_tests {
         for (i, a) in AA.chars().enumerate() {
             let p = permuted.find(a).unwrap();
             let want: f64 = freq[p].parse().unwrap();
-            assert!((val[400 + i] - want).abs() < 1e-12, "{a}: {} vs {want}", val[400 + i]);
+            assert!(
+                (val[400 + i] - want).abs() < 1e-12,
+                "{a}: {} vs {want}",
+                val[400 + i]
+            );
         }
     }
 
@@ -596,7 +604,10 @@ fn overridematrix(matrix: &mut [Vec<f64>]) -> bool {
         let parse_hex = |t: Option<&[u8]>| -> Option<u32> {
             let t = t?;
             let s = std::str::from_utf8(t).ok()?;
-            let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+            let s = s
+                .strip_prefix("0x")
+                .or_else(|| s.strip_prefix("0X"))
+                .unwrap_or(s);
             u32::from_str_radix(s, 16).ok()
         };
         let i1 = parse_hex(t1);
@@ -694,7 +705,9 @@ mod text_tests {
     #[test]
     fn the_default_text_matrix_is_identity_ish() {
         let (mut m, mut f, mut a, mut g) = blank();
-        let user = in_dir("default", None, || extendedmtx(0x100, &mut m, &mut f, &mut a, &mut g));
+        let user = in_dir("default", None, || {
+            extendedmtx(0x100, &mut m, &mut f, &mut a, &mut g)
+        });
         assert!(!user);
         for i in 0..0x100 {
             assert_eq!(a[i], i as u8);

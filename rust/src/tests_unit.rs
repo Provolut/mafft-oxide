@@ -909,21 +909,32 @@ fn clustered_flags_parse_like_the_c() {
 #[test]
 fn unsupported_configurations_are_refused() {
     let base = ["-C".into(), "0-0".into()];
-    // BLOSUM45 is a built-in table and is now supported...
+    // `-b` is checked by `check_blosum` rather than `check_supported`, because
+    // it depends on the sequence type and that is not known until the input
+    // has been read. BLOSUM45 is a built-in table and is supported...
     let mut argv: Vec<String> = base.to_vec();
     argv.extend(["-b".into(), "45".into()]);
-    assert!(Args::parse(&argv).unwrap().check_supported().is_ok());
+    let a = Args::parse(&argv).unwrap();
+    assert!(a.check_supported().is_ok());
+    assert!(a.check_blosum(b'p').is_ok());
 
-    // ...but a table that does not exist is refused.
+    // ...but a table that does not exist is refused, for protein.
     let mut argv: Vec<String> = base.to_vec();
     argv.extend(["-b".into(), "77".into()]);
-    assert!(Args::parse(&argv).unwrap().check_supported().is_err());
+    let a = Args::parse(&argv).unwrap();
+    assert!(a.check_supported().is_ok(), "not a parse-time decision");
+    assert!(a.check_blosum(b'p').is_err());
 
-    // `-b` is ignored for nucleotides, whose matrix comes from Kimura's model,
-    // so even a nonsense table must not refuse a nucleotide run.
+    // For nucleotides `-b` is ignored -- the matrix comes from Kimura's model
+    // -- so even a nonsense table must not refuse the run. Detected type, not
+    // the `-D` flag: without `-D` the flag is unset, and checking that instead
+    // refused `-b 47` on nucleotide input the C aligns happily.
+    assert!(a.check_blosum(b'd').is_ok());
     let mut argv: Vec<String> = base.to_vec();
     argv.extend(["-D".into(), "-b".into(), "77".into()]);
-    assert!(Args::parse(&argv).unwrap().check_supported().is_ok());
+    let a = Args::parse(&argv).unwrap();
+    assert!(a.check_supported().is_ok());
+    assert!(a.check_blosum(b'd').is_ok());
 
     // JTT and transmembrane are supported now too.
     for flag in ["-j", "-m"] {
@@ -1627,5 +1638,8 @@ fn intergroup_score_charges_a_gap_run_once() {
     let m = &cn.amino_dis_consweight_multi;
     let gapk = m[b'-' as usize][b'K' as usize];
     let kk = m[b'K' as usize][b'K' as usize];
-    assert!((s3 - (s1 - 2.0 * kk + 2.0 * gapk)).abs() < 1e-9, "{s1} {s3}");
+    assert!(
+        (s3 - (s1 - 2.0 * kk + 2.0 * gapk)).abs() < 1e-9,
+        "{s1} {s3}"
+    );
 }

@@ -35,7 +35,15 @@ fn main() {
                     for (k, e) in v.iter().enumerate().take_while(|(_, e)| e.idatnext != -1) {
                         println!(
                             "{} {} {} len={} relend={} freq={:016x} next={} prev={} npat={}",
-                            tag, j, k, e.len, e.relend, e.freq.to_bits(), e.idatnext, e.idatprev, e.npat
+                            tag,
+                            j,
+                            k,
+                            e.len,
+                            e.relend,
+                            e.freq.to_bits(),
+                            e.idatnext,
+                            e.idatprev,
+                            e.npat
                         );
                     }
                 }
@@ -48,7 +56,8 @@ fn main() {
         for j in 0..=l2 {
             println!(
                 "pf {} {} {:016x} gap={:016x} gapex={:016x}",
-                i, j,
+                i,
+                j,
                 calcpfacnoidatend(&g1[i], &g2[j]).to_bits(),
                 calcpfac_gap_noidatend(&g1[i], &g2[j], 2).to_bits(),
                 calcpfac_gapex_noidatend(&g1[i], &g2[j], 2).to_bits()

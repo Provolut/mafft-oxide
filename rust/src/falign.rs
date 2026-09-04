@@ -748,9 +748,8 @@ pub fn falign(
             );
             totalscore += sc;
         } else if alg == b'a' {
-            totalscore += crate::saalign::aalign(
-                cn, &mut block1, &mut block2, eff1, eff2, outgap, newgapstr,
-            );
+            totalscore +=
+                crate::saalign::aalign(cn, &mut block1, &mut block2, eff1, eff2, outgap, newgapstr);
         } else if clus1 == 1 && clus2 == 1 {
             let mut s1 = std::mem::take(&mut block1[0]);
             let mut s2 = std::mem::take(&mut block2[0]);
@@ -848,7 +847,11 @@ fn estimategapfreq(s: &[Vec<u8>]) -> f64 {
     for row in s.iter() {
         // Trim leading and trailing gaps, then count the gaps that remain.
         let start = row.iter().position(|&c| c != b'-').unwrap_or(row.len());
-        let end = row.iter().rposition(|&c| c != b'-').map(|p| p + 1).unwrap_or(start);
+        let end = row
+            .iter()
+            .rposition(|&c| c != b'-')
+            .map(|p| p + 1)
+            .unwrap_or(start);
         let len = end - start;
         let mut f = 0.0f64;
         for &c in &row[start..end] {
@@ -986,7 +989,8 @@ pub fn falign_givenanchors(
     eprintln!();
 
     alignorcopy[count] = b'a';
-    if count > 1 && (len1 - cut1[count]) > getterminalmargin(len2 - cut2[count], marginfac1, terminalmargin)
+    if count > 1
+        && (len1 - cut1[count]) > getterminalmargin(len2 - cut2[count], marginfac1, terminalmargin)
     {
         let cutadd = len1
             - 1
@@ -1113,9 +1117,7 @@ pub fn falign_givenanchors(
 
         // An anchored block whose two sides are already identical is copied
         // through untouched; everything else goes to the DP.
-        let copy = alignorcopy[i] == b'c'
-            && orilen1 == orilen2
-            && block1[0] == block2[0];
+        let copy = alignorcopy[i] == b'c' && orilen1 == orilen2 && block1[0] == block2[0];
         if !copy {
             // `'A'` blocks are the terminal overhangs. They are aligned with a
             // real extension penalty even when the run set it to zero, so the

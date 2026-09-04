@@ -129,9 +129,7 @@ pub fn restorecommongaps(seq: &mut [Vec<u8>], mem: &[i32], gapmap: &mut Vec<i32>
     let mut tmp: Vec<i32> = Vec::with_capacity(gapmap.len() * 2);
     for j in 0..len + 1 {
         tmp.push(gapmap[j]);
-        for _ in 0..gapmap[j] {
-            tmp.push(0);
-        }
+        tmp.resize(tmp.len() + gapmap[j] as usize, 0);
     }
     if gapmap.len() < tmp.len() {
         gapmap.resize(tmp.len(), 0);
@@ -148,9 +146,9 @@ pub fn restorecommongaps(seq: &mut [Vec<u8>], mem: &[i32], gapmap: &mut Vec<i32>
 pub fn profilealignment(
     cn: &Constants,
     ast: &mut AlignState,
-    aln0: &mut Vec<Vec<u8>>,
-    aln1: &mut Vec<Vec<u8>>,
-    aln2: &mut Vec<Vec<u8>>,
+    aln0: &mut [Vec<u8>],
+    aln1: &mut [Vec<u8>],
+    aln2: &mut [Vec<u8>],
 ) {
     let n0 = aln0.len();
     let n1 = aln1.len();
@@ -170,7 +168,7 @@ pub fn profilealignment(
     }
 
     // Weights: flat over the members that are not entirely gap.
-    let mk = |aln: &Vec<Vec<u8>>| -> Vec<f64> {
+    let mk = |aln: &[Vec<u8>]| -> Vec<f64> {
         let alcount = aln.iter().filter(|s| !isallgap(s)).count();
         aln.iter()
             .map(|s| {
@@ -262,9 +260,8 @@ pub fn insertnewgaps(
     for &k in ex2.iter() {
         mar[k as usize] = 2;
     }
-    let list = |want: u8, mar: &[u8]| -> Vec<usize> {
-        (0..njob).filter(|&i| mar[i] == want).collect()
-    };
+    let list =
+        |want: u8, mar: &[u8]| -> Vec<usize> { (0..njob).filter(|&i| mar[i] == want).collect() };
     let list2 = list(2, &mar);
     let list1 = list(1, &mar);
     let list0 = list(0, &mar);
@@ -286,7 +283,7 @@ pub fn insertnewgaps(
 
             let gapshift = gaplen[j] as usize;
             for s in mseq0.iter_mut() {
-                s.extend(std::iter::repeat(gapchar).take(gapshift));
+                s.extend(std::iter::repeat_n(gapchar, gapshift));
             }
             for (i, s) in mseq1.iter_mut().enumerate() {
                 s.extend(take(&seq[list1[i]], posin12, gapshift));

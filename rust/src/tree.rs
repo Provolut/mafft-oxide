@@ -809,9 +809,16 @@ pub fn upgma_treeout_constrained(
                 {
                     if !warned[gi] {
                         warned[gi] = true;
-                        eprintln!("\n###################################################################");
-                        eprintln!("# WARNING: Group {} is forced to be a monophyletic cluster.", gi + 1);
-                        eprintln!("###################################################################");
+                        eprintln!(
+                            "\n###################################################################"
+                        );
+                        eprintln!(
+                            "# WARNING: Group {} is forced to be a monophyletic cluster.",
+                            gi + 1
+                        );
+                        eprintln!(
+                            "###################################################################"
+                        );
                     }
                     inconsistent[im][jm] = true;
                     inconsistentpairs.push((im, jm));
@@ -1129,12 +1136,7 @@ pub fn createchain(
             dep[i].distfromtip = ll;
         }
         if names.is_some() {
-            instanttree.push_str(&format!(
-                "{}:{:7.5}):{:7.5},",
-                tree[im as usize],
-                ll - l,
-                l
-            ));
+            instanttree.push_str(&format!("{}:{:7.5}):{:7.5},", tree[im as usize], ll - l, l));
         }
         ll += l;
     }

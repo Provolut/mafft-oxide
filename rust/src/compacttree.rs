@@ -39,7 +39,11 @@ pub fn preferenceval(ori: i32, pos: i32, max: i32) -> f64 {
 /// Only `compacttree == 1` caches anything. The C fills rows in order until
 /// the running total passes `maxdistmtxsize` and leaves the rest NULL, so the
 /// cache covers a prefix of the sequences.
-pub fn prepare_partmtx(nseq: usize, compacttree: i32, maxdistmtxsize: f64) -> Vec<Option<Vec<f64>>> {
+pub fn prepare_partmtx(
+    nseq: usize,
+    compacttree: i32,
+    maxdistmtxsize: f64,
+) -> Vec<Option<Vec<f64>>> {
     let mut val: Vec<Option<Vec<f64>>> = (0..nseq).map(|_| None).collect();
     if compacttree != 1 {
         return val;
@@ -238,7 +242,13 @@ fn reformattree(
     if treeout {
         if let Some(names) = names {
             let leaves: Vec<String> = (0..n)
-                .map(|i| format!("\n{}_{}\n", i + 1, crate::tree::newick_name(&names[i], outnumber)))
+                .map(|i| {
+                    format!(
+                        "\n{}_{}\n",
+                        i + 1,
+                        crate::tree::newick_name(&names[i], outnumber)
+                    )
+                })
                 .collect();
             let newick = reformat_rec_newick(&leaves, treept, root as i32);
             std::fs::write("infile.tree", format!("{};\n", newick))
@@ -330,7 +340,13 @@ pub fn compact_distances(
     tuplesize: usize,
     compacttree: i32,
     maxdistmtxsize: f64,
-) -> (Vec<f64>, Vec<i32>, Vec<usize>, Vec<Option<Vec<f64>>>, Vec<i32>) {
+) -> (
+    Vec<f64>,
+    Vec<i32>,
+    Vec<usize>,
+    Vec<Option<Vec<f64>>>,
+    Vec<i32>,
+) {
     let t = crate::dist::build_tuples(cn, seq, njob, tuplesize);
 
     eprintln!("Compact tree, step 1");
@@ -437,7 +453,10 @@ pub fn msa_compact_distances(
     maxdistmtxsize: f64,
 ) -> (Vec<f64>, Vec<i32>) {
     eprintln!("Making a compact tree from msa, step 1.. ");
-    let skiptable: Vec<Vec<i32>> = bseq.iter().map(|s| crate::score::makeskiptable(s)).collect();
+    let skiptable: Vec<Vec<i32>> = bseq
+        .iter()
+        .map(|s| crate::score::makeskiptable(s))
+        .collect();
     let mut mindistfrom = vec![-1i32; njob];
     let mut mindist = vec![999.9f64; njob];
     let mut partmtx = prepare_partmtx(njob, compacttree, maxdistmtxsize);
@@ -624,9 +643,21 @@ mod tests {
         let seq: Vec<Vec<u8>> = vec![b"AA".to_vec(); 4];
         let skip: Vec<Vec<i32>> = seq.iter().map(|s| crate::score::makeskiptable(s)).collect();
         let cn = test_constants();
-        let src = CompactDist::Msa { cn: &cn, seq: &seq, skiptable: &skip };
+        let src = CompactDist::Msa {
+            cn: &cn,
+            seq: &seq,
+            skiptable: &skip,
+        };
         let t = compacttree_memsaveselectable(
-            4, &mut nr, &mut md, &[100, 100, 100, 100], &src, 0.1, None, false, false,
+            4,
+            &mut nr,
+            &mut md,
+            &[100, 100, 100, 100],
+            &src,
+            0.1,
+            None,
+            false,
+            false,
         );
         assert_eq!(t.topol[0], [0, 1]);
         assert!((t.dep[0].distfromtip - 0.10).abs() < 1e-12);
@@ -639,9 +670,21 @@ mod tests {
         let seq: Vec<Vec<u8>> = vec![b"AA".to_vec(); 4];
         let skip: Vec<Vec<i32>> = seq.iter().map(|s| crate::score::makeskiptable(s)).collect();
         let cn = test_constants();
-        let src = CompactDist::Msa { cn: &cn, seq: &seq, skiptable: &skip };
+        let src = CompactDist::Msa {
+            cn: &cn,
+            seq: &seq,
+            skiptable: &skip,
+        };
         let t = compacttree_memsaveselectable(
-            4, &mut nr, &mut md, &[100, 100, 100, 100], &src, 0.1, None, false, false,
+            4,
+            &mut nr,
+            &mut md,
+            &[100, 100, 100, 100],
+            &src,
+            0.1,
+            None,
+            false,
+            false,
         );
         assert_eq!(t.topol[0], [0, 1]);
         // Step 1's first side stands for the 0-1 node, and is named by that
@@ -661,13 +704,25 @@ mod tests {
         let seq: Vec<Vec<u8>> = vec![b"AC".to_vec(); 5];
         let skip: Vec<Vec<i32>> = seq.iter().map(|s| crate::score::makeskiptable(s)).collect();
         let cn = test_constants();
-        let src = CompactDist::Msa { cn: &cn, seq: &seq, skiptable: &skip };
+        let src = CompactDist::Msa {
+            cn: &cn,
+            seq: &seq,
+            skiptable: &skip,
+        };
         let t = compacttree_memsaveselectable(
             5, &mut nr, &mut md, &[100; 5], &src, 0.1, None, false, false,
         );
         for k in 0..4 {
-            assert!(t.topol[k][0] >= 0 && t.topol[k][1] >= 0, "step {} unfilled", k);
-            assert_ne!(t.topol[k][0], t.topol[k][1], "step {} joins a node to itself", k);
+            assert!(
+                t.topol[k][0] >= 0 && t.topol[k][1] >= 0,
+                "step {} unfilled",
+                k
+            );
+            assert_ne!(
+                t.topol[k][0], t.topol[k][1],
+                "step {} joins a node to itself",
+                k
+            );
         }
     }
 
@@ -782,7 +837,13 @@ pub fn compacttree_memsaveselectable(
 
     let mut tree: Vec<Option<String>> = match (treeout, names) {
         (true, Some(names)) => (0..nseq)
-            .map(|i| Some(format!("\n{}_{}\n", i + 1, crate::tree::newick_name(&names[i], outnumber))))
+            .map(|i| {
+                Some(format!(
+                    "\n{}_{}\n",
+                    i + 1,
+                    crate::tree::newick_name(&names[i], outnumber)
+                ))
+            })
             .collect(),
         _ => vec![None; nseq],
     };
@@ -877,28 +938,50 @@ pub fn compacttree_memsaveselectable(
                 } => {
                     let sx = sextet.as_mut().unwrap();
                     let a = distcompact(
-                        nlen[imu], nlen[i], sx.common(&table1, &pointt[i]),
-                        selfscore[imu], selfscore[i],
-                        *lenfaca, *lenfacb, *lenfacc, *lenfacd,
+                        nlen[imu],
+                        nlen[i],
+                        sx.common(&table1, &pointt[i]),
+                        selfscore[imu],
+                        selfscore[i],
+                        *lenfaca,
+                        *lenfacb,
+                        *lenfacc,
+                        *lenfacd,
                     );
                     let b = distcompact(
-                        nlen[jmu], nlen[i], sx.common(&table2, &pointt[i]),
-                        selfscore[jmu], selfscore[i],
-                        *lenfaca, *lenfacb, *lenfacc, *lenfacd,
+                        nlen[jmu],
+                        nlen[i],
+                        sx.common(&table2, &pointt[i]),
+                        selfscore[jmu],
+                        selfscore[i],
+                        *lenfaca,
+                        *lenfacb,
+                        *lenfacc,
+                        *lenfacd,
                     );
                     (a, b)
                 }
                 CompactDist::Msa { cn, seq, skiptable } => {
                     let a = distcompact_msa(
                         crate::score::naivepairscorefast(
-                            cn, &seq[imu], &seq[i], &skiptable[imu], &skiptable[i], cn.penalty_dist,
+                            cn,
+                            &seq[imu],
+                            &seq[i],
+                            &skiptable[imu],
+                            &skiptable[i],
+                            cn.penalty_dist,
                         ),
                         selfscore[imu],
                         selfscore[i],
                     );
                     let b = distcompact_msa(
                         crate::score::naivepairscorefast(
-                            cn, &seq[jmu], &seq[i], &skiptable[jmu], &skiptable[i], cn.penalty_dist,
+                            cn,
+                            &seq[jmu],
+                            &seq[i],
+                            &skiptable[jmu],
+                            &skiptable[i],
+                            cn.penalty_dist,
                         ),
                         selfscore[jmu],
                         selfscore[i],

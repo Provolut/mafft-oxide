@@ -58,7 +58,14 @@ pub struct Gaplen {
 impl Gaplen {
     /// The C's terminator: `len` and `relend` -1, `freq` 0, `npat` -1.
     pub fn terminator() -> Gaplen {
-        Gaplen { relend: -1, idatnext: -1, idatprev: -1, npat: -1, len: -1, freq: 0.0 }
+        Gaplen {
+            relend: -1,
+            idatnext: -1,
+            idatprev: -1,
+            npat: -1,
+            len: -1,
+            freq: 0.0,
+        }
     }
 }
 
@@ -347,7 +354,12 @@ pub fn extendgaplencompactx(cpy: &mut [Col], orig: &[Col], start: usize) {
     if start == 0 || cpy[start - 1].is_null() {
         return;
     }
-    let prev_lens: Vec<i32> = cpy[start - 1].get().unwrap().iter().map(|g| g.len).collect();
+    let prev_lens: Vec<i32> = cpy[start - 1]
+        .get()
+        .unwrap()
+        .iter()
+        .map(|g| g.len)
+        .collect();
     let v = cpy[start].get_mut().unwrap();
     let mut l = 0usize;
     while ov[l].idatnext != -1 {
@@ -518,7 +530,9 @@ mod tests {
         }
         let expect = [(6, 3, 3, -1), (7, 3, 2, 0), (8, 3, 1, 0), (9, 3, 0, 0)];
         for (col, len, relend, prev) in expect {
-            let v = g[col].get().unwrap_or_else(|| panic!("column {} empty", col));
+            let v = g[col]
+                .get()
+                .unwrap_or_else(|| panic!("column {} empty", col));
             assert_eq!(v[0].len, len, "col {} len", col);
             assert_eq!(v[0].relend, relend, "col {} relend", col);
             assert_eq!(v[0].freq, 0.25, "col {} freq", col);
@@ -544,7 +558,11 @@ mod tests {
         let g = build(&["MN--TEG", "M---TEG"], &[0.5, 0.5]);
         let v = g[4].get().expect("column 4 has both runs");
         assert_eq!(v[0].npat, 2);
-        let mut lens: Vec<i32> = v.iter().take_while(|e| e.idatnext != -1).map(|e| e.len).collect();
+        let mut lens: Vec<i32> = v
+            .iter()
+            .take_while(|e| e.idatnext != -1)
+            .map(|e| e.len)
+            .collect();
         lens.sort();
         assert_eq!(lens, vec![2, 3]);
     }
@@ -557,15 +575,27 @@ mod tests {
         let g2 = build(&["MN--TEGDNF"], &[1.0]);
         // Column 4 of group 2 ends its 2-residue gap; against a group-1
         // column with no pattern the straight factor is 1 and opening is 0.
-        assert_eq!(calcpfacnoidatend(&g1[0], &g2[4]).to_bits(), 0x3ff0000000000000);
+        assert_eq!(
+            calcpfacnoidatend(&g1[0], &g2[4]).to_bits(),
+            0x3ff0000000000000
+        );
         assert_eq!(calcpfac_gap_noidatend(&g1[0], &g2[4], 2).to_bits(), 0);
-        assert_eq!(calcpfac_gapex_noidatend(&g1[0], &g2[4], 2).to_bits(), 0x3ff0000000000000);
+        assert_eq!(
+            calcpfac_gapex_noidatend(&g1[0], &g2[4], 2).to_bits(),
+            0x3ff0000000000000
+        );
         // Away from that column the roles invert.
         assert_eq!(calcpfacnoidatend(&g1[0], &g2[0]).to_bits(), 0);
-        assert_eq!(calcpfac_gap_noidatend(&g1[0], &g2[0], 2).to_bits(), 0x3ff0000000000000);
+        assert_eq!(
+            calcpfac_gap_noidatend(&g1[0], &g2[0], 2).to_bits(),
+            0x3ff0000000000000
+        );
         // Group-1 column 6 opens its own run, which drops the opening factor
         // to 1 - 0.25 = 0.75.
-        assert_eq!(calcpfac_gap_noidatend(&g1[6], &g2[0], 2).to_bits(), 0x3fe8000000000000);
+        assert_eq!(
+            calcpfac_gap_noidatend(&g1[6], &g2[0], 2).to_bits(),
+            0x3fe8000000000000
+        );
     }
 
     #[test]

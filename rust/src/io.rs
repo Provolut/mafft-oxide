@@ -489,7 +489,8 @@ mod subaln_tests {
     fn with_table<T>(tag: &str, contents: &str, f: impl FnOnce() -> T) -> T {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let d = std::env::temp_dir().join(format!("mafft-rs-subaln-{}-{}", tag, std::process::id()));
+        let d =
+            std::env::temp_dir().join(format!("mafft-rs-subaln-{}-{}", tag, std::process::id()));
         let _ = std::fs::create_dir_all(&d);
         let mut fh = std::fs::File::create(d.join("_subalignmentstable")).unwrap();
         fh.write_all(contents.as_bytes()).unwrap();

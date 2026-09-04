@@ -203,7 +203,9 @@ pub fn reconstruct_delete_map(
                 p += 1;
             }
             if gapped[j] == b'-' {
-                out.extend_from_slice(format!("{}, {}, -\n", addbk[i][j] as char, j + 1).as_bytes());
+                out.extend_from_slice(
+                    format!("{}, {}, -\n", addbk[i][j] as char, j + 1).as_bytes(),
+                );
             } else {
                 out.extend_from_slice(
                     format!("{}, {}, {}\n", addbk[i][j] as char, j + 1, p + 1).as_bytes(),
@@ -330,7 +332,10 @@ mod tests {
         let original = record_original_gaps(2, &v(&["ABCD", "ABCE"]));
         let (ndel, list) = delete_new_insertions_whole(2, 1, &mut seq);
         assert_eq!(ndel, 2);
-        assert_eq!(s(&seq), vec!["ABCD".to_string(), "ABCE".into(), "----".into()]);
+        assert_eq!(
+            s(&seq),
+            vec!["ABCD".to_string(), "ABCE".into(), "----".into()]
+        );
         // Both inserted residues went, as one run starting at residue 0.
         assert_eq!(list[0], vec![GapPos { pos: 0, len: 2 }]);
         restore_original_gaps(3, &mut seq, &original);
@@ -391,7 +396,10 @@ mod tests {
         assert!(text.contains(">s1\n"), "{text}");
         // One run: it opens at residue 2 (1-origin) and closes at 3.
         assert!(text.contains("2B - "), "{text}");
-        assert_eq!(String::from_utf8(name[0].clone()).unwrap(), "=1ins:2B-3C|s1");
+        assert_eq!(
+            String::from_utf8(name[0].clone()).unwrap(),
+            "=1ins:2B-3C|s1"
+        );
     }
 
     #[test]
