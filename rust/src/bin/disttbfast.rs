@@ -5,6 +5,7 @@
 //! vector, FASTA on stdin, FASTA on stdout, and the same `order` file written
 //! into the working directory.  Configurations whose C code path is not ported
 //! are refused rather than approximated — see `Args::check_supported`.
+#![forbid(unsafe_code)]
 
 use std::io::{Read, Write};
 

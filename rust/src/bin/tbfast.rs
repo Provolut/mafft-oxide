@@ -11,6 +11,7 @@
 //! `-A`), turn each pairwise alignment's ungapped blocks into constraints,
 //! build a UPGMA tree from the pairwise distances, then align progressively
 //! with those constraints biasing the profile DP.
+#![forbid(unsafe_code)]
 
 use std::io::Read;
 

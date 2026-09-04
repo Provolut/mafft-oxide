@@ -129,3 +129,74 @@ pub fn jtt_mtx(is_tm: bool) -> ([[f64; 20]; 20], [f64; 20]) {
     }
     (r, freq)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// XOR of the upper triangle's f64 bit patterns. The matrix is symmetric,
+    /// so XOR-ing the whole thing cancels to zero and pins nothing; the upper
+    /// triangle alone catches any cell that moves.
+    fn upper_xor(r: &[[f64; 20]; 20]) -> u64 {
+        let mut x = 0u64;
+        for i in 0..20 {
+            for j in i + 1..20 {
+                x ^= r[i][j].to_bits();
+            }
+        }
+        x
+    }
+
+    /// Every expected value came from the C, by linking `core/JTT.c` against a
+    /// harness that calls `JTTmtx()` and dumps bit patterns.
+    #[test]
+    fn jtt_matches_the_c() {
+        let (r, freq) = jtt_mtx(false);
+        assert_eq!(upper_xor(&r), 0x0019_7346_79cc_c860);
+        assert_eq!(r[0][1].to_bits(), 0x4063_a7d4_b6ca_bd71);
+        assert_eq!(r[3][7].to_bits(), 0x4077_6deb_c685_0e5f);
+        assert_eq!(r[18][19].to_bits(), 0x4048_dba2_e8ba_2e8b);
+        assert_eq!(r[0][19].to_bits(), 0x408b_2605_0992_2f5a);
+        assert_eq!(freq[0].to_bits(), 0x3fb3_b645_a1ca_c083);
+        assert_eq!(freq[19].to_bits(), 0x3fb0_e560_4189_374c);
+    }
+
+    #[test]
+    fn transmembrane_matches_the_c() {
+        let (r, freq) = jtt_mtx(true);
+        assert_eq!(upper_xor(&r), 0x3f16_c579_8535_2c94);
+        assert_eq!(r[0][1].to_bits(), 0x403f_d11b_e71e_f724);
+        assert_eq!(r[3][7].to_bits(), 0x404b_cb1d_dd50_f10a);
+        assert_eq!(r[18][19].to_bits(), 0x3ff4_a987_87ed_7c95);
+        assert_eq!(r[0][19].to_bits(), 0x404d_0fd0_f4b5_f9d3);
+        assert_eq!(freq[0].to_bits(), 0x3fba_e7d5_66cf_41f2);
+        assert_eq!(freq[19].to_bits(), 0x3fbe_978d_4fdf_3b64);
+    }
+
+    #[test]
+    fn the_two_models_read_opposite_triangles_of_one_table() {
+        // R_RAW carries JTT below the diagonal and transmembrane above it, so
+        // the two calls must not agree anywhere off-diagonal -- if they did,
+        // one branch would be reading the wrong half.
+        let (jtt, _) = jtt_mtx(false);
+        let (tm, _) = jtt_mtx(true);
+        let agree = (0..20)
+            .flat_map(|i| (i + 1..20).map(move |j| (i, j)))
+            .filter(|&(i, j)| jtt[i][j] == tm[i][j])
+            .count();
+        assert_eq!(agree, 0, "no off-diagonal cell should match between models");
+    }
+
+    #[test]
+    fn both_models_are_symmetric_with_a_zero_diagonal() {
+        for tm in [false, true] {
+            let (r, _) = jtt_mtx(tm);
+            for i in 0..20 {
+                assert_eq!(r[i][i], 0.0, "diagonal {} (tm={})", i, tm);
+                for j in 0..20 {
+                    assert_eq!(r[i][j].to_bits(), r[j][i].to_bits(), "({},{}) tm={}", i, j, tm);
+                }
+            }
+        }
+    }
+}

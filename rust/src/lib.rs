@@ -4,6 +4,14 @@
 //! throughout is that the C's evaluation order, its persistent scratch
 //! buffers and its edge-case behaviour are reproduced exactly, because the
 //! output has to match byte for byte -- not because any of it is good style.
+//!
+//! No `unsafe`, and the lint below keeps it that way. The C's pointer walks
+//! are reproduced with indices and slices, its `static` scratch buffers with
+//! owned state passed explicitly, and its `char **` matrices with `Vec<Vec<_>>`
+//! -- so the transliteration is faithful in arithmetic without inheriting the
+//! memory model. That is what lets the port stop at upstream's out-of-bounds
+//! writes (issue #4) instead of reproducing them.
+#![forbid(unsafe_code)]
 
 pub mod addfunctions;
 pub mod align;
