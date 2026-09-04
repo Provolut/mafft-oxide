@@ -206,6 +206,29 @@ fn every_case_is_byte_identical_to_the_c() {
     }
 }
 
+/// The comparison has to actually compare. Verified once by hand -- flipping
+/// a single residue in `aa.fftns2.fa` made the run report
+/// "1 of 553 cases differ ... differs at line 4" with both versions printed --
+/// and pinned here so a refactor of `same()` cannot quietly turn the matrix
+/// into 553 assertions that nothing is wrong.
+#[test]
+fn the_comparison_detects_a_one_byte_difference() {
+    let a = b">s0\nMNGTEG\n>s1\nMNGTEG\n";
+    let b = b">s0\nMNGTEG\n>s1\nMNGTEW\n";
+    assert!(same(a, a, "stdout", "k").is_none(), "identical must pass");
+    let m = same(a, b, "stdout", "k").expect("a differing byte must be reported");
+    assert!(m.contains("line 4"), "should name the line: {}", m);
+    assert!(m.contains("MNGTEG") && m.contains("MNGTEW"), "should show both: {}", m);
+
+    // A truncated output is a difference too, and the byte counts say so.
+    let m = same(&a[..10], a, "stdout", "k").expect("a short output must be reported");
+    assert!(m.contains("differs in length"), "{}", m);
+
+    // An empty output against a real one -- what a silently crashing port
+    // would produce -- must not read as a pass.
+    assert!(same(b"", a, "stdout", "k").is_some());
+}
+
 /// The matrix is only worth what it covers. If a feature is added to
 /// `gen_golden.py` but the fixtures are not regenerated, or vice versa, this
 /// catches it before the comparison silently tests less than it looks like.

@@ -49,19 +49,22 @@ aa.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1
 aa.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 aa.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 aa.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
-aa.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+aa.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 aa.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-aa.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-aa.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+aa.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+aa.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 aa.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-aa.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-aa.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-aa.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-aa.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-aa.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+aa.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+aa.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+aa.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+aa.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+aa.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 aa.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 aa.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 aa.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+aa.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+aa.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+aa.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3	_aamtx	ok
 dup.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 dup.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 dup.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -113,19 +116,22 @@ dup.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -
 dup.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 dup.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 dup.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
-dup.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+dup.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 dup.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-dup.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-dup.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+dup.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+dup.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 dup.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-dup.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-dup.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-dup.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-dup.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-dup.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+dup.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+dup.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+dup.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+dup.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+dup.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 dup.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 dup.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 dup.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+dup.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+dup.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+dup.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3	_aamtx	ok
 gapped.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 gapped.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 gapped.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -177,19 +183,22 @@ gapped.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -
 gapped.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 gapped.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 gapped.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
-gapped.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+gapped.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 gapped.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-gapped.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-gapped.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+gapped.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+gapped.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 gapped.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-gapped.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-gapped.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-gapped.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-gapped.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-gapped.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+gapped.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+gapped.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+gapped.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+gapped.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+gapped.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 gapped.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 gapped.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 gapped.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+gapped.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+gapped.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+gapped.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3	_aamtx	ok
 nuc.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 nuc.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 nuc.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -241,19 +250,22 @@ nuc.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -
 nuc.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 nuc.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 nuc.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
-nuc.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+nuc.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 nuc.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-nuc.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-nuc.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+nuc.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+nuc.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 nuc.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-nuc.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-nuc.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-nuc.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-nuc.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-nuc.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+nuc.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+nuc.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+nuc.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+nuc.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+nuc.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 nuc.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 nuc.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 nuc.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+nuc.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+nuc.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+nuc.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O		_aamtx	exit
 ragged.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 ragged.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 ragged.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -301,19 +313,22 @@ ragged.youngest	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -
 ragged.aamatrix	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order	_aamtx	ok
 ragged.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 ragged.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
-ragged.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+ragged.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 ragged.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-ragged.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-ragged.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+ragged.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+ragged.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 ragged.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-ragged.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-ragged.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-ragged.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-ragged.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-ragged.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+ragged.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+ragged.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+ragged.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+ragged.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+ragged.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 ragged.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 ragged.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 ragged.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+ragged.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+ragged.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+ragged.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3	_aamtx	ok
 tandem.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 tandem.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 tandem.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -361,19 +376,22 @@ tandem.youngest	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -
 tandem.aamatrix	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order	_aamtx	ok
 tandem.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 tandem.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
-tandem.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+tandem.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 tandem.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-tandem.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-tandem.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+tandem.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+tandem.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 tandem.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-tandem.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-tandem.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-tandem.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-tandem.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-tandem.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+tandem.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+tandem.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+tandem.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+tandem.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+tandem.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 tandem.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 tandem.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 tandem.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+tandem.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+tandem.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+tandem.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3	_aamtx	ok
 wildx.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 wildx.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 wildx.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -421,19 +439,22 @@ wildx.youngest	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f
 wildx.aamatrix	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order	_aamtx	ok
 wildx.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
 wildx.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
-wildx.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
+wildx.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 wildx.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-wildx.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
-wildx.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
+wildx.linsi16	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 16 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
+wildx.ginsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
 wildx.ginsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-wildx.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-wildx.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2		ok
-wildx.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2		ok
-wildx.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2		ok
-wildx.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2	_guidetree	ok
+wildx.einsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+wildx.einsiold	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -O -6.00 -E -0.000 -N _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1	pre,order,hat2,hat3		ok
+wildx.linsidyn	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -t	pre,order,hat2,hat3		ok
+wildx.ginsiweight	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5	pre,order,hat2,hat3		ok
+wildx.linsitree	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -U	pre,order,hat2,hat3	_guidetree	ok
 wildx.linsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O			exit
 wildx.ginsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.10 -f -2.00 -Q 100.0 -h 0.1 -s 0.5 -A _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1			exit
 wildx.einsispec	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g 0.0 -f -2.00 -Q 100.0 -h 0.0 -O -6.00 -E -0.000 -N -Z -s 0.5 _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -O -C 0 -b 62 -f -1.53 -Q 100.0 -h 0.000 -F -l 2.7 -X 0.1			exit
+wildx.linsimem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -M -B			exit
+wildx.linsinomem	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -N	pre,order,hat2,hat3		ok
+wildx.linsiaamtx	tbfast	_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3	_aamtx	ok
 aa_add1.plain	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -I 1 -K	order		ok
 aa_add1.keeplength	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -I 1 -K -Y	order		ok
 aa_add1.mapout	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -I 1 -K -Y -Z	order,_deletemap		ok
@@ -494,3 +515,39 @@ ragged_profile2.keeplength	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -
 ragged_profile2.mapout	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -I 2 -Y -Z			exit
 ragged_profile2.mapoutc	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -I 2 -Y -z			exit
 ragged_profile2.mapoutn	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -I 2 -Y -Z -n			exit
+aa_add1.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K	pre,order,hat2,hat3		ok
+aa_add1.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K -Y	pre,order,hat2,hat3		ok
+aa_add1.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+aa_add3.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 3 -K	pre,order,hat2,hat3		ok
+aa_add3.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 3 -K -Y	pre,order,hat2,hat3		ok
+aa_add3.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 3 -K -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+aa_profile1.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1	pre,order,hat2,hat3		ok
+aa_profile1.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -Y	pre,order,hat2,hat3		ok
+aa_profile1.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+aa_profile3.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 3			exit
+aa_profile3.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 3 -Y			exit
+aa_profile3.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 3 -Y -Z			exit
+gapped_add1.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K	pre,order,hat2,hat3		ok
+gapped_add1.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K -Y	pre,order,hat2,hat3		ok
+gapped_add1.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+gapped_add2.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -K	pre,order,hat2,hat3		ok
+gapped_add2.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -K -Y	pre,order,hat2,hat3		ok
+gapped_add2.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -K -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+gapped_profile1.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1	pre,order,hat2,hat3		ok
+gapped_profile1.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -Y	pre,order,hat2,hat3		ok
+gapped_profile1.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+gapped_profile2.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2			exit
+gapped_profile2.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -Y			exit
+gapped_profile2.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -Y -Z			exit
+ragged_add1.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K	pre,order,hat2,hat3		ok
+ragged_add1.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K -Y	pre,order,hat2,hat3		ok
+ragged_add1.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -K -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+ragged_add2.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -K	pre,order,hat2,hat3		ok
+ragged_add2.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -K -Y	pre,order,hat2,hat3		ok
+ragged_add2.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -K -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+ragged_profile1.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1	pre,order,hat2,hat3		ok
+ragged_profile1.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -Y	pre,order,hat2,hat3		ok
+ragged_profile1.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 1 -Y -Z	pre,order,hat2,hat3,_deletemap		ok
+ragged_profile2.tbplain	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2			exit
+ragged_profile2.tbkeep	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -Y			exit
+ragged_profile2.tbmapout	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O -I 2 -Y -Z			exit

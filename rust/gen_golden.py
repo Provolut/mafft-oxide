@@ -271,6 +271,17 @@ def tbfast_cases(rng):
         ("linsispec", f"_ {TB_P} -s 0.5 -L _ -+ 2 {TB_T} -O", None),
         ("ginsispec", f"_ {TB_PG} -s 0.5 -A _ -+ 2 {TB_T}", None),
         ("einsispec", f"_ {TB_PE} -s 0.5 _ -+ 2 {TB_TE}", None),
+        ("linsimem", f"_ {TB_P} -L _ -+ 2 {TB_T} -O -M -B", None),
+        ("linsinomem", f"_ {TB_P} -L _ -+ 2 {TB_T} -O -N", None),
+        # `--aamatrix` reaches both stages, so both parse `-b -1` and both read
+        # `_aamtx`. `nblosum < 0` forces protein, so this runs on nucleotide
+        # input too and still has to agree.
+        (
+            "linsiaamtx",
+            "_ -u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L "
+            "_ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O",
+            lambda r, g, p: stage_aamtx(g),
+        ),
     ]
 
 
@@ -340,7 +351,7 @@ def main():
         src = os.path.join(out, "%s.fa" % inp)
         for binname, caselist, outputs in (
             ("disttbfast", distt_cases(rng), ("order", "hat2", "infile.tree")),
-            ("tbfast", tbfast_cases(rng), ("pre", "order", "hat2")),
+            ("tbfast", tbfast_cases(rng), ("pre", "order", "hat2", "hat3")),
         ):
             for case in caselist:
                 tag, argstr, stage = case[0], case[1], case[2]
@@ -425,6 +436,34 @@ def main():
                         g.write(data)
                     extras.append(e)
             manifest.append((key, "disttbfast", argstr, ",".join(extras), "", "ok"))
+            shutil.rmtree(work, ignore_errors=True)
+
+    # `tbfast`'s --add is not `disttbfast`'s: it divides the added sequences'
+    # weights by 100 and skips the per-added-sequence `samemembern` pass, so it
+    # needs its own cases rather than riding on the ones above.
+    for name in sorted(add_inputs):
+        nadd, mode = add_inputs[name]
+        src = os.path.join(out, "%s.fa" % name)
+        kflag = " -K" if mode == "add" else ""
+        for tag, extra in (("tbplain", ""), ("tbkeep", " -Y"), ("tbmapout", " -Y -Z")):
+            key = "%s.%s" % (name, tag)
+            argstr = "_ %s -L _ -+ 2 %s -O -I %d%s%s" % (TB_P, TB_T, nadd, kflag, extra)
+            work = tempfile.mkdtemp()
+            rc, _ = run(os.path.join(core, "tbfast"), argstr.split(), work, src)
+            if rc != 0:
+                manifest.append((key, "tbfast", argstr, "", "", "exit"))
+                shutil.rmtree(work, ignore_errors=True)
+                continue
+            extras = []
+            for e in ("pre", "order", "hat2", "hat3", "_deletelist", "_deletemap"):
+                p = os.path.join(work, e)
+                if os.path.exists(p) and os.path.getsize(p):
+                    with open(p, "rb") as fh:
+                        data = fh.read()
+                    with open(os.path.join(out, "%s.%s" % (key, e)), "wb") as g:
+                        g.write(data)
+                    extras.append(e)
+            manifest.append((key, "tbfast", argstr, ",".join(extras), "", "ok"))
             shutil.rmtree(work, ignore_errors=True)
 
     with open(os.path.join(out, "MANIFEST"), "w") as fh:
