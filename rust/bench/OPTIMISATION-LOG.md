@@ -130,6 +130,19 @@ which is a change in my own favour, and that is not mine to make. The
 re-measured file sits beside it and the comparison is reported against both.
 Which one is the yardstick is a call for a human.
 
+## One more thing the gates caught
+
+The push was refused by `bench/coverage.sh`, which runs the suite a second
+time. `blosum`, `io` and `tree` each had a test helper that swaps the
+process-wide working directory under a `static LOCK` of its own -- four locks,
+one directory, several test threads. About one run in eight, two helpers
+interleaved and a test ran in the other's directory. Fixed with a single
+`crate::cwd_lock()` taken by all four; no assertion changed. 20 consecutive
+instrumented runs clean. Coverage 89.86% regions, 89.36% lines.
+
+Worth recording here because the flake was invisible to the fast gate for as
+long as only one run happened per push.
+
 ## Leads not taken
 
 - **Three `commonIP` buffers against the C's one.** `align.rs`, `genalign.rs`
