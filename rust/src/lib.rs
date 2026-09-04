@@ -42,3 +42,21 @@ pub mod warp;
 
 #[cfg(test)]
 mod tests_unit;
+
+/// One lock for every test that swaps the working directory.
+///
+/// The working directory is process-wide, and four helpers across three
+/// modules change it to run a case in a scratch directory. Each of them had a
+/// `static LOCK` of its own, which serialises a helper against itself and
+/// against nothing else -- so two of them would interleave, and a test would
+/// find itself running in another helper's directory. It failed the way that
+/// implies: the file the helper had just written was "not found", and the
+/// restore afterwards hit `ENOENT` on a directory the other thread had already
+/// removed. Roughly one run in eight.
+///
+/// Every one of those helpers takes this lock instead.
+#[cfg(test)]
+pub(crate) fn cwd_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}

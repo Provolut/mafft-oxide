@@ -487,8 +487,7 @@ mod subaln_tests {
     use std::io::Write as _;
 
     fn with_table<T>(tag: &str, contents: &str, f: impl FnOnce() -> T) -> T {
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::cwd_lock();
         let d =
             std::env::temp_dir().join(format!("mafft-rs-subaln-{}-{}", tag, std::process::id()));
         let _ = std::fs::create_dir_all(&d);

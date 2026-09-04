@@ -441,8 +441,7 @@ mod aamtx_tests {
     /// runs in its own temporary one.
     fn in_dir<T>(name: &str, contents: &str, f: impl FnOnce() -> T) -> T {
         // Serialise: the working directory is process-wide.
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::cwd_lock();
         let dir =
             std::env::temp_dir().join(format!("mafft-rs-aamtx-{}-{}", name, std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
@@ -674,8 +673,7 @@ mod text_tests {
     use std::io::Write as _;
 
     fn in_dir<T>(tag: &str, aamtx: Option<&str>, f: impl FnOnce() -> T) -> T {
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::cwd_lock();
         let d = std::env::temp_dir().join(format!("mafft-rs-text-{}-{}", tag, std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::create_dir_all(&d);
