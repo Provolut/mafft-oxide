@@ -1,1 +1,7 @@
 target/
+
+# Rewritten by bench/sample.sh on every push, with timings that vary run to
+# run. The profiling *database* (bench/profile.tsv) is committed on purpose --
+# it is the tracked evidence for GOAL.md section 3 and a diff in it is
+# reviewable -- but this file would put a diff of noise on every push.
+bench/sample-profile.txt
