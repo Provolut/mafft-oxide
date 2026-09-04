@@ -4,17 +4,17 @@
 keeps `tests/matrix.rs`, `verify.sh`, `verify_tbfast.sh` and `verify_e2e.sh`
 green. An optimisation that changes one alignment is a bug, however fast.
 
-## Where this starts
+## Where this stands
 
-`bench/profile.tsv`, 8 cases, C and port side by side. A single case is not
-the picture: `disttbfast -F` on `test/sample` alone reads 1.70x / 0.63x /
-1.21x, which is the flattering end of the range.
+`bench/profile.tsv`, 8 cases, C and port side by side. One case is not the
+picture: `disttbfast -F` on `test/sample` alone reads the flattering end of
+every range.
 
-| metric | aggregate | worst case |
-|---|---|---|
-| instructions (callgrind Ir) | **2.15x** work-weighted | memsave 2.46x |
-| wall clock | **1.36x** work-weighted | memsave 1.44x |
-| peak RSS | **1.25x** mean per run | linsi 2.67x |
+| metric | aggregate | worst case | vs done |
+|---|---|---|---|
+| instructions (callgrind Ir) | **2.03x** work-weighted | memsave 2.35x | not met |
+| wall clock | **1.27x** work-weighted | memsave 1.38x | not met |
+| peak RSS | **0.92x** mean per run | linsi 1.67x | **met**, short of 0.90x |
 
 `cargo test`: 4.1 s, 553 bit-identity cases, 89.6% regions / 89.1% lines.
 
@@ -70,18 +70,30 @@ mean down and hides that the two heaviest cases are the two worst.
 `bench/summarize.py` prints both, weighted first. Peak RSS is the exception:
 peaks do not sum, so memory is judged on the per-run mean and the worst case.
 
-Nothing is close to done. Instructions are 2.15x and wall clock 1.36x; memory
-averages 1.25x with two cases above 2x. Wall clock is consistently better than
-instruction count, which says the extra instructions are cache-friendly -- so
-read the database before optimising, and do not assume the two will reach
-parity together.
+**Memory is done**: 0.92x mean per run, better than the C. Building the
+release profile the way the C is built -- opt-level 3, fat LTO, one codegen
+unit, panic=abort -- took it there from 1.25x, and the worst case from 2.67x
+to 1.67x. Getting under the 0.90x stretch is a `sample.linsi` problem now.
 
-Where the cost is concentrated, from the database:
+**Compute is not**: 2.03x instructions, 1.27x wall clock. Wall clock is
+consistently the better of the two, so the extra instructions are
+cache-friendly; do not assume they reach parity together, and do not optimise
+for Ir alone.
 
-- **`sample.memsave` 2.46x instructions** -- the linear-space aligner, and the
-  most recently written code.
-- **`sample.linsi` 2.67x peak RSS** and **`sample.nwns2` 2.19x** -- the two
-  places memory goes the wrong way, against 0.54-0.63x on the FFT path.
+Where the compute sits, from the database and `hotspots.sh`:
+
+- **`L__align11` is 88% of `sample.linsi` on both sides**, and the port runs
+  it at 1.79x. One scalar function against another -- see below -- so it is
+  the whole game for L-INS-i.
+- **`sample.memsave` 2.35x** -- the linear-space aligner, the newest code.
+
+`core/` is not stock MAFFT: it is provolut's performance fork, carrying a
+hoisted mi/mpi recurrence, branches rewritten as selects so the row
+vectorises, and an AVX-512 intrinsics path. That path is **compiled out** --
+guarded on `__AVX512F__`, which `CFLAGS = -O3` does not define, and objdump
+finds no zmm or ymm in either binary. Both sides are scalar, so the gap is
+real work rather than a SIMD handicap. If the C is ever built with
+`-march=native` that stops being true and this section needs re-baselining.
 
 Rules while doing it:
 
