@@ -19,7 +19,10 @@ path = "src/bin/tbfast.rs"
 
 [profile.release]
 opt-level = 3
-debug = false
+# Line tables only: no effect on codegen or speed, but callgrind can then
+# attribute instructions to source lines, which is what `bench/hotspots.sh`
+# and every optimisation in GOAL.md section 3 depend on.
+debug = "line-tables-only"
 lto = "fat"
 codegen-units = 1
 panic = "abort"

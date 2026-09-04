@@ -174,23 +174,41 @@ fn match_calc(
         }
     }
 
+    // The C writes this l-outer, j-inner:
+    //     for( l=0; l<nalphabets; l++ ) { scarr[l] = 0.0;
+    //         for( j=0; j<nalphabets; j++ )
+    //             scarr[l] += n_dynamicmtx[j][l] * cpmx1[j][i1]; }
+    // Transposed here. Each `scarr[l]` still accumulates over j in increasing
+    // j, so every sum is the same sequence of additions in the same order --
+    // the one thing that must not move. What changes is the addressing:
+    // `n_dynamicmtx[j]` is walked along its row rather than down a column, and
+    // `cpmx1[j][i1]` is loaded once per j instead of once per (l, j).
     let mut scarr = vec![0.0f64; nalphabets];
-    for (l, sc) in scarr.iter_mut().enumerate() {
-        let mut s = 0.0;
-        for j in 0..nalphabets {
-            s += n_dynamicmtx[j][l] * cpmx1[j][i1];
+    for j in 0..nalphabets {
+        let c = cpmx1[j][i1];
+        let row = &n_dynamicmtx[j];
+        for (l, sc) in scarr.iter_mut().enumerate() {
+            *sc += row[l] * c;
         }
-        *sc = s;
     }
 
-    for j in 0..lgth2 {
+    // The C fetches each column's two row pointers once and then walks them
+    // (`cpmxpdnpt = *cpmxpdnptpt++;` ... `while( *cpmxpdnpt>-1 ) *matchpt +=
+    // scarr[*cpmxpdnpt++] * *cpmxpdpt++;`). Indexing `intwork[j][k]` inside
+    // the inner loop instead re-walks the outer `Vec` on every step, and does
+    // it twice per iteration -- once for the test and once for the value.
+    // Same arithmetic in the same order; only the addressing changes.
+    for (j, o) in out.iter_mut().enumerate().take(lgth2) {
+        let codes = &intwork[j];
+        let vals = &doublework[j];
         let mut acc = 0.0f64;
-        let mut k = 0usize;
-        while intwork[j][k] > -1 {
-            acc += scarr[intwork[j][k] as usize] * doublework[j][k];
-            k += 1;
+        for (&code, &val) in codes.iter().zip(vals.iter()) {
+            if code < 0 {
+                break;
+            }
+            acc += scarr[code as usize] * val;
         }
-        out[j] = acc;
+        *o = acc;
     }
 }
 
