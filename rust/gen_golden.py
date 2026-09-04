@@ -286,6 +286,37 @@ def main():
     for name, recs in sorted(cases.items()):
         write_fasta(os.path.join(out, "%s.fa" % name), recs)
 
+    # --add and --addprofile take a combined input: an existing alignment plus
+    # the sequences to add. Build those by aligning a corpus entry with the C
+    # and splicing the result, then treat each as an input in its own right.
+    # `nadd` varies per input, so these carry their own case list.
+    add_inputs = {}
+    for inp in ("aa", "gapped", "ragged"):
+        work = tempfile.mkdtemp()
+        rc, aligned = run(
+            os.path.join(core, "disttbfast"), (DF).split(), work, os.path.join(out, "%s.fa" % inp)
+        )
+        shutil.rmtree(work, ignore_errors=True)
+        if rc != 0 or not aligned:
+            continue
+        apath = os.path.join(out, "%s.aligned.tmp" % inp)
+        with open(apath, "wb") as fh:
+            fh.write(aligned)
+        n = aligned.count(b">")
+        for nadd in (1, max(1, n // 2)):
+            for mode in ("add", "profile"):
+                name = "%s_%s%d" % (inp, mode, nadd)
+                gen = subprocess.run(
+                    [sys.executable, os.path.join(HERE, "gen_add.py"), apath, str(nadd), mode],
+                    stdout=subprocess.PIPE,
+                )
+                if gen.returncode != 0 or not gen.stdout:
+                    continue
+                with open(os.path.join(out, "%s.fa" % name), "wb") as fh:
+                    fh.write(gen.stdout)
+                add_inputs[name] = (nadd, mode)
+        os.remove(apath)
+
     manifest = []
     for inp in sorted(cases):
         recs = cases[inp]
@@ -342,6 +373,42 @@ def main():
                     )
                 )
                 shutil.rmtree(work, ignore_errors=True)
+
+    # `-K` is --add proper (the tail is ungapped); without it the tail is an
+    # aligned profile. `-Y` (--keeplength) cuts the columns the alignment
+    # inserted into the reference back out, and -Z/-z say what that cost.
+    for name in sorted(add_inputs):
+        nadd, mode = add_inputs[name]
+        src = os.path.join(out, "%s.fa" % name)
+        kflag = " -K" if mode == "add" else ""
+        for tag, extra in (
+            ("plain", ""),
+            ("keeplength", " -Y"),
+            ("mapout", " -Y -Z"),
+            ("mapoutc", " -Y -z"),
+            ("mapoutn", " -Y -Z -n"),
+        ):
+            key = "%s.%s" % (name, tag)
+            argstr = "%s -I %d%s%s" % (DF, nadd, kflag, extra)
+            work = tempfile.mkdtemp()
+            rc, stdout = run(os.path.join(core, "disttbfast"), argstr.split(), work, src)
+            if rc != 0:
+                manifest.append((key, "disttbfast", argstr, "", "", "exit"))
+                shutil.rmtree(work, ignore_errors=True)
+                continue
+            with open(os.path.join(out, key + ".fa"), "wb") as fh:
+                fh.write(stdout)
+            extras = []
+            for e in ("order", "_deletelist", "_deletemap"):
+                p = os.path.join(work, e)
+                if os.path.exists(p) and os.path.getsize(p):
+                    with open(p, "rb") as fh:
+                        data = fh.read()
+                    with open(os.path.join(out, "%s.%s" % (key, e)), "wb") as g:
+                        g.write(data)
+                    extras.append(e)
+            manifest.append((key, "disttbfast", argstr, ",".join(extras), "", "ok"))
+            shutil.rmtree(work, ignore_errors=True)
 
     with open(os.path.join(out, "MANIFEST"), "w") as fh:
         for row in manifest:
