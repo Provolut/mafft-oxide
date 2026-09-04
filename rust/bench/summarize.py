@@ -14,8 +14,49 @@ the two worst.
 The *work-weighted ratio* -- the sum of the port's cost over the sum of the
 C's -- is what a caller actually experiences across the workload, and is the
 figure GOAL.md means by "on average". It is reported first for that reason.
+
+With a second argument it also compares against a frozen baseline, which is how
+GOAL.md's "<= 90% of today" is checked rather than eyeballed:
+
+    ./summarize.py profile.tsv baseline-2026-09-04.tsv
 """
 import sys
+
+
+def totals(path):
+    """(wall clock ms summed, mean peak RSS KB) over the rows that measured."""
+    with open(path) as fh:
+        header = fh.readline().rstrip("\n").split("\t")
+        idx = {n: i for i, n in enumerate(header)}
+        ms = rss = n = 0.0
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            if len(f) < len(header) or f[idx["note"]] != "ok":
+                continue
+            ms += float(f[idx["r_ms"]])
+            rss += float(f[idx["r_rss_kb"]])
+            n += 1
+    return (ms, rss / n if n else 0.0)
+
+
+def compare_to_baseline(path, base):
+    ms, rss = totals(path)
+    bms, brss = totals(base)
+    print("\nagainst %s (GOAL.md target: <= 90%% of either)" % base)
+    print("-" * 70)
+    hit = False
+    for label, now, was, unit in (
+        ("wall clock", ms, bms, "ms"),
+        ("mean peak RSS", rss, brss, "KB"),
+    ):
+        pct = 100.0 * now / was if was else 0.0
+        hit = hit or pct <= 90.0
+        print(
+            "%-14s %8.0f %s   was %8.0f %s   %6.1f%% of today  %s"
+            % (label, now, unit, was, unit, pct, "MET" if pct <= 90.0 else "")
+        )
+    print("\n%s" % ("TARGET MET" if hit else "target not met"))
+    return 0 if hit else 1
 
 
 def main():
@@ -83,8 +124,15 @@ def main():
             if float(r[idx[ckey]])
         )
         print("  %-13s %s" % (label + ":", names))
+
+    if len(sys.argv) > 2:
+        return compare_to_baseline(path, sys.argv[2])
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except BrokenPipeError:
+        # Piped through `head`; not an error worth a traceback.
+        sys.exit(0)
