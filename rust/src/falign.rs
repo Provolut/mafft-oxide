@@ -151,12 +151,21 @@ fn alignable_reagion(
         // every letter above index 25 is silently left out of this score.
         let mut pre1 = na;
         let mut pre2 = na;
-        for j in (0..=25usize).rev() {
-            if prf1[j] != 0.0 {
+        // Sliced to exactly 26 before the loop. `j` is provably <= 25, but
+        // `prf1.len()` is `nalphabets` -- a runtime value -- so without this
+        // the compiler cannot fold the bounds check and emits one per element
+        // per column. These two lines were 21% of `sample.memsave`'s
+        // instructions. `nalphabets` is 26 for protein and nucleotide and 256
+        // for `--text`, so the slice itself never fails; if it ever did, the C
+        // would be reading out of bounds at the same index.
+        let p1 = &prf1[..26];
+        let p2 = &prf2[..26];
+        for j in (0..26usize).rev() {
+            if p1[j] != 0.0 {
                 hat1[pre1] = j as i32;
                 pre1 = j;
             }
-            if prf2[j] != 0.0 {
+            if p2[j] != 0.0 {
                 hat2[pre2] = j as i32;
                 pre2 = j;
             }
@@ -582,6 +591,8 @@ pub fn falign(
 
     // --- collect anchors at each candidate lag ---
     let mut count = 0usize;
+    let mut s1: Vec<&[u8]> = Vec::with_capacity(clus1);
+    let mut s2: Vec<&[u8]> = Vec::with_capacity(clus2);
     for k in 0..nkouho {
         let lag = fs.kouho[k];
         if lag <= -(len1 as i32) || len2 as i32 <= lag {
@@ -593,8 +604,13 @@ pub fn falign(
         } else {
             ((-lag) as usize, 0usize)
         };
-        let s1: Vec<&[u8]> = group1.iter().map(|s| &s[off1..]).collect();
-        let s2: Vec<&[u8]> = group2.iter().map(|s| &s[off2..]).collect();
+        // Rebuilt in place rather than collected fresh: these two are one
+        // allocation each per candidate lag per node, and DHAT counted 34,843
+        // of each across a `-M` run on test/sample.
+        s1.clear();
+        s1.extend(group1.iter().map(|s| &s[off1..]));
+        s2.clear();
+        s2.extend(group2.iter().map(|s| &s[off2..]));
 
         let tmpint = alignable_reagion(
             &mut fs.alignable,
