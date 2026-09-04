@@ -32,6 +32,10 @@ struct TbArgs {
     /// `-N`: suppress the C's automatic switch to the memsave aligner past
     /// 30000 columns (tbfast.c:1096). `-B` is accepted and ignored, as in the C.
     nevermemsave: bool,
+    /// `-i`: read the input from this file instead of stdin. The C has one
+    /// `arguments()` called for both option groups and one file-scope
+    /// `inputfile`, so `-i` in either group sets it.
+    inputfile: Option<String>,
     // pair phase
     pair_alg: Option<PairAlg>,
     pair_ppenalty: i32,
@@ -106,6 +110,7 @@ impl Default for TbArgs {
     fn default() -> Self {
         TbArgs {
             nevermemsave: false,
+            inputfile: None,
             pair_alg: None,
             pair_ppenalty: NOTSPECIFIED,
             pair_ppenalty_ex: NOTSPECIFIED,
@@ -223,6 +228,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
     // --- pairwise phase (pairlocalalign.c's arguments()) ---
     scan(&pav, |c, take| {
         match c {
+            'i' => a.inputfile = Some(take().ok_or("-i needs a value")?),
             'L' => a.pair_alg = Some(PairAlg::Local),
             'A' => a.pair_alg = Some(PairAlg::Global),
             'u' => a.pair_unalignlevel = atof(&take().ok_or("-u needs a value")?),
@@ -279,6 +285,7 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
                     None => a.nthread,
                 };
             }
+            'i' => a.inputfile = Some(take().ok_or("-i needs a value")?),
             'b' => a.nblosum = atoi(&take().ok_or("-b")?),
             'j' => {
                 a.pam_n = atoi(&take().ok_or("-j")?);
@@ -471,9 +478,20 @@ fn main() {
     }
 
     let mut bytes = Vec::new();
-    std::io::stdin()
-        .read_to_end(&mut bytes)
-        .expect("read stdin");
+    match &a.inputfile {
+        Some(path) => match std::fs::read(path) {
+            Ok(b) => bytes = b,
+            Err(_) => {
+                eprintln!("Cannot open {}", path);
+                std::process::exit(1);
+            }
+        },
+        None => {
+            std::io::stdin()
+                .read_to_end(&mut bytes)
+                .expect("read stdin");
+        }
+    }
     let input = io::read_data(bytes, a.dorp, a.outnumber, a.nblosum == -2);
     let njob = input.njob;
     if njob < 2 {

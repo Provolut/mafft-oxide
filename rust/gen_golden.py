@@ -69,6 +69,17 @@ def corpus(rng):
             s[p] = "-"
         g.append(("g%d" % i, "".join(s)))
     c["gapped"] = g
+
+    # X wildcards and one sequence too short to align: `removex`, the
+    # `distancemtx = 3.0` short-circuit, and the `-:` wildcard handling.
+    x = []
+    for i in range(5):
+        s = list(mutate(base, 0.15, rng))
+        for p in range(5 + 7 * i, 9 + 7 * i):
+            s[p] = "X"
+        x.append(("x%d" % i, "".join(s)))
+    x.append(("xshort", base[:4]))
+    c["wildx"] = x
     return c
 
 
@@ -254,6 +265,12 @@ def tbfast_cases(rng):
         ("linsidyn", f"_ {TB_P} -L _ -+ 2 {TB_T} -O -t", None),
         ("ginsiweight", f"_ {TB_PG} -A _ -+ 2 -W 0.001 -V -1.53 -s 0.0 -C 0 -b 62 -f -2.00 -Q 100.0 -h -0.1 -F -l 0.5 -X 0.5", None),
         ("linsitree", f"_ {TB_P} -L _ -+ 2 {TB_T} -O -U", lambda r, g, p: newick(len(r), "balanced")),
+        # `-s` in the pairwise stage is `specificityconsideration`: it makes
+        # pairalign score once, derive a distance, and re-align through a
+        # distance-specific matrix. Nothing else reaches that branch.
+        ("linsispec", f"_ {TB_P} -s 0.5 -L _ -+ 2 {TB_T} -O", None),
+        ("ginsispec", f"_ {TB_PG} -s 0.5 -A _ -+ 2 {TB_T}", None),
+        ("einsispec", f"_ {TB_PE} -s 0.5 _ -+ 2 {TB_TE}", None),
     ]
 
 

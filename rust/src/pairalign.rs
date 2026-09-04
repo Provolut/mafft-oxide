@@ -263,3 +263,56 @@ pub fn pairalign(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `score2dist()` has three branches and the middle one is the C's own
+    /// "mondai ari" -- a self-score below the pair score, which should not
+    /// happen but does, and is clamped to 0 rather than going negative.
+    #[test]
+    fn score2dist_matches_the_c_on_all_three_branches() {
+        // MIN(self1, self2) == 0 -> the maximum distance, not a division.
+        assert_eq!(score2dist(500.0, 0.0, 900.0), 2.0);
+        assert_eq!(score2dist(500.0, 900.0, 0.0), 2.0);
+        assert_eq!(score2dist(0.0, 0.0, 0.0), 2.0);
+
+        // MIN < pscore -> clamped to 0.
+        assert_eq!(score2dist(1000.0, 900.0, 950.0), 0.0);
+        assert_eq!(score2dist(901.0, 900.0, 900.0), 0.0);
+
+        // The ordinary case, and that it is the *smaller* self-score that
+        // divides -- swapping the two must not change the answer.
+        assert_eq!(score2dist(450.0, 900.0, 1200.0), (1.0f64 - 450.0 / 900.0) * 2.0);
+        assert_eq!(
+            score2dist(450.0, 900.0, 1200.0),
+            score2dist(450.0, 1200.0, 900.0)
+        );
+        // Equality goes to the division, not the clamp: `bunbo < pscore`.
+        assert_eq!(score2dist(900.0, 900.0, 900.0), 0.0);
+    }
+
+    #[test]
+    fn removex_strips_both_cases_and_counts_them() {
+        let (d, n) = removex(b"MXNGxTEG");
+        assert_eq!(d, b"MNGTEG".to_vec());
+        assert_eq!(n, 2);
+
+        // No X at all: the count is what the caller stores as
+        // `thereisxineachseq`, so 0 has to mean 0 rather than "unset".
+        let (d, n) = removex(b"MNGTEG");
+        assert_eq!(d, b"MNGTEG".to_vec());
+        assert_eq!(n, 0);
+
+        // All X: the C leaves an empty string, not a NULL.
+        let (d, n) = removex(b"XXxx");
+        assert!(d.is_empty());
+        assert_eq!(n, 4);
+
+        // A lower-case sequence keeps its case; only `x` is special.
+        let (d, n) = removex(b"mngteg");
+        assert_eq!(d, b"mngteg".to_vec());
+        assert_eq!(n, 0);
+    }
+}

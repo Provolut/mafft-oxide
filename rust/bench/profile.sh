@@ -73,6 +73,29 @@ ir_count() {
   rm -f "$out"
 }
 
+# A run that failed is not a fast run. Without this a crashing port records as
+# "0.000x", which is how a profiling database turns into a lie: check both
+# binaries exit 0 and produce the same bytes before timing either of them.
+check_pair() {
+  local cbin="$1" rbin="$2"; shift 2
+  local cd rd
+  cd=$(mktemp -d); rd=$(mktemp -d)
+  ( cd "$cd" && "$cbin" "$@" > stdout.fa 2>/dev/null ); local cst=$?
+  ( cd "$rd" && "$rbin" "$@" > stdout.fa 2>/dev/null ); local rst=$?
+  local verdict=ok
+  if [ $cst -ne 0 ] || [ $rst -ne 0 ]; then
+    verdict="exit:$cst/$rst"
+  else
+    for f in stdout.fa pre order hat2; do
+      if [ -f "$cd/$f" ] || [ -f "$rd/$f" ]; then
+        cmp -s "$cd/$f" "$rd/$f" || { verdict="differs:$f"; break; }
+      fi
+    done
+  fi
+  rm -rf "$cd" "$rd"
+  echo "$verdict"
+}
+
 best_ms() {
   local best=999999 s e ms i
   for i in 1 2 3 4 5; do
@@ -83,7 +106,7 @@ best_ms() {
   echo "$best"
 }
 
-printf 'tag\tbinary\tc_ir\tr_ir\tir_ratio\tc_rss_kb\tr_rss_kb\trss_ratio\tc_ms\tr_ms\tms_ratio\n'
+printf 'tag\tbinary\tc_ir\tr_ir\tir_ratio\tc_rss_kb\tr_rss_kb\trss_ratio\tc_ms\tr_ms\tms_ratio\tnote\n'
 printf '%s\n' "$CASES" | while IFS=$'\t' read -r tag bin input argv; do
   [ -n "$tag" ] || continue
   cbin="$CORE/$bin"
@@ -91,6 +114,12 @@ printf '%s\n' "$CASES" | while IFS=$'\t' read -r tag bin input argv; do
   cd "$work" || exit 1
   # shellcheck disable=SC2086
   set -- $argv -i "$input"
+  verdict=$(check_pair "$cbin" "$rbin" "$@")
+  if [ "$verdict" != ok ]; then
+    printf '%s\t%s\tSKIPPED\t%s\t-\t-\t-\t-\t-\t-\t-\n' "$tag" "$bin" "$verdict" 1>&2
+    printf '%s\t%s\t-\t-\t-\t-\t-\t-\t-\t-\t-\t%s\n' "$tag" "$bin" "$verdict"
+    continue
+  fi
   cir=$(ir_count "$cbin" "$@")
   rir=$(ir_count "$rbin" "$@")
   crss=$(peak_rss "$cbin" "$@")
@@ -99,7 +128,7 @@ printf '%s\n' "$CASES" | while IFS=$'\t' read -r tag bin input argv; do
   rms=$(best_ms "$rbin" "$@")
   awk -v t="$tag" -v b="$bin" -v ci="$cir" -v ri="$rir" -v cr="$crss" -v rr="$rrss" \
       -v cm="$cms" -v rm="$rms" 'BEGIN{
-        printf "%s\t%s\t%s\t%s\t%.3f\t%s\t%s\t%.3f\t%s\t%s\t%.3f\n",
+        printf "%s\t%s\t%s\t%s\t%.3f\t%s\t%s\t%.3f\t%s\t%s\t%.3f\tok\n",
                t, b, ci, ri, (ci?ri/ci:0), cr, rr, (cr?rr/cr:0), cm, rm, (cm?rm/cm:0)
       }'
 done
