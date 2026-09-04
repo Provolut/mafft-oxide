@@ -212,6 +212,123 @@ fn count_atgc(s: &[u8]) -> (i64, i64) {
     (n_atgc, n_char)
 }
 
+/// `countATGCandN()`: (nucleotide-ish characters, N characters, total letters).
+///
+/// Separate from [`count_atgc`] rather than folded into it because the C keeps
+/// two functions that differ only in whether they hand back the `n` tally, and
+/// their callers are on different paths.
+fn count_atgc_and_n(s: &[u8]) -> (i64, i64, i64) {
+    let mut n_atgc = 0i64;
+    let mut n_n = 0i64;
+    let mut n_char = 0i64;
+    for &ch in s {
+        let c = ch.to_ascii_lowercase();
+        if c.is_ascii_alphabetic() {
+            n_char += 1;
+            if matches!(c, b'a' | b't' | b'g' | b'c' | b'u' | b'n') {
+                n_atgc += 1;
+            }
+            if c == b'n' {
+                n_n += 1;
+            }
+        }
+    }
+    (n_atgc, n_n, n_char)
+}
+
+/// `countnogaplen()`: residues that are not `-`.
+fn count_nogap_len(seq: &[u8]) -> usize {
+    seq.iter().filter(|&&c| c != b'-').count()
+}
+
+/// What `getnumlen_nogap_countn()` measures about an input.
+///
+/// Attributes are the four values the C leaves in globals plus the two it
+/// returns through pointers, which is why they travel together here: `countlen`
+/// prints all of them in one line and nothing else uses them.
+pub struct LengthCounts {
+    /// `njob`: number of records.
+    pub njob: usize,
+    /// `nlenmax`: longest ungapped record.
+    pub nlenmax: usize,
+    /// The shortest ungapped record (the C's `*nlenminpt`).
+    pub nlenmin: usize,
+    /// `dorp`: `b'd'` for nucleotide, `b'p'` for protein, decided by the
+    /// nucleotide-character fraction over the first 100000 sites.
+    pub dorp: u8,
+    /// The C's `*nfreq`: N characters per nucleotide-ish character.
+    pub nfreq: f64,
+}
+
+/// `getnumlen_nogap_countn()`: measure an input without aligning it.
+///
+/// The sampling cap is the C's and is load-bearing rather than an optimisation:
+/// only the first 100000 sites feed the nucleotide-fraction decision, so a file
+/// whose head and tail differ in composition is typed from its head, and a port
+/// that read all of it would disagree with the C on exactly those inputs.
+///
+/// Args are the raw file bytes and the `-D`/`-P` override, if one was given.
+///
+/// Returns:
+///     The record count, the longest and shortest ungapped lengths, the
+///     inferred sequence type, and the N frequency.
+pub fn getnumlen_nogap_countn(bytes: Vec<u8>, dorp_in: Option<u8>) -> LengthCounts {
+    let mut fp = CFile::new(bytes);
+    let njob = count_ku_or_wa(&mut fp);
+    search_ku_or_wa(&mut fp);
+    let mut nlenmax = 0usize;
+    let mut nlenmin = 99_999_999usize;
+    let mut atgcnum = 0i64;
+    let mut total = 0i64;
+    let mut nnum = 0i64;
+    // The C's `nN` is a function-scope local that only `countATGCandN` writes,
+    // while `nnum += nN` sits *outside* the `total < 100000` guard. So once the
+    // sampling cap is reached, every remaining record adds the last sampled
+    // record's N count again. Transliterated rather than tidied: `nfreq` is
+    // printed, and correcting the C here would make the two disagree on any
+    // input longer than 100000 sites -- which is most of them.
+    //
+    // The zero here is a decision, not a transliteration, and it is the one
+    // place this function knowingly differs from the C. The C leaves `nN`
+    // uninitialised, and `countATGCandN` returns early for an empty sequence
+    // body writing `*total` but not `*countN` -- so an input whose first record
+    // has an empty body reaches the `nfreq` division with a stack value.
+    // Valgrind names the allocation; upstream issue #8 has the four-line input
+    // and the trace. There is no bit-exact answer to reproduce, so this picks
+    // the defined one: zero, which agrees with the C on every input where the
+    // C itself is defined. `verify_utils.sh` scores that input as
+    // indeterminate rather than as a pass or a failure.
+    let mut n_n = 0i64;
+    for _ in 0..njob {
+        let _name = myfgets(&mut fp, 5_000_000 - 1);
+        let seq = load1_seq_without_name(&mut fp);
+        let tmp = count_nogap_len(&seq);
+        if tmp > nlenmax {
+            nlenmax = tmp;
+        }
+        if tmp < nlenmin {
+            nlenmin = tmp;
+        }
+        if total < 100_000 {
+            let (n_atgc, sampled_n, n_site) = count_atgc_and_n(&seq);
+            atgcnum += n_atgc;
+            total += n_site;
+            n_n = sampled_n;
+        }
+        nnum += n_n;
+    }
+    let atgcfreq = atgcnum as f64 / total as f64;
+    let nfreq = nnum as f64 / atgcnum as f64;
+    let dorp = dorp_in.unwrap_or(if atgcfreq > 0.75 { b'd' } else { b'p' });
+    LengthCounts {
+        njob,
+        nlenmax,
+        nlenmin,
+        dorp,
+        nfreq,
+    }
+}
+
 /// One input record: the MAFFT-style name (with its leading `'='`) and residues.
 pub struct Input {
     pub njob: usize,

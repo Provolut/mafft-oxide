@@ -17,6 +17,14 @@ path = "src/bin/disttbfast.rs"
 name = "tbfast-rs"
 path = "src/bin/tbfast.rs"
 
+[[bin]]
+name = "countlen-rs"
+path = "src/bin/countlen.rs"
+
+[[bin]]
+name = "version-rs"
+path = "src/bin/version.rs"
+
 [profile.release]
 opt-level = 3
 debug = false

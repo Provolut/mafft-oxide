@@ -4,16 +4,25 @@ A transliteration of MAFFT 7.526's multiple-sequence-alignment algorithms from
 C into Rust, written to produce **bit-identical output**, not to be fast. Where
 the C and a cleaner formulation disagree, the C wins.
 
-Two binaries, both drop-in replacements for their `libexec/mafft/` originals —
+Four binaries, all drop-in replacements for their `libexec/mafft/` originals —
 same argument vector, same input, same output files:
 
-| binary | replaces | strategies |
+| binary | replaces | covers |
 |---|---|---|
 | `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--text`, `--oneiteration`, `--merge`, `--treein` (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
+| `countlen-rs` | `countlen` | the record count, longest and shortest ungapped lengths, and sequence type the `mafft` script reads to pick a strategy |
+| `version-rs` | `version` | the version string, with the missing trailing newline the script relies on |
 
-Both handle protein and nucleotide input, which the reader tells apart the same
-way the C does.
+The two aligners handle protein and nucleotide input, which the reader tells
+apart the same way the C does.
+
+`countlen` and `version` are the first two of the seven binaries a `mafft
+--auto` run executes; the goal they belong to is making that whole run need no
+C at all, which leaves `replaceu`, `restoreu`, `f2cl` and `dvtditr`. Their
+differential harness is `verify_utils.sh` (needs a built `core/`), and
+`tests/utils.rs` pins the same behaviour against committed fixtures, so the
+suite still runs on a machine with no C toolchain.
 
 Dropped into a MAFFT installation, upstream's own test suite passes 9/9 and
 `mafft --auto` is byte-identical. The `-i` (iterative refinement) variants come

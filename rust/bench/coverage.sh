@@ -47,8 +47,14 @@ for line in sys.stdin:
 ')
 cargo test --tests --quiet > /dev/null
 
+# Every binary the tests drive as a subprocess has to be listed. Adding one to
+# the workspace without adding it here does not lower the total -- it reports
+# the new binary at 0.00% while its tests are in fact exercising it, which is
+# the same under-report the header describes, pointed the other way.
 args=()
-for o in $objects target/debug/disttbfast-rs target/debug/tbfast-rs; do
+for o in $objects \
+         target/debug/disttbfast-rs target/debug/tbfast-rs \
+         target/debug/countlen-rs target/debug/version-rs; do
   args+=(--object "$o")
 done
 
