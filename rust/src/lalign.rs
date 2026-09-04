@@ -242,9 +242,14 @@ impl LalignState {
             // whose matrix row is all zeros.
             {
                 let c1 = if i < lgth1 { seq1[i] } else { 0u8 };
-                let row = &mtx[c1 as usize];
-                for j in 0..lgth2 {
-                    currentw[j] = row[seq2[j] as usize];
+                // As a fixed 256-entry array, not a slice: the residue index is
+                // a `u8`, so with the length in the type the compiler drops the
+                // bounds check on every cell of the row.
+                let row: &[f64; 0x100] = (&mtx[c1 as usize][..0x100])
+                    .try_into()
+                    .expect("dynamic matrix rows are 256 wide");
+                for (dst, &c2) in currentw[..lgth2].iter_mut().zip(&seq2[..lgth2]) {
+                    *dst = row[c2 as usize];
                 }
             }
             currentw[0] = initverticalw[i];
@@ -253,12 +258,21 @@ impl LalignState {
             {
                 let mut miscan = previousw[0];
                 let mut mpiscan = 0i32;
-                for jj in 1..lastj {
-                    miv[jj] = miscan;
-                    mpiv[jj] = mpiscan;
-                    if previousw[jj - 1] > miscan {
-                        miscan = previousw[jj - 1];
-                        mpiscan = jj as i32 - 1;
+                // Zipped, not indexed, for the reason given at the DP row below:
+                // three indexed buffers per position, each carrying a bounds
+                // check. The recurrence is serial either way -- `miscan` feeds
+                // the next position -- so only the checks go, not the order.
+                for (idx, ((mv_j, mpv_j), &pw_prev)) in miv[1..lastj]
+                    .iter_mut()
+                    .zip(mpiv[1..lastj].iter_mut())
+                    .zip(&previousw[..lastj - 1])
+                    .enumerate()
+                {
+                    *mv_j = miscan;
+                    *mpv_j = mpiscan;
+                    if pw_prev > miscan {
+                        miscan = pw_prev;
+                        mpiscan = idx as i32;
                     }
                     miscan += fpenalty_ex;
                 }
@@ -277,30 +291,39 @@ impl LalignState {
                 // them is an exact integer here (the score matrix and both
                 // penalties are ints), so no reassociation question arises.
                 //
-                // Sliced to `lastj` up front so the bounds checks fold away:
-                // the compiler cannot otherwise see that `jj < lastj` is in
-                // range for buffers sized from a previous, larger call.
-                let pw = &previousw[..lastj];
-                let cw = &mut currentw[..lastj];
-                let mv = &miv[..lastj];
-                let mpv = &mpiv[..lastj];
-                let mm = &mut m[..lastj];
-                let mpp = &mut mp[..lastj];
-                let ijr = &mut ijprow[..lastj];
-                for jj in 1..lastj {
-                    let diag = pw[jj - 1];
-                    let gi = mv[jj] + fpenalty;
-                    let gj = mm[jj] + fpenalty;
+                // Walked as zipped slices rather than indexed. Slicing to
+                // `lastj` was not enough: seven buffers are indexed per cell and
+                // the compiler kept a check on each, which callgrind attributes
+                // to `core/src/slice/index.rs` inlined here -- 14% of this
+                // function's instructions. Zipping proves every range once
+                // instead of per access. Traversal order, comparisons and
+                // arithmetic are untouched; this is the same loop, addressed
+                // differently.
+                let cells = previousw[..lastj - 1]
+                    .iter()
+                    .zip(&miv[1..lastj])
+                    .zip(&mpiv[1..lastj])
+                    .zip(m[1..lastj].iter_mut())
+                    .zip(mp[1..lastj].iter_mut())
+                    .zip(ijprow[1..lastj].iter_mut())
+                    .zip(currentw[1..lastj].iter_mut());
+                for (idx, ((((((diag, miv_j), mpv_j), mm_j), mpp_j), ijr_j), cw_j)) in
+                    cells.enumerate()
+                {
+                    let jj = idx + 1;
+                    let diag = *diag;
+                    let gi = *miv_j + fpenalty;
+                    let gj = *mm_j + fpenalty;
                     let taki = gi > diag;
                     let w1v = if taki { gi } else { diag };
-                    let ip1 = if taki { -(jj as i32 - mpv[jj]) } else { 0 };
+                    let ip1 = if taki { -(jj as i32 - *mpv_j) } else { 0 };
                     let takj = gj > w1v;
                     let w2v = if takj { gj } else { w1v };
-                    let ip2 = if takj { i as i32 - mpp[jj] } else { ip1 };
-                    let takm = diag > mm[jj];
+                    let ip2 = if takj { i as i32 - *mpp_j } else { ip1 };
+                    let takm = diag > *mm_j;
 
-                    mpp[jj] = if takm { i as i32 - 1 } else { mpp[jj] };
-                    mm[jj] = if takm { diag } else { mm[jj] } + fpenalty_ex;
+                    *mpp_j = if takm { i as i32 - 1 } else { *mpp_j };
+                    *mm_j = if takm { diag } else { *mm_j } + fpenalty_ex;
 
                     if maxwm < w2v {
                         maxwm = w2v;
@@ -309,8 +332,8 @@ impl LalignState {
                     }
 
                     let stop = w2v < localthr;
-                    ijr[jj] = if stop { localstop } else { ip2 };
-                    cw[jj] += if stop { localthr2 } else { w2v };
+                    *ijr_j = if stop { localstop } else { ip2 };
+                    *cw_j += if stop { localthr2 } else { w2v };
                 }
             } else {
                 for jj in 1..lastj {
@@ -468,9 +491,14 @@ impl LalignState {
             previousw[0] = initverticalw[i - 1];
             {
                 let c1 = if i < lgth1 { seq1[i] } else { 0u8 };
-                let row = &mtx[c1 as usize];
-                for j in 0..lgth2 {
-                    currentw[j] = row[seq2[j] as usize];
+                // As a fixed 256-entry array, not a slice: the residue index is
+                // a `u8`, so with the length in the type the compiler drops the
+                // bounds check on every cell of the row.
+                let row: &[f64; 0x100] = (&mtx[c1 as usize][..0x100])
+                    .try_into()
+                    .expect("dynamic matrix rows are 256 wide");
+                for (dst, &c2) in currentw[..lgth2].iter_mut().zip(&seq2[..lgth2]) {
+                    *dst = row[c2 as usize];
                 }
             }
             currentw[0] = initverticalw[i];
@@ -592,9 +620,14 @@ impl LalignState {
             previousw[0] = initverticalw[i - 1];
             {
                 let c1 = if i < lgth1 { seq1[i] } else { 0u8 };
-                let row = &mtx[c1 as usize];
-                for j in 0..lgth2 {
-                    currentw[j] = row[seq2[j] as usize];
+                // As a fixed 256-entry array, not a slice: the residue index is
+                // a `u8`, so with the length in the type the compiler drops the
+                // bounds check on every cell of the row.
+                let row: &[f64; 0x100] = (&mtx[c1 as usize][..0x100])
+                    .try_into()
+                    .expect("dynamic matrix rows are 256 wide");
+                for (dst, &c2) in currentw[..lgth2].iter_mut().zip(&seq2[..lgth2]) {
+                    *dst = row[c2 as usize];
                 }
             }
             currentw[0] = initverticalw[i];

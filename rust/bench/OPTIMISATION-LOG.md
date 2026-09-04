@@ -175,3 +175,98 @@ executes 1.23x the C's instructions and runs at 0.98x its wall clock; on
 `sample.linsi`, 1.42x instructions for 1.07x wall clock. The port's extra work
 is cache-friendly and pipelines behind the loads the C is also waiting on.
 Optimising against `Ir` alone would therefore chase work that is already free.
+
+
+# The L-INS-i path, 2026-09-04 (second session)
+
+A different objective from the one above: not "beat the port by 10%", but
+**reach the C on the workload a caller actually runs**. That caller is the
+GEMME/ESCOTT evolutionary trace in provolut-ml, whose every sub-alignment
+realignment is a `mafft --auto` that lands on L-INS-i. `sample.linsi` is the
+only case in the database on that path.
+
+Output did not change at any point.
+
+## Result
+
+The port is now **faster than the C** on `sample.linsi`, and the case's
+instruction ratio fell by a fifth:
+
+| `sample.linsi` | before | after |
+|---|---|---|
+| instructions vs C | 1.378x | **1.142x** |
+| wall clock vs C | 1.018x | **0.967x** |
+| peak RSS vs C | 1.633x | 1.663x |
+
+On the caller's own corpus -- 10 sub-alignments drawn from the ProteinGym
+P53_HUMAN alignment, replayed through `tbfast` alone with the argument vector
+and staged input the `mafft` script hands it, 5 repetitions each -- the port
+went from **0.940x the C to 0.986x**, every output byte-identical. Through the
+whole `mafft --auto` pipeline, where `tbfast` is 78% of the call and the other
+six binaries are still the C's, 0.950x to 0.988x.
+
+The remaining gap on that corpus and the win on `sample.linsi` are the same
+port: the two workloads differ in shape (51 sequences of 393 residues against
+the 36-sequence `test/sample`), and the case that gains most is the one with
+the most DP cells per call.
+
+Whole-database, same host, before against after: wall clock 1280 ms -> 1223 ms
+(95.5%), mean peak RSS 6505 KB -> 6527 KB (100.3%, inside the harness's noise).
+The five `disttbfast` cases are unmoved to within noise, as expected -- nothing
+here touches a function they call.
+
+## What was done
+
+All three changes remove bounds checks, and nothing else. Callgrind put 14% of
+`l_align11`'s instructions in `core/src/slice/index.rs` inlined into it; after
+the three, that line is gone from the profile. No arithmetic was reassociated,
+no comparison reordered, no `unsafe` introduced.
+
+1. **The DP row walked as zipped slices** rather than indexed. Slicing the seven
+   buffers to `lastj` up front -- what the code already did, with a comment
+   saying the checks would fold -- was not enough: seven indexed accesses per
+   cell each kept a check. Zipping proves the ranges once. 0.940x -> 0.951x on
+   the corpus.
+
+2. **The `mi`/`mpi` prefix scan zipped** the same way, three buffers. The
+   recurrence stays serial -- `miscan` feeds the next position -- so only the
+   checks go. 0.951x -> 0.970x.
+
+3. **`match_calc`'s row typed as `&[f64; 0x100]`** instead of a slice. The
+   residue index is a `u8`, so with the length in the type the check on every
+   cell of the row folds away. 0.970x -> 0.986x.
+
+Measured one at a time, in that order, each on the 10-payload corpus.
+
+## What is left, and why it was not taken
+
+`if maxwm < w2v` is now the single hottest line at 10.8% of the function's
+instructions. It is not a Rust-vs-C gap: `core/Lalign11.c` runs the same
+in-loop argmax in its scalar path, and the branch is well predicted because
+`maxwm` only ever increases. The C lifts it into a per-row reduction *only*
+inside `LALIGN11_AVX512`, which `CFLAGS = -O3` never defines, so both sides run
+the same construct. Matching it is the right outcome here; beating it means
+vectorising the row, which is the anti-diagonal project the previous session
+scoped and declined.
+
+`ijp` is still `Vec<Vec<i32>>` against the C's single contiguous `commonIP`
+(the "three `commonIP` buffers" lead above). Untried this session: rows are
+already contiguous within themselves, so the gain is limited to row
+transitions, and it is the change that would move `sample.linsi`'s peak RSS,
+which is the metric already 1.66x the C's.
+
+## Measurement note
+
+`bench/profile.tsv` was re-recorded on a different host from the one that wrote
+the committed copy -- `sample.linsi` takes 549 ms here against 1014 ms there --
+so **the absolute `c_ms` / `r_ms` columns are not comparable with the previous
+revision of that file; the ratio columns are**, and it is the ratios that carry
+the claim. `bench/before-lalign11-bounds-checks.tsv` is this host's run of the
+unchanged port, so before-and-after on one machine is comparable throughout.
+
+## Gates
+
+`cargo test --release` green (553-case golden matrix included). The wide
+harnesses, run against the compiled `core/`: `verify.sh` pass=12018 fail=0,
+`verify_tbfast.sh` pass=1690 fail=0, `verify_e2e.sh` pass=29 fail=0.
+`bench/coverage.sh`: 89.88% regions, 89.37% lines.
