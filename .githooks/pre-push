@@ -1,0 +1,63 @@
+#!/bin/bash
+# Refuse a push whose tests fail or whose coverage has dropped below the floor,
+# and refresh the sampling profile on the way through.
+#
+# Install once:
+#     git config core.hooksPath .githooks
+#
+# Takes about 40 seconds: the test suite is 4 s, the coverage run is the rest.
+# That is deliberate -- a hook slow enough to be worth skipping gets skipped,
+# and then it is not a gate. `--no-verify` bypasses it when you genuinely need
+# to push a work-in-progress branch.
+#
+# Two things this does NOT do, on purpose:
+#
+#  * It does not run `verify.sh` or `verify_tbfast.sh`. Those need a compiled
+#    `core/` on the machine and take an hour. `tests/matrix.rs` carries the C's
+#    answers as fixtures and covers the same ground in seconds; the full
+#    harnesses belong in a nightly job.
+#  * It does not gate on performance. The profiling database is measured with
+#    callgrind, which costs ~50x, and wall-clock numbers taken on a machine
+#    busy with a push are not comparable to anything. `bench/sample.sh`
+#    refreshes a cheap sampling profile instead, and only warns.
+
+set -u
+here=$(cd "$(dirname "$0")/.." && pwd)
+cd "$here/rust" || exit 0   # nothing to check if the port is not present
+
+FLOOR=85
+fail() { echo; echo "pre-push: $*" 1>&2; echo "pre-push: push refused. Use --no-verify to override." 1>&2; exit 1; }
+
+echo "pre-push: cargo test"
+if ! cargo test --release --quiet 2>&1 | tail -20; then
+  fail "tests failed"
+fi
+# `cargo test --quiet` exits non-zero on failure, but the pipe above swallows
+# it; PIPESTATUS is what actually happened.
+[ "${PIPESTATUS[0]:-0}" -eq 0 ] || fail "tests failed"
+
+echo "pre-push: coverage (this is the slow part)"
+cov_out=$(./bench/coverage.sh 2>/dev/null) || fail "coverage run failed"
+total=$(printf '%s\n' "$cov_out" | awk '$1=="TOTAL"{print $3}' | tr -d '%')
+if [ -z "$total" ]; then
+  fail "could not parse coverage output -- has bench/coverage.sh changed?"
+fi
+if awk -v t="$total" -v f="$FLOOR" 'BEGIN{ exit !(t < f) }'; then
+  printf '%s\n' "$cov_out" | grep -E '^src|^TOTAL' 1>&2
+  fail "region coverage ${total}% is below the ${FLOOR}% floor"
+fi
+echo "pre-push: coverage ${total}% (floor ${FLOOR}%)"
+
+# Profiling runs on every push because it is cheap enough to: gprofng samples
+# at about 4% here, and `sample.sh` measures that per case rather than assuming
+# it. Over budget is a warning, not a block -- a distorted profile is a reason
+# to distrust the profile, not to reject the code.
+echo "pre-push: sampling profile"
+if ! ./bench/sample.sh 8 > /tmp/pre-push-sample.$$ 2>&1; then
+  echo "pre-push: WARNING -- the sampling profiler exceeded its 8% budget;" 1>&2
+  echo "          the profile was discarded. See bench/sample-profile.txt." 1>&2
+fi
+grep -E '^== ' /tmp/pre-push-sample.$$ 2>/dev/null | sed 's/^/  /'
+rm -f /tmp/pre-push-sample.$$
+
+echo "pre-push: ok"
