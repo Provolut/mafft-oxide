@@ -127,9 +127,18 @@ fn alignable_reagion(
     let mut hat1 = vec![0i32; na + 1];
     let mut hat2 = vec![0i32; na + 1];
 
+    // Hoisted and re-zeroed per column, as the C does ("make prfs",
+    // fftFunctions.c): `for( j=0; j<nalphabets; j++ ) { prf1[j] = 0.0; ... }`
+    // over a buffer allocated once. Allocating these inside the loop instead
+    // cost one malloc/free pair per column per call -- 18.2 million of the
+    // port's 18.8 million allocations on `sample.memsave`, against the C's
+    // 407 thousand for the whole run.
+    let mut prf1 = vec![0.0f64; na];
+    let mut prf2 = vec![0.0f64; na];
+
     for i in 0..len {
-        let mut prf1 = vec![0.0f64; na];
-        let mut prf2 = vec![0.0f64; na];
+        prf1.fill(0.0);
+        prf2.fill(0.0);
         for j in 0..clus1 {
             prf1[cn.amino_n[seq1[j][i] as usize] as usize] += eff1[j];
         }
