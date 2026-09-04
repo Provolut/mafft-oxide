@@ -42,21 +42,24 @@ def totals(path):
 def compare_to_baseline(path, base):
     ms, rss = totals(path)
     bms, brss = totals(base)
-    print("\nagainst %s (GOAL.md target: <= 90%% of either)" % base)
+    print("\nagainst %s (GOAL.md target: <= 90%% of BOTH)" % base)
     print("-" * 70)
-    hit = False
+    # Both, not either: a change that trades memory for speed is not progress
+    # here, and `or` would have accepted exactly that.
+    all_met = True
     for label, now, was, unit in (
         ("wall clock", ms, bms, "ms"),
         ("mean peak RSS", rss, brss, "KB"),
     ):
         pct = 100.0 * now / was if was else 0.0
-        hit = hit or pct <= 90.0
+        met = pct <= 90.0
+        all_met = all_met and met
         print(
             "%-14s %8.0f %s   was %8.0f %s   %6.1f%% of today  %s"
-            % (label, now, unit, was, unit, pct, "MET" if pct <= 90.0 else "")
+            % (label, now, unit, was, unit, pct, "MET" if met else "not yet")
         )
-    print("\n%s" % ("TARGET MET" if hit else "target not met"))
-    return 0 if hit else 1
+    print("\n%s" % ("TARGET MET (both)" if all_met else "target not met"))
+    return 0 if all_met else 1
 
 
 def main():

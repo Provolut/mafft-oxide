@@ -17,15 +17,19 @@ already reached and is no longer the objective.
 | wall clock, 8 cases | 2367 ms | **<= 2130 ms** |
 | mean peak RSS | 5800 KB | **<= 5220 KB** |
 
-**Either one is enough.** Both is better. Instructions (1.378x of the C) are
-not a target — they have been the pessimistic metric at every step, and wall
-clock is what a caller experiences.
+**Both are required.** One without the other is not done: a change that buys
+speed with memory, or memory with speed, is not progress here, and
+`summarize.py` fails until both hold. Instructions (1.378x of the C) are not a
+target -- they have been the pessimistic metric at every step, and wall clock
+is what a caller experiences.
 
 ## Done is either of these
 
-1. **Hit the target.** `bench/profile.sh` reports wall clock <= 2130 ms or
-   mean peak RSS <= 5220 KB, on a run where every row says `ok`, with the
-   suite green.
+1. **Hit both targets.** `bench/profile.sh` reports wall clock <= 2130 ms
+   *and* mean peak RSS <= 5220 KB, on a run where every row says `ok`, with
+   the suite green. Check it with
+   `./bench/summarize.py bench/profile.tsv bench/baseline-2026-09-04.tsv`,
+   which exits non-zero until both hold.
 2. **90 minutes of genuine attempts without hitting it.** Then stop, restore
    the last good state, and write up what was tried and what each attempt
    measured. A negative result that says *where the remaining time goes and
