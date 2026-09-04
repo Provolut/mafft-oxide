@@ -463,9 +463,11 @@ impl FalignState {
             kouho: vec![0; NKOUHO_LONG],
             cut1: vec![0; MAXSEG],
             cut2: vec![0; MAXSEG],
-            segment: vec![Segment::default(); MAXSEG],
-            segment1: vec![Segment::default(); MAXSEG],
-            segment2: vec![Segment::default(); MAXSEG],
+            // Grown on demand, not allocated at MAXSEG (100000 entries, 2.4 MB
+            // each). See the resize before `alignable_reagion` below.
+            segment: Vec::new(),
+            segment1: Vec::new(),
+            segment2: Vec::new(),
         }
     }
 }
@@ -611,6 +613,22 @@ pub fn falign(
         s1.extend(group1.iter().map(|s| &s[off1..]));
         s2.clear();
         s2.extend(group2.iter().map(|s| &s[off2..]));
+
+        // `alignable_reagion` appends at most one segment per column it scans,
+        // so `count + len` bounds what this call can write. Growing to that,
+        // rather than allocating all three arrays at MAXSEG up front, is worth
+        // more than the 7.2 MB suggests: at MAXSEG the three allocations are
+        // large enough that glibc sometimes serves them from fresh mmap, whose
+        // zero pages never fault in, and sometimes from recycled heap that is
+        // already resident. That made `sample.linsi`'s peak RSS trimodal --
+        // 11.0, 13.4 and 14.4 MB across repeats of the same binary. Grown on
+        // demand it sits at 11.3 MB with a 1% spread.
+        let need = count + len1.max(len2) + 8;
+        if fs.segment.len() < need {
+            fs.segment.resize(need, Segment::default());
+            fs.segment1.resize(need, Segment::default());
+            fs.segment2.resize(need, Segment::default());
+        }
 
         let tmpint = alignable_reagion(
             &mut fs.alignable,

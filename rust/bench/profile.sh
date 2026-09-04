@@ -54,7 +54,15 @@ EOF
 
 # Peak RSS in KB, by polling VmHWM: the kernel's own high-water mark, so the
 # sampling interval does not matter.
-peak_rss() {
+#
+# Reported as the median of several runs, not one. The same binary on the same
+# input varies by 31% here -- `sample.linsi` clusters at 11.0, 13.4 and 14.4 MB
+# across repeats, while the C sits inside 1% -- because glibc sometimes serves
+# a large allocation from fresh mmap, whose zero pages are never faulted in,
+# and sometimes from recycled heap that is already resident. A single sample of
+# that is not a measurement: it read as a 7.6% memory regression from a change
+# that only ever removed allocations.
+peak_rss_once() {
   "$@" >/dev/null 2>&1 &
   local pid=$! peak=0 v
   while kill -0 "$pid" 2>/dev/null; do
@@ -64,6 +72,12 @@ peak_rss() {
   done
   wait "$pid" 2>/dev/null
   echo "$peak"
+}
+
+peak_rss() {
+  local vals i
+  vals=$(for i in 1 2 3 4 5; do peak_rss_once "$@"; done | sort -n)
+  echo "$vals" | awk 'NR==3'
 }
 
 ir_count() {
