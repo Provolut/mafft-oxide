@@ -599,6 +599,74 @@ mod tests {
     }
 
     #[test]
+    fn strralpha_counts_the_gap_run_ending_just_before_pos() {
+        // The C walks backwards from `pos-1` and stops at the first non-gap,
+        // so it counts the gaps immediately before `pos`, not all of them.
+        assert_eq!(strralpha(b"MN---TEG", 5), 3);
+        assert_eq!(strralpha(b"MN---TEG", 2), 0, "seq[1] is not a gap");
+        assert_eq!(strralpha(b"---TEG", 3), 3);
+        // At the start of the sequence there is nothing to walk back over.
+        assert_eq!(strralpha(b"MNGTEG", 0), 0);
+        assert_eq!(strralpha(b"------", 6), 6, "an all-gap prefix is all of it");
+    }
+
+    #[test]
+    fn extendgaplencompactx_creates_the_column_then_pulls_the_previous_lengths() {
+        let src = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        // An empty destination column is created from the source's entries.
+        let mut dst = vec![Col::Null; src.len()];
+        extendgaplencompactx(&mut dst, &src, 7);
+        assert!(!dst[7].is_null(), "the column must be materialised");
+        assert_eq!(dst[7].get().unwrap()[0].len, src[7].get().unwrap()[0].len);
+
+        // Where the source column is empty, the destination is cleared rather
+        // than left holding whatever it had.
+        let mut dst = vec![Col::Data(vec![Gaplen::terminator()]); src.len()];
+        extendgaplencompactx(&mut dst, &src, 2);
+        assert!(dst[2].is_null(), "an empty source empties the destination");
+    }
+
+    #[test]
+    fn extendgaplencompactx_follows_idatprev_into_the_previous_column() {
+        // Columns 6..9 are one run, chained by idatprev. Copy the run, widen
+        // column 7's predecessor, and extending 8 must pick that width up
+        // through the chain rather than keeping its own.
+        let src = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        let mut dst = vec![Col::Null; src.len()];
+        duplicategaplencompactx(&mut dst, &src, 0, src.len() as i32 - 2);
+        dst[7].get_mut().unwrap()[0].len = 42;
+        extendgaplencompactx(&mut dst, &src, 8);
+        assert_eq!(
+            dst[8].get().unwrap()[0].len,
+            42,
+            "column 8 takes its length from column 7 through idatprev"
+        );
+    }
+
+    #[test]
+    fn copygaplencompactx_takes_the_lengths_then_extends() {
+        let src = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
+        let mut dst = vec![Col::Null; src.len()];
+        duplicategaplencompactx(&mut dst, &src, 0, src.len() as i32 - 2);
+        let before = dst[6].get().unwrap()[0].len;
+
+        // `gapstartpos == -1` means "the destination position itself", which
+        // is how every call site in the DP passes it.
+        copygaplencompactx(&mut dst, &src, -1, 3, 6, 6);
+        assert_eq!(
+            dst[6].get().unwrap()[0].len,
+            before + 3,
+            "the copy takes the source's length, then the insertion widens it"
+        );
+
+        // An empty source column is a no-op, not a panic: the DP calls this
+        // for positions that may hold nothing.
+        let mut dst2 = vec![Col::Null; src.len()];
+        copygaplencompactx(&mut dst2, &src, -1, 3, 2, 2);
+        assert!(dst2[2].is_null());
+    }
+
+    #[test]
     fn duplicate_then_extend_leaves_the_source_untouched() {
         let src = build(&["MNGTEG---DNFY", "MNGTEGAAADNFY"], &[0.25, 0.75]);
         let mut dst = vec![Col::Null; src.len()];

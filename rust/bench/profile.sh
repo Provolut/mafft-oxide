@@ -76,8 +76,20 @@ ir_count() {
 # A run that failed is not a fast run. Without this a crashing port records as
 # "0.000x", which is how a profiling database turns into a lie: check both
 # binaries exit 0 and produce the same bytes before timing either of them.
+# `disttbfast` and `tbfast` write different things. `tbfast` puts the alignment
+# in `pre`; `disttbfast` puts it on stdout and separately creates an *empty*
+# `pre` plus a `trace` log, from `initFiles()` in io.c -- neither is output, and
+# `trace` starts with the pid, so it could not be reproduced even in principle.
+# Comparing those two files is what made every disttbfast row read "differs".
+outputs_for() {
+  case "$1" in
+    tbfast) echo "pre order hat2 hat3" ;;
+    *)      echo "stdout.fa order hat2 infile.tree" ;;
+  esac
+}
+
 check_pair() {
-  local cbin="$1" rbin="$2"; shift 2
+  local bin="$1" cbin="$2" rbin="$3"; shift 3
   local cd rd
   cd=$(mktemp -d); rd=$(mktemp -d)
   ( cd "$cd" && "$cbin" "$@" > stdout.fa 2>/dev/null ); local cst=$?
@@ -86,7 +98,7 @@ check_pair() {
   if [ $cst -ne 0 ] || [ $rst -ne 0 ]; then
     verdict="exit:$cst/$rst"
   else
-    for f in stdout.fa pre order hat2; do
+    for f in $(outputs_for "$bin"); do
       if [ -f "$cd/$f" ] || [ -f "$rd/$f" ]; then
         cmp -s "$cd/$f" "$rd/$f" || { verdict="differs:$f"; break; }
       fi
@@ -114,7 +126,7 @@ printf '%s\n' "$CASES" | while IFS=$'\t' read -r tag bin input argv; do
   cd "$work" || exit 1
   # shellcheck disable=SC2086
   set -- $argv -i "$input"
-  verdict=$(check_pair "$cbin" "$rbin" "$@")
+  verdict=$(check_pair "$bin" "$cbin" "$rbin" "$@")
   if [ "$verdict" != ok ]; then
     printf '%s\t%s\tSKIPPED\t%s\t-\t-\t-\t-\t-\t-\t-\n' "$tag" "$bin" "$verdict" 1>&2
     printf '%s\t%s\t-\t-\t-\t-\t-\t-\t-\t-\t-\t%s\n' "$tag" "$bin" "$verdict"
