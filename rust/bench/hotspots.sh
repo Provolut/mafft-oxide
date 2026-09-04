@@ -17,7 +17,7 @@
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 CORE="$here/../../core"
-RSDIR="$here/../target/release"
+RSDIR="$here/../target/profiling"
 SAMPLE="$here/../../test/sample"
 MATRIX="$here/../tests/golden/matrix"
 
@@ -41,6 +41,11 @@ esac
 
 command -v callgrind_annotate >/dev/null || {
   echo "hotspots: callgrind_annotate not found" 1>&2; exit 2; }
+
+# The `profiling` profile is release codegen plus line tables. Building it
+# here rather than expecting it to exist, because the binary it produces is
+# not the one `profile.sh` measures.
+( cd "$here/.." && cargo build --profile profiling --quiet ) || exit 2
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

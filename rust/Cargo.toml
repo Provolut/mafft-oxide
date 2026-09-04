@@ -19,10 +19,18 @@ path = "src/bin/tbfast.rs"
 
 [profile.release]
 opt-level = 3
-# Line tables only: no effect on codegen or speed, but callgrind can then
-# attribute instructions to source lines, which is what `bench/hotspots.sh`
-# and every optimisation in GOAL.md section 3 depend on.
-debug = "line-tables-only"
+debug = false
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+
+# Release codegen plus line tables, so callgrind can attribute instructions to
+# source lines -- which is where every optimisation in GOAL.md section 3 came
+# from. Kept separate from `release` because the debug sections add about
+# 750 KB to the mapped binary, and on the small cases in the profiling
+# database that is a large enough share of peak RSS to move the memory metric
+# by several points. `bench/hotspots.sh` builds this; `bench/profile.sh`
+# measures the real release build.
+[profile.profiling]
+inherits = "release"
+debug = "line-tables-only"
