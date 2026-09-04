@@ -1,0 +1,24 @@
+# Sampling profile (gprofng), refreshed by bench/sample.sh
+# Overhead budget: 8%. Measured per case below.
+
+== memsave: 1114ms plain, 1152ms sampled, overhead 3.4%
+   Excl. Total   Incl. Total    Name
+   CPU           CPU
+    sec.      %   sec.      %
+   0.110 100.00  0.110 100.00   <Total>
+   0.080  72.73  0.080  72.73   mafft_rs::falign::falign
+   0.020  18.18  0.030  27.27   mafft_rs::msalign::msalignmm_rec
+   0.010   9.09  0.010   9.09   mafft_rs::msalign::match_calc_alphabet_seq
+   
+
+== linsi: 1020ms plain, 1043ms sampled, overhead 2.3%
+   Excl. Total   Incl. Total    Name
+   CPU           CPU
+    sec.      %   sec.      %
+   0.100 100.00  0.100 100.00   <Total>
+   0.090  90.00  0.090  90.00   mafft_rs::lalign::LalignState::l_align11
+   0.010  10.00  0.010  10.00   mafft_rs::align::AlignState::a_align
+   0.      0.    0.060  60.00   mafft_rs::pairalign::pairalign
+   0.      0.    0.060  60.00   tbfast_rs::main
+   
+

@@ -20,7 +20,12 @@ every range.
 
 ## 1. Testing — a floor to hold, not a milestone to reach
 
-- **>= 85% region coverage from `cargo test` alone.** At 89.6%; do not regress.
+The floor is enforced, not just written down: `.githooks/pre-push` refuses a
+push whose tests fail or whose coverage is under 85%, and refreshes the
+sampling profile on the way through. Install with
+`git config core.hooksPath .githooks`; about 70 s, most of it the coverage run.
+
+- **>= 85% region coverage from `cargo test` alone.** At 89.8%; do not regress.
   Measure with `bench/coverage.sh`, which gets the two easy mistakes right.
 - **Suite stays far under 5 min.** At 4.1 s. Keep it seconds: tiny inputs, no
   sleeps, no network. A slow suite stops being run.
@@ -47,7 +52,13 @@ Build and keep `bench/profile.tsv`, refreshed by `bench/profile.sh`:
   not machine noise — which matters more here than wall-clock realism.
 - **Memory: peak RSS** from `/proc/<pid>/VmHWM`, plus massif or DHAT where a
   row needs explaining.
-- `bench/hotspots.sh` gives the per-function `Ir` breakdown for one case.
+- `bench/hotspots.sh` gives the per-function `Ir` breakdown for one case,
+  under callgrind -- exact, and about 50x, so it is a tool for deciding
+  whether a change helped rather than something to run routinely.
+- `bench/sample.sh` is the cheap counterpart: gprofng sampling, measured at
+  3-4% here against an 8% budget it enforces per case. Over budget it discards
+  the profile rather than recording numbers taken under conditions that no
+  longer resemble a normal run. The pre-push hook runs it on every push.
 - A row is recorded only if both binaries exit 0 *and* produce the same bytes.
   Without that check a crashing port reads as a 1000x speedup, which is how a
   profiling database becomes a lie -- it happened once already.
