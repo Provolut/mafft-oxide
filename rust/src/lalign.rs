@@ -265,45 +265,95 @@ impl LalignState {
             }
 
             let ijprow = &mut ijp[i];
-            for jj in 1..lastj {
-                let diag = previousw[jj - 1];
-                let gi = miv[jj] + fpenalty;
-                let gj = m[jj] + fpenalty;
-                let taki = gi > diag;
-                let w1v = if taki { gi } else { diag };
-                let ip1 = if taki { -(jj as i32 - mpiv[jj]) } else { 0 };
-                let takj = gj > w1v;
-                let w2v = if takj { gj } else { w1v };
-                let ip2 = if takj { i as i32 - mp[jj] } else { ip1 };
-                let takm = diag > m[jj];
+            // The C splits this in two on `trywarp` rather than testing it per
+            // cell (Lalign11.c: `if( !trywarp ) { ... } else ...`). Testing it
+            // inside the row costs a branch on every one of lgth1*lgth2 cells
+            // and stops the body being elementwise in j.
+            if warp.is_none() {
+                // Straight-line form, matching the C's scalar tail exactly:
+                // every conditional is a select and every store is
+                // unconditional. Same comparisons on the same operands in the
+                // same order, so the values are identical -- and every one of
+                // them is an exact integer here (the score matrix and both
+                // penalties are ints), so no reassociation question arises.
+                //
+                // Sliced to `lastj` up front so the bounds checks fold away:
+                // the compiler cannot otherwise see that `jj < lastj` is in
+                // range for buffers sized from a previous, larger call.
+                let pw = &previousw[..lastj];
+                let cw = &mut currentw[..lastj];
+                let mv = &miv[..lastj];
+                let mpv = &mpiv[..lastj];
+                let mm = &mut m[..lastj];
+                let mpp = &mut mp[..lastj];
+                let ijr = &mut ijprow[..lastj];
+                for jj in 1..lastj {
+                    let diag = pw[jj - 1];
+                    let gi = mv[jj] + fpenalty;
+                    let gj = mm[jj] + fpenalty;
+                    let taki = gi > diag;
+                    let w1v = if taki { gi } else { diag };
+                    let ip1 = if taki { -(jj as i32 - mpv[jj]) } else { 0 };
+                    let takj = gj > w1v;
+                    let w2v = if takj { gj } else { w1v };
+                    let ip2 = if takj { i as i32 - mpp[jj] } else { ip1 };
+                    let takm = diag > mm[jj];
 
-                if takm {
-                    mp[jj] = i as i32 - 1;
-                }
-                m[jj] = if takm { diag } else { m[jj] } + fpenalty_ex;
+                    mpp[jj] = if takm { i as i32 - 1 } else { mpp[jj] };
+                    mm[jj] = if takm { diag } else { mm[jj] } + fpenalty_ex;
 
-                if maxwm < w2v {
-                    maxwm = w2v;
-                    endali = i;
-                    endalj = jj;
-                }
-
-                let mut w2v = w2v;
-                let mut ip2 = ip2;
-                let stop = w2v < localthr;
-                if stop {
-                    ip2 = localstop;
-                    w2v = localthr2;
-                }
-                if let Some(wp) = warp.as_mut() {
-                    let (nw, code) = wp.cell(i, jj, w2v, currentw[jj], fpenalty_shift, fpenalty_ex);
-                    w2v = nw;
-                    if let Some(c) = code {
-                        ip2 = c;
+                    if maxwm < w2v {
+                        maxwm = w2v;
+                        endali = i;
+                        endalj = jj;
                     }
+
+                    let stop = w2v < localthr;
+                    ijr[jj] = if stop { localstop } else { ip2 };
+                    cw[jj] += if stop { localthr2 } else { w2v };
                 }
-                ijprow[jj] = ip2;
-                currentw[jj] += w2v;
+            } else {
+                for jj in 1..lastj {
+                    let diag = previousw[jj - 1];
+                    let gi = miv[jj] + fpenalty;
+                    let gj = m[jj] + fpenalty;
+                    let taki = gi > diag;
+                    let w1v = if taki { gi } else { diag };
+                    let ip1 = if taki { -(jj as i32 - mpiv[jj]) } else { 0 };
+                    let takj = gj > w1v;
+                    let w2v = if takj { gj } else { w1v };
+                    let ip2 = if takj { i as i32 - mp[jj] } else { ip1 };
+                    let takm = diag > m[jj];
+
+                    if takm {
+                        mp[jj] = i as i32 - 1;
+                    }
+                    m[jj] = if takm { diag } else { m[jj] } + fpenalty_ex;
+
+                    if maxwm < w2v {
+                        maxwm = w2v;
+                        endali = i;
+                        endalj = jj;
+                    }
+
+                    let mut w2v = w2v;
+                    let mut ip2 = ip2;
+                    let stop = w2v < localthr;
+                    if stop {
+                        ip2 = localstop;
+                        w2v = localthr2;
+                    }
+                    if let Some(wp) = warp.as_mut() {
+                        let (nw, code) =
+                            wp.cell(i, jj, w2v, currentw[jj], fpenalty_shift, fpenalty_ex);
+                        w2v = nw;
+                        if let Some(c) = code {
+                            ip2 = c;
+                        }
+                    }
+                    ijprow[jj] = ip2;
+                    currentw[jj] += w2v;
+                }
             }
             if let Some(wp) = warp.as_mut() {
                 wp.end_row(lastj);
