@@ -12,9 +12,9 @@ every range.
 
 | metric | aggregate | worst case | vs done |
 |---|---|---|---|
-| instructions (callgrind Ir) | **1.89x** work-weighted | memsave 2.35x | not met |
-| wall clock | **1.22x** work-weighted | memsave 1.38x | not met |
-| peak RSS | **0.89x** mean per run | linsi 1.47x | **stretch met** |
+| wall clock | **1.05x** work-weighted | nwns2 1.23x | within 5% |
+| instructions (callgrind Ir) | **1.40x** work-weighted | nwns2 1.69x | not met |
+| peak RSS | **0.85x** mean per run | linsi 1.78x | **stretch met** |
 
 `cargo test`: 4.1 s, 553 bit-identity cases, 89.6% regions / 89.1% lines.
 
@@ -70,51 +70,41 @@ mean down and hides that the two heaviest cases are the two worst.
 `bench/summarize.py` prints both, weighted first. Peak RSS is the exception:
 peaks do not sum, so memory is judged on the per-run mean and the worst case.
 
-**Memory is past the stretch bar**: 0.89x mean per run, worst case 1.47x.
-Two changes got it there from 1.25x/2.67x -- building the release profile the
-way the C is built (opt-level 3, fat LTO, one codegen unit, panic=abort, which
-drops the unwinding tables), and the loop split below.
+**Memory is past the stretch bar**: 0.85x mean per run.
 
-**Compute is not done**: 1.89x instructions, 1.22x wall clock. Wall clock is
-consistently the better of the two, so the extra instructions are
-cache-friendly; do not assume they reach parity together, and do not optimise
-for Ir alone.
+**Wall clock is within 5% of parity**: 1.05x work-weighted, and 0.84x as an
+unweighted mean -- most individual cases are already faster than the C.
 
-What is left, from the database and `hotspots.sh`:
+**Instructions are not**: 1.40x. They have been consistently the worse of the
+two metrics, so the port's extra instructions are cache-friendly; do not
+assume the two reach parity together, and do not chase Ir at the cost of
+wall clock.
 
-- **`sample.memsave` 2.35x instructions, 1.38x wall** -- now the whole of the
-  remaining gap. The linear-space aligner, the newest code, and untouched by
-  either change so far.
-- Everything else is at or under 1.25x wall clock.
+Four changes so far, each verified byte-identical before being measured, and
+every one of them a transliteration miss rather than a cost of the language:
 
-Done so far, both verified byte-identical before being measured:
+| | Ir | wall | RSS |
+|---|---|---|---|
+| start | 2.15x | 1.36x | 1.25x |
+| release profile matched to the C's -O3 | 2.03x | 1.27x | 0.92x |
+| `L__align11` warp check hoisted out of the row | 1.89x | 1.22x | 0.89x |
+| `falign` profile buffers hoisted out of the column loop | **1.40x** | **1.05x** | **0.85x** |
 
-- Release profile matched to the C's. A fairness bug, not an optimisation:
-  most of the memory win was `panic=abort`.
-- `L__align11`: the port tested `warp` inside the innermost loop where the C
-  splits the row in two on `trywarp`. Split the same way, body written as
-  selects with unconditional stores, buffers sliced to `lastj` so the bounds
-  checks fold. `sample.linsi` 1.79x -> 1.43x instructions, 1.22x -> 1.08x
-  wall. `verify_tbfast.sh` pass=3668 fail=0.
+The last was the big one and shows the shape of the remaining work.
+`hotspots.sh` had the port at 43% of its instructions inside malloc/free;
+DHAT counted 18,810,901 allocations against the C's 406,972, while peak
+footprint was already *lower* than the C's -- churn, not size. Two adjacent
+sites in `falign::falign` held 18.2M of them: `prf1`/`prf2` allocated per
+column, where the C re-zeroes one hoisted buffer. Now 625,467 allocations and
+180 MB total against the C's 407,062 and 548 MB.
 
-`core/` is not stock MAFFT: it is provolut's performance fork, carrying a
-hoisted mi/mpi recurrence, branches rewritten as selects so the row
-vectorises, and an AVX-512 intrinsics path. That path is **compiled out** --
-guarded on `__AVX512F__`, which `CFLAGS = -O3` does not define, and objdump
-finds no zmm or ymm in either binary. Both sides are scalar, so the gap is
-real work rather than a SIMD handicap. If the C is ever built with
-`-march=native` that stops being true and this section needs re-baselining.
+What is left, in order of what the database says:
 
-Rules while doing it:
-
-- **Do not trade evaluation order for speed.** f64 arithmetic must stay in the
-  C's order, including its redundant operations. Reassociating changes results.
-- Allocation is the obvious first suspect: the C hoists `static` scratch
-  buffers that the port often rebuilds per call. Hoisting is safe — it changes
-  no arithmetic.
-- Bounds checks are the second. Prefer restructuring to slices and iterators
-  over `get_unchecked`; `#![forbid(unsafe_code)]` stays.
-- Measure per change, against the database. "Should be faster" is not evidence.
+- **`sample.nwns2`, 1.69x Ir and 1.23x wall** -- now the worst case on both.
+- **`sample.linsi`, 1.78x peak RSS** -- the one case where memory is well
+  above the C, against 0.35x on the FFT path.
+- Look for more allocation churn first: 625K against the C's 407K says there
+  is still some, and it has been the cheapest thing to find every time.
 
 ## Method
 
