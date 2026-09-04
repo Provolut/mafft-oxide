@@ -24,7 +24,7 @@ import sys
 
 
 def totals(path):
-    """(wall clock ms summed, mean peak RSS KB) over the rows that measured."""
+    """(wall clock ms summed, mean peak RSS KB, rows counted)."""
     with open(path) as fh:
         header = fh.readline().rstrip("\n").split("\t")
         idx = {n: i for i, n in enumerate(header)}
@@ -36,14 +36,27 @@ def totals(path):
             ms += float(f[idx["r_ms"]])
             rss += float(f[idx["r_rss_kb"]])
             n += 1
-    return (ms, rss / n if n else 0.0)
+    return (ms, rss / n if n else 0.0, int(n))
 
 
 def compare_to_baseline(path, base):
-    ms, rss = totals(path)
-    bms, brss = totals(base)
+    ms, rss, n = totals(path)
+    bms, brss, bn = totals(base)
     print("\nagainst %s (GOAL.md target: <= 90%% of BOTH)" % base)
     print("-" * 70)
+    # A baseline with no rows once divided to 0.0% and printed "TARGET MET",
+    # which is the same vacuous-green as a harness reporting pass=0 fail=0.
+    # An empty side is a broken measurement, so say so and fail.
+    for label, count, where in (("current", n, path), ("baseline", bn, base)):
+        if count == 0:
+            print("%s run %s has no rows marked ok -- nothing to compare"
+                  % (label, where), file=sys.stderr)
+            return 1
+    if n != bn:
+        print("current run has %d ok rows, baseline %d: the two sides do not "
+              "cover the same cases, so their totals are not comparable"
+              % (n, bn), file=sys.stderr)
+        return 1
     # Both, not either: a change that trades memory for speed is not progress
     # here, and `or` would have accepted exactly that.
     all_met = True
