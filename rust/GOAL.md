@@ -12,9 +12,9 @@ every range.
 
 | metric | aggregate | worst case | vs done |
 |---|---|---|---|
-| instructions (callgrind Ir) | **2.03x** work-weighted | memsave 2.35x | not met |
-| wall clock | **1.27x** work-weighted | memsave 1.38x | not met |
-| peak RSS | **0.92x** mean per run | linsi 1.67x | **met**, short of 0.90x |
+| instructions (callgrind Ir) | **1.89x** work-weighted | memsave 2.35x | not met |
+| wall clock | **1.22x** work-weighted | memsave 1.38x | not met |
+| peak RSS | **0.89x** mean per run | linsi 1.47x | **stretch met** |
 
 `cargo test`: 4.1 s, 553 bit-identity cases, 89.6% regions / 89.1% lines.
 
@@ -70,22 +70,32 @@ mean down and hides that the two heaviest cases are the two worst.
 `bench/summarize.py` prints both, weighted first. Peak RSS is the exception:
 peaks do not sum, so memory is judged on the per-run mean and the worst case.
 
-**Memory is done**: 0.92x mean per run, better than the C. Building the
-release profile the way the C is built -- opt-level 3, fat LTO, one codegen
-unit, panic=abort -- took it there from 1.25x, and the worst case from 2.67x
-to 1.67x. Getting under the 0.90x stretch is a `sample.linsi` problem now.
+**Memory is past the stretch bar**: 0.89x mean per run, worst case 1.47x.
+Two changes got it there from 1.25x/2.67x -- building the release profile the
+way the C is built (opt-level 3, fat LTO, one codegen unit, panic=abort, which
+drops the unwinding tables), and the loop split below.
 
-**Compute is not**: 2.03x instructions, 1.27x wall clock. Wall clock is
+**Compute is not done**: 1.89x instructions, 1.22x wall clock. Wall clock is
 consistently the better of the two, so the extra instructions are
 cache-friendly; do not assume they reach parity together, and do not optimise
 for Ir alone.
 
-Where the compute sits, from the database and `hotspots.sh`:
+What is left, from the database and `hotspots.sh`:
 
-- **`L__align11` is 88% of `sample.linsi` on both sides**, and the port runs
-  it at 1.79x. One scalar function against another -- see below -- so it is
-  the whole game for L-INS-i.
-- **`sample.memsave` 2.35x** -- the linear-space aligner, the newest code.
+- **`sample.memsave` 2.35x instructions, 1.38x wall** -- now the whole of the
+  remaining gap. The linear-space aligner, the newest code, and untouched by
+  either change so far.
+- Everything else is at or under 1.25x wall clock.
+
+Done so far, both verified byte-identical before being measured:
+
+- Release profile matched to the C's. A fairness bug, not an optimisation:
+  most of the memory win was `panic=abort`.
+- `L__align11`: the port tested `warp` inside the innermost loop where the C
+  splits the row in two on `trywarp`. Split the same way, body written as
+  selects with unconditional stores, buffers sliced to `lastj` so the bounds
+  checks fold. `sample.linsi` 1.79x -> 1.43x instructions, 1.22x -> 1.08x
+  wall. `verify_tbfast.sh` pass=3668 fail=0.
 
 `core/` is not stock MAFFT: it is provolut's performance fork, carrying a
 hoisted mi/mpi recurrence, branches rewritten as selects so the row
