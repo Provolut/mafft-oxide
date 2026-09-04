@@ -17,6 +17,15 @@ already reached and is no longer the objective.
 | wall clock, 8 cases | 2367 ms | **<= 2130 ms** |
 | mean peak RSS | 5800 KB | **<= 5220 KB** |
 
+> **The RSS row is measured on a harness that was wrong.** The frozen file was
+> recorded when every run shared one working directory, which these binaries
+> write into and read back; peak RSS spread 31% because of it. `profile.sh` now
+> gives each run its own directory, and `bench/baseline-2026-09-04-remeasured.tsv`
+> is the same commit re-measured that way -- 6084 KB, not 5800. The frozen file
+> and the targets above are **left as they are**: correcting them relaxes the
+> RSS target, which is not an agent's call to make. See
+> `bench/OPTIMISATION-LOG.md`.
+
 **Both are required.** One without the other is not done: a change that buys
 speed with memory, or memory with speed, is not progress here, and
 `summarize.py` fails until both hold. Instructions (1.378x of the C) are not a

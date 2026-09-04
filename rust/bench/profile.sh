@@ -55,15 +55,28 @@ EOF
 # Peak RSS in KB, by polling VmHWM: the kernel's own high-water mark, so the
 # sampling interval does not matter.
 #
-# Reported as the median of several runs, not one. The same binary on the same
-# input varies by 31% here -- `sample.linsi` clusters at 11.0, 13.4 and 14.4 MB
-# across repeats, while the C sits inside 1% -- because glibc sometimes serves
-# a large allocation from fresh mmap, whose zero pages are never faulted in,
-# and sometimes from recycled heap that is already resident. A single sample of
-# that is not a measurement: it read as a 7.6% memory regression from a change
-# that only ever removed allocations.
+# Reported as the median of several runs, not one. A single sample of this once
+# read as a 7.6% memory regression from a change that only ever removed
+# allocations, and as "no change" from one that removed 7 MB of arrays.
+#
+# The spread that caused it -- 31% on `sample.linsi`, clustered at 11.0, 13.4
+# and 14.4 MB -- was the harness, not the program: every run shared one working
+# directory, and these binaries write `hat2`, `hat3`, `order` and `pre` there
+# and read them back. Each run now gets its own empty directory (see
+# `scratch`), and the same binary then repeats inside 1%. The median is kept
+# because it costs nothing and a stale conclusion costs a day.
+# Every measured run gets an empty working directory of its own. Sharing one
+# made the numbers meaningless: `tbfast` and `disttbfast` write `hat2`, `hat3`,
+# `order` and `pre` into the cwd and read them back, so the second run of a
+# case was not doing the same work as the first, and later cases inherited
+# earlier ones' files. That, not glibc, is where the 31% spread in peak RSS
+# came from -- in a fresh directory the same binary on the same input repeats
+# inside 1%.
+scratch() { mktemp -d "$work/run.XXXXXX"; }
+
 peak_rss_once() {
-  "$@" >/dev/null 2>&1 &
+  local d; d=$(scratch)
+  ( cd "$d" && exec "$@" ) >/dev/null 2>&1 &
   local pid=$! peak=0 v
   while kill -0 "$pid" 2>/dev/null; do
     v=$(awk '/VmHWM/{print $2}' "/proc/$pid/status" 2>/dev/null)
@@ -71,6 +84,7 @@ peak_rss_once() {
     sleep 0.02
   done
   wait "$pid" 2>/dev/null
+  rm -rf "$d"
   echo "$peak"
 }
 
@@ -81,10 +95,11 @@ peak_rss() {
 }
 
 ir_count() {
-  local out="$work/cg.$$"
-  valgrind --tool=callgrind --callgrind-out-file="$out" "$@" >/dev/null 2>"$work/cg.log"
+  local out="$work/cg.$$" d; d=$(scratch)
+  ( cd "$d" && valgrind --tool=callgrind --callgrind-out-file="$out" "$@" ) \
+    >/dev/null 2>"$work/cg.log"
   grep -oP 'refs:\s+\K[0-9,]+' "$work/cg.log" | tr -d ,
-  rm -f "$out"
+  rm -f "$out"; rm -rf "$d"
 }
 
 # A run that failed is not a fast run. Without this a crashing port records as
@@ -123,9 +138,11 @@ check_pair() {
 }
 
 best_ms() {
-  local best=999999 s e ms i
+  local best=999999 s e ms i d
   for i in 1 2 3 4 5; do
-    s=$(date +%s%N); "$@" >/dev/null 2>&1; e=$(date +%s%N)
+    d=$(scratch)
+    s=$(date +%s%N); ( cd "$d" && "$@" ) >/dev/null 2>&1; e=$(date +%s%N)
+    rm -rf "$d"
     ms=$(( (e - s) / 1000000 ))
     [ "$ms" -lt "$best" ] && best=$ms
   done
