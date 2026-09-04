@@ -10,11 +10,11 @@ green. An optimisation that changes one alignment is a bug, however fast.
 picture: `disttbfast -F` on `test/sample` alone reads the flattering end of
 every range.
 
-| metric | aggregate | worst case | vs done |
-|---|---|---|---|
-| wall clock | **1.05x** work-weighted | nwns2 1.23x | within 5% |
-| instructions (callgrind Ir) | **1.40x** work-weighted | nwns2 1.69x | not met |
-| peak RSS | **0.85x** mean per run | linsi 1.78x | **stretch met** |
+| metric | work-weighted | mean per case | worst | vs done |
+|---|---|---|---|---|
+| wall clock | **1.02x** | 0.81x | linsi 1.06x | at parity |
+| peak RSS | n/a | **0.86x** | linsi 1.36x | **stretch met** |
+| instructions (Ir) | 1.38x | 1.00x | nwns2 1.60x | not met |
 
 `cargo test`: 4.1 s, 553 bit-identity cases, 89.6% regions / 89.1% lines.
 
@@ -70,41 +70,48 @@ mean down and hides that the two heaviest cases are the two worst.
 `bench/summarize.py` prints both, weighted first. Peak RSS is the exception:
 peaks do not sum, so memory is judged on the per-run mean and the worst case.
 
-**Memory is past the stretch bar**: 0.85x mean per run.
+**Memory is past the stretch bar** at 0.86x mean per run.
 
-**Wall clock is within 5% of parity**: 1.05x work-weighted, and 0.84x as an
-unweighted mean -- most individual cases are already faster than the C.
+**Wall clock is at parity**: 1.02x work-weighted, 0.81x as a mean -- the
+typical case is already faster than the C, and `sample.fftns2` runs at 0.98x.
 
-**Instructions are not**: 1.40x. They have been consistently the worse of the
-two metrics, so the port's extra instructions are cache-friendly; do not
-assume the two reach parity together, and do not chase Ir at the cost of
-wall clock.
+**Instructions are not**: 1.38x work-weighted, though the mean is exactly
+1.00x. They have been the worse of the two compute metrics at every single
+step, which says the port's extra instructions are cache-friendly. Do not
+chase Ir at the cost of wall clock; wall clock is what a caller experiences.
 
-Four changes so far, each verified byte-identical before being measured, and
-every one of them a transliteration miss rather than a cost of the language:
+Five changes, each verified byte-identical before being measured:
 
 | | Ir | wall | RSS |
 |---|---|---|---|
 | start | 2.15x | 1.36x | 1.25x |
 | release profile matched to the C's -O3 | 2.03x | 1.27x | 0.92x |
 | `L__align11` warp check hoisted out of the row | 1.89x | 1.22x | 0.89x |
-| `falign` profile buffers hoisted out of the column loop | **1.40x** | **1.05x** | **0.85x** |
+| `falign` profile buffers hoisted out of the column loop | 1.40x | 1.05x | 0.85x |
+| `match_calc` loop transposed, row slices hoisted | **1.38x** | **1.02x** | **0.86x** |
 
-The last was the big one and shows the shape of the remaining work.
-`hotspots.sh` had the port at 43% of its instructions inside malloc/free;
-DHAT counted 18,810,901 allocations against the C's 406,972, while peak
-footprint was already *lower* than the C's -- churn, not size. Two adjacent
-sites in `falign::falign` held 18.2M of them: `prf1`/`prf2` allocated per
-column, where the C re-zeroes one hoisted buffer. Now 625,467 allocations and
-180 MB total against the C's 407,062 and 548 MB.
+Every one was a transliteration miss, not a cost of the language: a build
+profile that did not match the C's, a check inside a loop the C splits in two,
+buffers allocated per column where the C re-zeroes one, and a matrix walked
+down its columns where the C's loop order walks along rows.
 
-What is left, in order of what the database says:
+Two method notes worth keeping:
 
-- **`sample.nwns2`, 1.69x Ir and 1.23x wall** -- now the worst case on both.
-- **`sample.linsi`, 1.78x peak RSS** -- the one case where memory is well
-  above the C, against 0.35x on the FFT path.
-- Look for more allocation churn first: 625K against the C's 407K says there
-  is still some, and it has been the cheapest thing to find every time.
+- **Measure one change at a time against the database.** Of the two
+  `match_calc` fixes, the one that looked obvious (hoisting the row slices)
+  was worth 1%, and the one that looked like a rounding detail (transposing
+  the loops) was worth 4%.
+- **Instrumentation can corrupt the metric.** Putting line tables on the
+  release profile added 750 KB to the mapped binary and read as a memory
+  regression, 0.85x -> 0.93x, entirely on the small cases. Only the per-case
+  breakdown showed it; the aggregate just looked like a loss. Line tables live
+  in the `profiling` profile now.
+
+What is left, in the order the database ranks it:
+
+- **`sample.nwns2`, 1.60x Ir and 1.17x wall** -- the worst case on both.
+- **`sample.linsi`, 1.36x peak RSS and 1.06x wall** -- worst on memory.
+- Allocation churn is still worth checking: 625K against the C's 407K.
 
 ## Method
 
