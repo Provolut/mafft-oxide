@@ -323,21 +323,32 @@ RNA folding programs and fail identically with the stock C binaries.)
 The port was written for bit-exactness rather than speed, and for most of its
 life it ran at roughly the C's pace. It is now the fastest of the three builds
 on the workload that matters here — ESCOTT's `mafft --auto --preservecase`, 12
-ProteinGym payloads:
+ProteinGym payloads, all three builds compiled and timed in one session on one
+machine:
 
-| build | time | vs the C at `-O3` |
-|---|---|---|
-| C, `gcc -O3` | 12.60 s | 1.00x |
-| C, `-march=native` (its AVX-512 kernel compiled in) | 7.34 s | 1.72x |
-| **this port** | **6.86 s** | **1.84x** |
+| build | time | vs the C at `-O3` | vs the C at `-march=native` |
+|---|---|---|---|
+| C, `gcc -O3` | 13.13 s | 1.00x | 0.60x |
+| C, `-march=native` (its AVX-512 kernel compiled in) | 7.86 s | 1.67x | 1.00x |
+| **this port** | **5.71 s** | **2.30x** | **1.38x** |
 
-Two things got it there, and `bench/OPTIMISATION-LOG.md` has the measurements
-for both. The smaller one removed bounds checks and a sentinel test from
-`dvtditr`'s hot loops (18% off that binary). The larger one is
-`lalign_avx512` — a transliteration of the C's own AVX-512 kernel for
-`L__align11`, which is ~69% of the aligner's cost. On one staged input it takes
-`tbfast` from 0.770 s to 0.292 s, 2.6x, and lands 17% ahead of the C's
-`-march=native` build of the same function.
+Per binary, on one staged payload each and with byte-identical output:
+
+| | C `-O3` | C `-march=native` | port |
+|---|---|---|---|
+| `tbfast` | 0.821 s | 0.365 s | **0.219 s** |
+| `dvtditr` | 0.189 s | 0.193 s | **0.168 s** |
+
+Four things got it there, and `bench/OPTIMISATION-LOG.md` has the measurements
+for all of them. Two removed work rather than doing it faster: bounds checks and
+a sentinel test in `dvtditr`'s hot loops, then the 95% of a profile column that
+is zeroes and a rescan of every sequence that had already been walked (`match_calc`
+and `fillimp`, 1.27x on that binary between them). The other two are
+`lalign_avx512`: a transliteration of the C's own AVX-512 kernel for
+`L__align11`'s DP row, and — with the row vectorised, the recurrence that feeds
+it turned out to be 43% of the binary on its own — a vectorised prefix scan of
+`mi`, which the C does not have. `tbfast` on a staged payload went 0.770 s →
+0.292 s → 0.219 s.
 
 **The port's kernel dispatches at runtime; the C's is compiled in.** A C build
 carrying it (`-march=native`) crashes on a machine without AVX-512, and a
@@ -345,6 +356,15 @@ portable C build never gets it — which is why the conda-forge 7.526 that
 production runs is the slowest build in the table. One `tbfast-rs` is fast where
 the hardware allows and correct everywhere else, and
 `MAFFT_RS_NO_AVX512=1` forces the scalar path for bisecting.
+
+**One of the two kernels is conditional on the arithmetic, not just the CPU.**
+The prefix scan reaches a position with a single multiply where the loop adds
+the gap-extension penalty to itself repeatedly, and those agree only when
+nothing rounds on the way — which holds when the scores and penalties are whole
+numbers and the sums stay under 2^53. MAFFT's are, so this is the ordinary case,
+but it is a property of the input: `l_align11` establishes it from the score
+matrix and the penalties before dispatching, and runs the serial loop when it
+does not hold. `lalign_avx512`'s own documentation carries the argument.
 
 ## Notes for anyone extending this
 
