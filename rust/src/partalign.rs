@@ -551,3 +551,365 @@ pub fn atracking_localhom(
         Some(imp),
     )
 }
+
+/// Scratch buffers for [`part_a_align`], reused across calls.
+///
+/// The C keeps these as `static TLS` and grows them on demand; the growth rule
+/// is the contract, the storage class is not. No `cpmxhist` here -- see the
+/// module docs.
+#[derive(Default)]
+pub struct PartAlignState {
+    orlgth1: usize,
+    orlgth2: usize,
+    w1: Vec<f64>,
+    w2: Vec<f64>,
+    initverticalw: Vec<f64>,
+    lastverticalw: Vec<f64>,
+    m: Vec<f64>,
+    mp: Vec<i32>,
+    ogcp1: Vec<f64>,
+    ogcp2: Vec<f64>,
+    fgcp1: Vec<f64>,
+    fgcp2: Vec<f64>,
+    cpmx1: Vec<Vec<f64>>,
+    cpmx2: Vec<Vec<f64>>,
+    gapfreq1: Vec<f64>,
+    gapfreq2: Vec<f64>,
+    doublework: Vec<Vec<f64>>,
+    intwork: Vec<Vec<i32>>,
+    ijp: Vec<Vec<i32>>,
+}
+
+/// Everything the constraint path needs, absent when running unconstrained.
+pub struct PartConstraint<'a> {
+    pub imp: &'a PartImp,
+    pub gapmap1: &'a [i32],
+    pub gapmap2: &'a [i32],
+    pub start1: usize,
+    pub start2: usize,
+}
+
+/// The four terminal-gap patterns `new_*GapCount` needs, when the caller has
+/// them. `None` selects the C's `st_*` path and zero head/tail frequencies.
+pub type PartGaps<'a> = (&'a [u8], &'a [u8], &'a [u8], &'a [u8]);
+
+impl PartAlignState {
+    /// `partA__align()` from `partSalignmm.c`.
+    ///
+    /// Aligns two groups across the window the caller has already cut, writing
+    /// the aligned rows back into `group1` / `group2`.
+    ///
+    /// **The two gap-open comparisons use `>`, not `>=`.** `Salignmm.c`'s
+    /// `A__align` uses `>=` there and this one does not; upstream flipped them
+    /// here in April 2018 and left the other file alone. Copying `align.rs`'s
+    /// loop would change the alignment on every tie at identical score. See
+    /// `GOAL-C-FREE.md`.
+    ///
+    /// The `trywarp` and `chudanpt` paths are absent: this port refuses the
+    /// former before reaching here, and nothing in this repo sets the latter.
+    ///
+    /// Returns:
+    ///     The alignment score, and the accumulated constraint score (the C's
+    ///     `*impmatch`, 0.0 when unconstrained).
+    #[allow(clippy::too_many_arguments)]
+    pub fn part_a_align(
+        &mut self,
+        cn: &crate::constants::Constants,
+        penalty: i32,
+        penalty_ex: i32,
+        group1: &mut [Vec<u8>],
+        group2: &mut [Vec<u8>],
+        eff1: &[f64],
+        eff2: &[f64],
+        outgap: bool,
+        legacygapcost: bool,
+        gaps: Option<PartGaps>,
+        constraint: Option<&PartConstraint>,
+        newgapstr: u8,
+    ) -> (f64, f64) {
+        use crate::profile;
+
+        let (icyc, jcyc) = (group1.len(), group2.len());
+        let lgth1 = group1[0].len();
+        let lgth2 = group2[0].len();
+
+        // Degenerate windows: one side is empty, so the other is all gap.
+        if lgth1 == 0 && lgth2 == 0 {
+            return (0.0, 0.0);
+        }
+        if lgth1 == 0 {
+            for row in group1.iter_mut() {
+                *row = vec![newgapstr; lgth2];
+            }
+            return (0.0, 0.0);
+        }
+        if lgth2 == 0 {
+            for row in group2.iter_mut() {
+                *row = vec![newgapstr; lgth1];
+            }
+            return (0.0, 0.0);
+        }
+
+        self.ensure(lgth1, lgth2, cn.charsize);
+
+        let fpenalty = f64::from(penalty);
+        let fpenalty_ex = f64::from(penalty_ex);
+        let s1: Vec<&[u8]> = group1.iter().map(std::vec::Vec::as_slice).collect();
+        let s2: Vec<&[u8]> = group2.iter().map(std::vec::Vec::as_slice).collect();
+
+        profile::cpmx_calc_new(cn, &s1, &mut self.cpmx1, eff1, lgth1, icyc);
+        profile::cpmx_calc_new(cn, &s2, &mut self.cpmx2, eff2, lgth2, jcyc);
+
+        let (headgapfreq1, headgapfreq2);
+        if let Some((sgap1, sgap2, egap1, egap2)) = gaps {
+            profile::new_opening_gap_count(&mut self.ogcp1, icyc, &s1, eff1, lgth1, sgap1);
+            profile::new_opening_gap_count(&mut self.ogcp2, jcyc, &s2, eff2, lgth2, sgap2);
+            profile::new_final_gap_count(&mut self.fgcp1, icyc, &s1, eff1, lgth1);
+            // `new_FinalGapCount` takes an `egappat` the C never reads (see
+            // `profile::new_final_gap_count`); `egap1` / `egap2` earn their
+            // keep just below, in the tail gap frequencies.
+            profile::new_final_gap_count(&mut self.fgcp2, jcyc, &s2, eff2, lgth2);
+            headgapfreq1 = profile::outgapcount(icyc, sgap1, eff1);
+            headgapfreq2 = profile::outgapcount(jcyc, sgap2, eff2);
+            self.gapfreq1[lgth1] = profile::outgapcount(icyc, egap1, eff1);
+            self.gapfreq2[lgth2] = profile::outgapcount(jcyc, egap2, eff2);
+        } else {
+            profile::st_opening_gap_count(&mut self.ogcp1, icyc, &s1, eff1, lgth1);
+            profile::st_opening_gap_count(&mut self.ogcp2, jcyc, &s2, eff2, lgth2);
+            profile::st_final_gap_count(&mut self.fgcp1, icyc, &s1, eff1, lgth1);
+            profile::st_final_gap_count(&mut self.fgcp2, jcyc, &s2, eff2, lgth2);
+            headgapfreq1 = 0.0;
+            headgapfreq2 = 0.0;
+            self.gapfreq1[lgth1] = 0.0;
+            self.gapfreq2[lgth2] = 0.0;
+        }
+
+        let (headgapfreq1, headgapfreq2) = if legacygapcost {
+            for v in self.gapfreq1.iter_mut().take(lgth1 + 1) {
+                *v = 1.0;
+            }
+            for v in self.gapfreq2.iter_mut().take(lgth2 + 1) {
+                *v = 1.0;
+            }
+            (1.0, 1.0)
+        } else {
+            profile::gapcountf(&mut self.gapfreq1, &s1, icyc, eff1, lgth1);
+            profile::gapcountf(&mut self.gapfreq2, &s2, jcyc, eff2, lgth2);
+            for v in self.gapfreq1.iter_mut().take(lgth1 + 1) {
+                *v = 1.0 - *v;
+            }
+            for v in self.gapfreq2.iter_mut().take(lgth2 + 1) {
+                *v = 1.0 - *v;
+            }
+            (1.0 - headgapfreq1, 1.0 - headgapfreq2)
+        };
+
+        for i in 0..lgth1 {
+            self.ogcp1[i] = 0.5 * (1.0 - self.ogcp1[i]) * fpenalty * self.gapfreq1[i];
+            self.fgcp1[i] = 0.5 * (1.0 - self.fgcp1[i]) * fpenalty * self.gapfreq1[i];
+        }
+        for i in 0..lgth2 {
+            self.ogcp2[i] = 0.5 * (1.0 - self.ogcp2[i]) * fpenalty * self.gapfreq2[i];
+            self.fgcp2[i] = 0.5 * (1.0 - self.fgcp2[i]) * fpenalty * self.gapfreq2[i];
+        }
+
+        let mut cur_is_w1 = true;
+        {
+            let (initv, curr) = (&mut self.initverticalw, &mut self.w1);
+            crate::align::match_calc(
+                &cn.n_dis_consweight_multi,
+                initv,
+                &self.cpmx2,
+                &self.cpmx1,
+                0,
+                lgth1,
+                &mut self.doublework,
+                &mut self.intwork,
+                true,
+            );
+            if let Some(c) = constraint {
+                c.imp
+                    .add_column(&mut initv[..lgth1], c.gapmap2[0] as usize + c.start2, c.start1, c.gapmap1);
+            }
+            crate::align::match_calc(
+                &cn.n_dis_consweight_multi,
+                curr,
+                &self.cpmx1,
+                &self.cpmx2,
+                0,
+                lgth2,
+                &mut self.doublework,
+                &mut self.intwork,
+                true,
+            );
+            if let Some(c) = constraint {
+                c.imp
+                    .add_row(&mut curr[..lgth2], c.gapmap1[0] as usize + c.start1, c.start2, c.gapmap2);
+            }
+        }
+
+        if outgap {
+            for i in 1..lgth1 + 1 {
+                self.initverticalw[i] +=
+                    self.ogcp1[0] * headgapfreq2 + self.fgcp1[i - 1] * self.gapfreq2[0];
+            }
+            for j in 1..lgth2 + 1 {
+                self.w1[j] += self.ogcp2[0] * headgapfreq1 + self.fgcp2[j - 1] * self.gapfreq1[0];
+            }
+        }
+
+        for j in 1..lgth2 + 1 {
+            self.m[j] = self.w1[j - 1] + self.ogcp1[1] * self.gapfreq2[j - 1];
+            self.mp[j] = 0;
+        }
+        self.lastverticalw[0] = self.w1[lgth2 - 1];
+
+        let lasti = if outgap { lgth1 + 1 } else { lgth1 };
+        let lastj = lgth2 + 1;
+        let mut wm = 0.0f64;
+
+        for i in 1..lasti {
+            cur_is_w1 = !cur_is_w1;
+            let (currentw, previousw) = if cur_is_w1 {
+                (&mut self.w1, &mut self.w2)
+            } else {
+                (&mut self.w2, &mut self.w1)
+            };
+            previousw[0] = self.initverticalw[i - 1];
+
+            crate::align::match_calc(
+                &cn.n_dis_consweight_multi,
+                currentw,
+                &self.cpmx1,
+                &self.cpmx2,
+                i,
+                lgth2,
+                &mut self.doublework,
+                &mut self.intwork,
+                false,
+            );
+            if let Some(c) = constraint {
+                c.imp.add_row(
+                    &mut currentw[..lgth2],
+                    c.gapmap1[i] as usize + c.start1,
+                    c.start2,
+                    c.gapmap2,
+                );
+            }
+            currentw[0] = self.initverticalw[i];
+
+            let mut mi = previousw[0] + self.ogcp2[1] * self.gapfreq1[i - 1];
+            let mut mpi = 0i32;
+            let fgcp1va = self.fgcp1[i - 1];
+            let ogcp1va = self.ogcp1[i];
+            let gf1va = self.gapfreq1[i];
+            let gf1vapre = self.gapfreq1[i - 1];
+            let ijprow = &mut self.ijp[i];
+
+            for j in 1..lastj {
+                let mut w = previousw[j - 1];
+                ijprow[j] = 0;
+
+                let g = mi + self.fgcp2[j - 1] * gf1va;
+                if g > w {
+                    w = g;
+                    ijprow[j] = -(j as i32 - mpi);
+                }
+                // `>`, not `>=`: see the note on this function.
+                let g = previousw[j - 1] + self.ogcp2[j] * gf1vapre;
+                if g > mi {
+                    mi = g;
+                    mpi = j as i32 - 1;
+                }
+                mi += fpenalty_ex;
+
+                let g = self.m[j] + fgcp1va * self.gapfreq2[j];
+                if g > w {
+                    w = g;
+                    ijprow[j] = i as i32 - self.mp[j];
+                }
+                // `>`, not `>=`: see the note on this function.
+                let g = previousw[j - 1] + ogcp1va * self.gapfreq2[j - 1];
+                if g > self.m[j] {
+                    self.m[j] = g;
+                    self.mp[j] = i as i32 - 1;
+                }
+                self.m[j] += fpenalty_ex;
+
+                currentw[j] += w;
+                wm = w;
+            }
+            self.lastverticalw[i] = currentw[lgth2 - 1];
+        }
+
+        let currentw: &[f64] = if cur_is_w1 { &self.w1 } else { &self.w2 };
+        let (track, impmatch) = match constraint {
+            Some(c) => {
+                let t = ImpTrack {
+                    imp: c.imp,
+                    gapmap1: c.gapmap1,
+                    gapmap2: c.gapmap2,
+                    start1: c.start1,
+                    start2: c.start2,
+                };
+                atracking_localhom(
+                    currentw,
+                    &self.lastverticalw,
+                    lgth1,
+                    lgth2,
+                    &mut self.ijp,
+                    outgap,
+                    &t,
+                )
+            }
+            None => (
+                atracking(
+                    currentw,
+                    &self.lastverticalw,
+                    lgth1,
+                    lgth2,
+                    &mut self.ijp,
+                    outgap,
+                ),
+                0.0,
+            ),
+        };
+
+        for row in group1.iter_mut() {
+            *row = profile::gapireru(row, &track.gt1, newgapstr);
+        }
+        for row in group2.iter_mut() {
+            *row = profile::gapireru(row, &track.gt2, newgapstr);
+        }
+
+        (wm, impmatch)
+    }
+
+    /// Grow the scratch to fit a window, the way the C's `orlgth1/2` guard does.
+    fn ensure(&mut self, lgth1: usize, lgth2: usize, charsize: usize) {
+        if lgth1 <= self.orlgth1 && lgth2 <= self.orlgth2 {
+            return;
+        }
+        let ll1 = (lgth1 as f64 * 1.3) as usize + 100;
+        let ll2 = (lgth2 as f64 * 1.3) as usize + 100;
+        self.w1 = vec![0.0; ll2 + 2];
+        self.w2 = vec![0.0; ll2 + 2];
+        self.initverticalw = vec![0.0; ll1 + 2];
+        self.lastverticalw = vec![0.0; ll1 + 2];
+        self.m = vec![0.0; ll2 + 2];
+        self.mp = vec![0; ll2 + 2];
+        self.ogcp1 = vec![0.0; ll1 + 2];
+        self.ogcp2 = vec![0.0; ll2 + 2];
+        self.fgcp1 = vec![0.0; ll1 + 2];
+        self.fgcp2 = vec![0.0; ll2 + 2];
+        self.gapfreq1 = vec![0.0; ll1 + 2];
+        self.gapfreq2 = vec![0.0; ll2 + 2];
+        self.cpmx1 = vec![vec![0.0; ll1 + 2]; charsize];
+        self.cpmx2 = vec![vec![0.0; ll2 + 2]; charsize];
+        self.doublework = vec![vec![0.0; charsize]; ll2 + 2];
+        self.intwork = vec![vec![0; charsize + 1]; ll2 + 2];
+        self.ijp = vec![vec![0; ll2 + 2]; ll1 + 2];
+        self.orlgth1 = ll1 - 100;
+        self.orlgth2 = ll2 - 100;
+    }
+}
