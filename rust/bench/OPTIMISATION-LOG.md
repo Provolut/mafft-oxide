@@ -402,3 +402,68 @@ operations are element-wise (`loadu_pd`, `cmp_pd_mask`, `mask_blend_pd`,
 `add_pd`, `storeu_pd`) with no horizontal reduction, so a port of it would be
 bit-exact by construction rather than by luck.
 
+---
+
+# The AVX-512 kernel for `l_align11`, 2026-09-05
+
+The section above ended by saying the only big saving left was to vectorise
+`l_align11` explicitly, as the C does. This is that, and it is the largest
+single change the port has had.
+
+## Result
+
+One staged `tbfast` input (51 sequences, 393 aa — an ESCOTT realign payload),
+best of five:
+
+| build | time |
+|---|---|
+| `tbfast-rs`, scalar (`MAFFT_RS_NO_AVX512=1`) | 0.770 s |
+| C `tbfast`, `-march=native` (its own AVX-512 kernel) | 0.342 s |
+| **`tbfast-rs`, kernel** | **0.292 s** |
+
+**2.63x over the port's scalar path, and 17% ahead of the C's own vectorised
+build.** End to end over 12 ESCOTT payloads: C `-O3` 12.60 s, C `-march=native`
+7.34 s, **port 6.86 s** — the port is now the fastest of the three, and unlike
+the `-march=native` C it is a portable binary that decides at runtime.
+
+Peak RSS is unchanged: alternating runs give 10.5–10.7 MB with the kernel on and
+off alike, with no consistent direction. The kernel adds two 8-lane stack arrays
+and nothing else.
+
+## What it is
+
+`src/lalign_avx512.rs`, a statement-for-statement transliteration of
+`Lalign11.c`'s `LALIGN11_AVX512` block: eight cells at a time, `__m512d` for the
+scores and `__m256i` for the traceback indices, with the per-lane running maximum
+reduced once per row.
+
+The C's own comment explains why neither compiler will do this automatically —
+the loop mixes 64-bit scores with 32-bit indices, so there is no single
+vectorisation factor. That matches what was measured here: LLVM emitted **zero**
+packed arithmetic ops for this loop, and `-C target-cpu=native` bought 1.7% end
+to end.
+
+## Why it is bit-exact
+
+Every lane runs the scalar computation on its own cell — the same comparisons
+(`_CMP_GT_OQ` / `_CMP_LT_OQ`) on the same operands in the same order, the same
+additions, no reassociation, and no horizontal sum anywhere. The only
+cross-lane interaction is the running maximum, and the C's tie rule restores
+scan order exactly: strict `>` keeps the earliest `j` within a lane, and the
+smallest `j` wins across lanes.
+
+That is an argument, not evidence, so `verify_lalign_kernel.sh` runs the same
+alignments twice through one binary — once with `MAFFT_RS_NO_AVX512=1` — and
+requires identical bytes. **This is the check the other harnesses structurally
+cannot make**: they compare the port against the C, so they would pass if both
+of the port's paths were wrong in the same way.
+
+## The cost, stated plainly
+
+The crate moved from `#![forbid(unsafe_code)]` to `#![deny(unsafe_code)]`, and
+`lalign_avx512` is the one module that lifts it. `forbid` cannot be lifted
+locally — that is the difference between the two lints — so this is the whole of
+the licence, and it is visible in `lib.rs` rather than buried. Portable SIMD
+(`std::simd`) would have avoided it, but it is still nightly-only with no
+stabilisation date.
+
