@@ -53,7 +53,7 @@ static void match_ribosum( double *match, double **cpmx1, double **cpmx2, int i1
 			scarr[l] += ribosumdis[k][l] * cpmx1[i1][k];
 		}
 	}
-#if 0 /* ¤³¤ì¤ò»È¤¦¤È¤­¤Ïdoublework¤Î¥¢¥í¥±¡¼¥È¤òµÕ¤Ë¤¹¤ë */
+#if 0 /* ã“ã‚Œã‚’ä½¿ã†ã¨ãã¯doubleworkã®ã‚¢ãƒ­ã‚±ãƒ¼ãƒˆã‚’é€†ã«ã™ã‚‹ */
 	{
 		double *fpt, **fptpt, *fpt2;
 		int *ipt, **iptpt;
@@ -131,7 +131,7 @@ static void match_calc( double *match, double **cpmx1, double **cpmx2, int i1, i
 			scarr[l] += (n_dis[k][l]-RNAthr) * cpmx1[i1][k];
 		}
 	}
-#if 0 /* ¤³¤ì¤ò»È¤¦¤È¤­¤Ïdoublework¤Î¥¢¥í¥±¡¼¥È¤òµÕ¤Ë¤¹¤ë */
+#if 0 /* ã“ã‚Œã‚’ä½¿ã†ã¨ãã¯doubleworkã®ã‚¢ãƒ­ã‚±ãƒ¼ãƒˆã‚’é€†ã«ã™ã‚‹ */
 	{
 		double *fpt, **fptpt, *fpt2;
 		int *ipt, **iptpt;
@@ -210,7 +210,7 @@ static void match_add( double *match, double **cpmx1, double **cpmx2, int i1, in
 			scarr[l] += n_dis[k][l] * cpmx1[i1][k];
 		}
 	}
-#if 0 /* ¤³¤ì¤ò»È¤¦¤È¤­¤Ïdoublework¤Î¥¢¥í¥±¡¼¥È¤òµÕ¤Ë¤¹¤ë */
+#if 0 /* ã“ã‚Œã‚’ä½¿ã†ã¨ãã¯doubleworkã®ã‚¢ãƒ­ã‚±ãƒ¼ãƒˆã‚’é€†ã«ã™ã‚‹ */
 	{
 		double *fpt, **fptpt, *fpt2;
 		int *ipt, **iptpt;

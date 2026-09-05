@@ -57,6 +57,26 @@ what fired, why you think it is wrong, and what you would change.
 
 A gate an agent can talk itself past is not a gate.
 
+## Sources are UTF-8, and a hook keeps them that way
+
+Upstream ships eight files whose Japanese comments are EUC-JP. That is not a
+cosmetic problem: GNU grep in a UTF-8 locale treats such a file as binary and
+reports **nothing** for it -- no match, no count, no warning -- so a "nothing
+calls this function" or "this macro is unused" conclusion silently excludes
+whichever files happen to be affected. Here that was `constants.c`, `io.c`,
+`mltaln9.c`, `Lalign11.c`, `Lalignmm.c` and `MSalignmm.c`: all of I/O, the
+memsave aligner, and the file `fillimp` lives in. It has already produced two
+wrong statements in this repo's own documents.
+
+They are converted, and `scripts/check-encoding.sh` (run by `pre-push`) refuses
+a source that is not valid UTF-8. **After importing a new upstream release, run
+`scripts/check-encoding.sh --fix`** -- the release will bring the EUC-JP files
+back.
+
+Converting is safe, and that was measured rather than assumed: every affected
+byte is inside a comment, and `core/` built before and after the conversion
+gives 34 of 34 binaries byte-identical.
+
 ## What to do when output diverges
 
 Instrument a scratch copy of `core/`, dump the intermediates as f64 bit

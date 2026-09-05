@@ -56,7 +56,7 @@ static void match_calc_add( double **scoringmtx, double *match, double **cpmx1, 
 			scarr[l] += scoringmtx[k][l] * cpmx1[i1][k];
 		}
 	}
-#if 0 /* ¤³¤ì¤ò»È¤¦¤È¤­¤Ïdoublework¤Î¥¢¥í¥±¡¼¥È¤òµÕ¤Ë¤¹¤ë */
+#if 0 /* ã“ã‚Œã‚’ä½¿ã†ã¨ãã¯doubleworkã®ã‚¢ãƒ­ã‚±ãƒ¼ãƒˆã‚’é€†ã«ã™ã‚‹ */
 	{
 		double *fpt, **fptpt, *fpt2;
 		int *ipt, **iptpt;
@@ -137,7 +137,7 @@ static void match_calc( double **n_dynamicmtx, double *match, double **cpmx1, do
 			scarr[l] += n_dynamicmtx[k][l] * cpmx1[i1][k];
 		}
 	}
-#if 0 /* ¤³¤ì¤ò»È¤¦¤È¤­¤Ïdoublework¤Î¥¢¥í¥±¡¼¥È¤òµÕ¤Ë¤¹¤ë */
+#if 0 /* ã“ã‚Œã‚’ä½¿ã†ã¨ãã¯doubleworkã®ã‚¢ãƒ­ã‚±ãƒ¼ãƒˆã‚’é€†ã«ã™ã‚‹ */
 	{
 		double *fpt, **fptpt, *fpt2;
 		int *ipt, **iptpt;

@@ -809,7 +809,7 @@ void constants( int nseq, char **seq )
 		}
 #endif
 #if 0
-/* Ãí°Õ ¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª */
+/* æ³¨æ„ ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ */
 			penalty -= offset;
 #endif
 
@@ -1026,7 +1026,7 @@ void constants( int nseq, char **seq )
 		}
 #endif
 #if 0
-/* Ãí°Õ ¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª */
+/* æ³¨æ„ ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ */
 			penalty -= offset;
 #endif
 
@@ -1337,7 +1337,7 @@ void constants( int nseq, char **seq )
 		}
 #endif
 #if 0
-/* Ãí°Õ ¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª */
+/* æ³¨æ„ ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ï¼ */
 			penalty -= offset;
 #endif
 

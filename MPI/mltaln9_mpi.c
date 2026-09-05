@@ -16468,7 +16468,7 @@ void fillimp( double **impmtx, double *imp, int clus1, int clus2, int lgth1, int
 				{
 					if( *pt1 != '-' && *pt2 != '-' )
 					{
-// ½Å¤ß¤òÆó½Å¤Ë¤«¤±¤Ê¤¤¤è¤¦¤ËÃí°Õ¤·¤Æ²¼¤µ¤¤¡£
+// é‡ã¿ã‚’äºŒé‡ã«ã‹ã‘ãªã„ã‚ˆã†ã«æ³¨æ„ã—ã¦ä¸‹ã•ã„ã€‚
 //						impmtx[k1][k2] += tmpptr->wimportance * fastathreshold;
 //						impmtx[k1][k2] += tmpptr->importance * effij;
 //						impmtx[k1][k2] += tmpptr->fimportance * effij;
