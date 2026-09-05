@@ -17,6 +17,30 @@ path = "src/bin/disttbfast.rs"
 name = "tbfast-rs"
 path = "src/bin/tbfast.rs"
 
+[[bin]]
+name = "countlen-rs"
+path = "src/bin/countlen.rs"
+
+[[bin]]
+name = "version-rs"
+path = "src/bin/version.rs"
+
+[[bin]]
+name = "replaceu-rs"
+path = "src/bin/replaceu.rs"
+
+[[bin]]
+name = "f2cl-rs"
+path = "src/bin/f2cl.rs"
+
+[[bin]]
+name = "restoreu-rs"
+path = "src/bin/restoreu.rs"
+
+[[bin]]
+name = "dndpre-rs"
+path = "src/bin/dndpre.rs"
+
 [profile.release]
 opt-level = 3
 debug = false
