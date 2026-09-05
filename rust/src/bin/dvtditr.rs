@@ -11,7 +11,7 @@
 //! written.
 //!
 //! **The implemented configuration is the one the script produces**, and every
-//! other one is refused by name rather than approximated. `GOAL-C-FREE.md`
+//! other one is refused by name rather than approximated. `README.md`
 //! records why that is the rule here and what a traced run reports.
 #![forbid(unsafe_code)]
 
@@ -177,7 +177,7 @@ fn main() {
         // `-s 0.8`, which switches `tditeration` onto `scoringmatrices`,
         // `classifypairs`, `smalldistmtx` and `partA__align_variousdist` --
         // a second scoring path this port does not implement. It is not on the
-        // `--auto` route. See GOAL-C-FREE.md.
+        // `--auto` route. See README.md, "What is *not* ported".
         eprintln!(
             "dvtditr-rs: -s {} (specificityconsideration, --allowshift) selects a \
              scoring path this port does not implement",
