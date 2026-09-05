@@ -3,267 +3,203 @@
 **The constraint does not move: output must not change.** `tests/matrix.rs`,
 `tests/utils.rs`, `verify.sh`, `verify_tbfast.sh`, `verify_utils.sh` and
 `verify_e2e.sh` stay green. A change that alters one alignment is a bug however
-much C it removes. `../CLAUDE.md` owns the gates an agent may not lower; the
-85% coverage floor and the test suite are not negotiable here either.
+much C it removes. `../CLAUDE.md` owns the gates an agent may not lower.
 
-This goal sits **beside** `GOAL.md`, it does not replace it. That one is a
-performance target against a frozen baseline and its numbers are not this
-goal's to move. Where they conflict — and they can, because a port of a hot
-binary may land slower than the C before it lands faster — `GOAL.md`'s
-targets are advisory for the duration of this work and binding again after.
+This sits **beside** `GOAL.md`, which is a performance target against a frozen
+baseline; its numbers are not this goal's to move.
 
-## What is already C-free, so that the goal is not overstated
+---
 
-The `rust/` crate has no `build.rs` and no dependencies; `tests/matrix.rs` and
-`tests/utils.rs` run the Rust binaries against committed fixtures and only
-*mention* `core/` in regeneration comments; `bench/coverage.sh` needs no C; and
-`.githooks/pre-push` is exactly those two things. **`cargo build && cargo test`
-already passes with `core/` deleted.** The library is not the problem.
+## 1. Status
 
-What is not C-free is the **runtime**: the `mafft` script dispatches to
-binaries, and most of them are still the C's.
+Nine binaries can run under `mafft --auto`. **Eight are Rust and verified
+byte-identical.** The ninth, `dvtditr`, is the whole of what remains.
 
-## The target
+| binary | state |
+|---|---|
+| `disttbfast`, `tbfast` | Rust, byte-identical (pre-existing) |
+| `countlen`, `version`, `replaceu`, `restoreu`, `f2cl`, `dndpre` | Rust, byte-identical |
+| **`dvtditr`** | **not done** — see §5 |
+| `splittbfast` | **out of scope** — parttree bracket only, ≥200000 sequences |
 
-`--auto` picks one of seven brackets (`scripts/mafft:1290-1345`), and the
-binaries a run executes follow from that choice. Traced by wrapping every
-binary in `$MAFFT_BINARIES` with a logger:
+Verified with eight Rust binaries in place: the 840-payload ProteinGym corpus
+byte-identical through `mafft --auto`, upstream's own suite, and provolut-ml's
+ESCOTT scorer SHA-256-identical on two assays. Speed 0.989× (51×393 windows)
+and 0.981× (11×448) against the all-C build.
 
-| bracket | selects | binaries executed |
+`f2cl` implements the **FASTA path only**; clustal and phylip are refused
+rather than approximated. `--clustalout` / `--phylipout` still need the C.
+
+---
+
+## 2. Start here: the environment
+
+None of this is in the repo, and all of it is needed.
+
+```sh
+# Rust toolchain and valgrind (bench/profile.sh and bench/hotspots.sh need it).
+mamba create -y -n rustdev -c conda-forge rust
+mamba install -y -n rustdev -c conda-forge valgrind
+export PATH=$HOME/miniforge3/envs/rustdev/bin:$PATH
+
+# The pre-push gate is NOT wired in a fresh clone. Wire it, or you will push
+# ungated and not notice — this happened here for thirteen commits.
+git config core.hooksPath .githooks
+
+# Building core/ for the differential harnesses: conda's gcc 15 FAILS.
+# `dndblast.c` and `filter.c` are built by make's implicit rule without
+# $(MYCFLAGS), so they lose -std=c99 and C23 rejects mltaln.h's old-style
+# declarations (upstream issue #7). Use the system gcc 13:
+cd core && make -j CC=/usr/bin/gcc-13 CFLAGS="-O3"
+```
+
+`make` writes the binaries into `../binaries/`. Point a run at a build with
+`MAFFT_BINARIES=/path/to/binaries scripts/mafft ...`; that is how a mixed
+C/Rust configuration is assembled — copy `binaries/`, drop the `*-rs` binaries
+over the C ones under their C names.
+
+---
+
+## 3. How you know you are right
+
+In increasing order of authority. **A unit test cannot see a reordered
+addition; only these can.**
+
+1. `cargo test --release` — golden matrix and the utility fixtures. Needs no C.
+2. `./verify_utils.sh ../core [corpus-dir]` — the utilities, wide. Pass a
+   directory of FASTA files to widen it.
+3. `./verify.sh`, `./verify_tbfast.sh`, `./verify_e2e.sh` — the aligners,
+   against a built `core/`. About an hour. **This is what decides `dvtditr`.**
+4. `./bench/coverage.sh` — 85% floor.
+5. The ProteinGym corpus and ESCOTT, below.
+
+### Rebuilding the ProteinGym corpus
+
+The 840-payload corpus is the realistic workload: the exact FASTA payloads
+provolut-ml's GEMME/ESCOTT trace hands MAFFT. It is not in this repo. Rebuild
+it from provolut-ml with `pml.bioseq.gemme.pipeline`'s own sampler —
+`_aligned_records` → `filter_homologs` → `sample_sub_alignments` at the iGEMME
+defaults (`n_iter=7`, `oversample=2`, `max_homologs=40000`), writing each
+subset through `_degap` as `>name\nseq`. MSAs live at
+`$PROTEINGYM_MSA_DIR` (default `~/gemme_pg/msa_extract/DMS_msa_files`).
+`P53_HUMAN_full_04-29-2022_b09.a2m` and `SPG1_STRSG_full_11-26-2021_b07.a2m`
+give 100 and 35 payloads at stride 7 / 4.
+
+### The ESCOTT end-to-end check
+
+The strongest signal, and the one that matters to the caller. In provolut-ml:
+
+```sh
+GEMME_TRACE_CACHE=$(mktemp -d) PML_MAFFT_BIN=/path/to/mafft-shim \
+  python escott_e2e.py SPG1_STRSG_Olson_2014 out
+```
+
+Score one assay per build, **each with its own fresh `GEMME_TRACE_CACHE`** —
+a warm cache silently skips MAFFT entirely and the run passes without either
+aligner being asked anything. Compare the saved `.scores.npy` and
+`.matrix.npy` by SHA-256. Sanity-check the harness by pointing
+`PML_MAFFT_BIN` at a nonexistent path: the run must fail.
+
+`SPG1_STRSG_Olson_2014` (536962 mutants) and `P53_HUMAN_Kotler_2018` (1048,
+5069-sequence MSA) are the two used here.
+
+---
+
+## 4. Hazards — read before writing code
+
+### `partA__align` and `A__align` disagree on two tie comparisons
+
+The single most dangerous detail in the remaining work. Copying `align.rs`'s
+inner loop — the obvious move, since it is the same DP and already ported —
+gives a different alignment on every tie, at identical score. No unit test and
+no score check can see it.
+
+| recurrence | `Salignmm.c` / `align.rs` | `partSalignmm.c` |
 |---|---|---|
-| `nlen<3000 & nseq<100` | L-INS-i | version, countlen, replaceu, f2cl, **tbfast**, **dvtditr**, restoreu |
-| `nlen<1000 & nseq<200` | L-INS-2 | same set |
-| `nlen<10000 & nseq<500` | FFT-NS-i | version, countlen, replaceu, f2cl, **disttbfast**, **dndpre**, **dvtditr**, restoreu |
-| `nseq<20000` | FFT-NS-2 | as above without `dvtditr` |
-| `nseq<100000` | + memsavetree | as above; `disttbfast-rs` already covers `--memsavetree` |
-| `nseq<200000` | + memsavetree, one cycle | as above |
-| otherwise | parttree | adds **splittbfast** |
+| `*prept + *ogcp2pt * gf1vapre` vs `mi` | **`>=`** | **`>`** (`// 2018/Apr`) |
+| `*prept + ogcp1va * *gf2ptpre` vs `*mjpt` | **`>=`** | **`>`** (`// 2018/Apr`) |
 
-Nine distinct binaries. Four are Rust today — `disttbfast`, `tbfast`,
-`countlen`, `version`. Five remain: **`replaceu`, `restoreu`, `f2cl`,
-`dndpre`, `dvtditr`**, and a sixth, `splittbfast`, only for the parttree
-bracket.
+Both files carry both forms, one live and one commented — mirror images.
+Upstream changed `partSalignmm.c` in April 2018 and left `Salignmm.c`. It is
+deliberate; there is nothing to report upstream. The other two comparisons in
+that loop use `>` in both files.
 
-**The target is the first six brackets: every input with fewer than 200000
-sequences runs `--auto` with no C process.** That is five binaries, and it
-covers every workload this repository actually serves, including the
-GEMME/ESCOTT trace in provolut-ml, which never draws a sub-alignment above 51
-sequences.
+`partalign.rs` already has this right, with the reason at the call site.
 
-The parttree bracket is deliberately out. Say so in the README rather than
-letting it look finished: a 200000-sequence input keeps executing the C
-`splittbfast`, and it must keep *working*, not start refusing. Silently
-falling back is fine here precisely because it is documented; what is not fine
-is claiming the run is C-free when it is not.
+### An input with no bit-exact answer
 
-## Done is all four of these
+`getnumlen_nogap_countn` reads an uninitialised `nN` when a record has an empty
+body — reachable with a four-line input, valgrind-confirmed (upstream issue
+#8). There is no bit-exact answer to reproduce. `countlen-rs` picks the defined
+value, zero, which agrees with the C wherever the C is defined, and
+`verify_utils.sh` scores that input `indeterminate` rather than pass or fail.
+Expect more of these in `dvtditr`; handle them the same way — name the input,
+prove the indeterminacy, choose deliberately, never hide it in a pass count.
 
-1. **Coverage.** A `$MAFFT_BINARIES` directory containing only Rust binaries
-   runs `mafft --auto` to completion on an input from each of the first six
-   brackets. Prove it by *removing* the C ones from that directory, not by
-   trusting a symlink: a missing binary must fail the run, which is what makes
-   a passing run mean something.
-2. **Identity.** Byte-identical stdout against the all-C configuration on: the
-   840-payload ProteinGym corpus, upstream's own test suite (9/9), and the
-   committed golden matrix. Plus the end-to-end proof that actually matters —
-   provolut-ml's ESCOTT scorer producing SHA-256-identical scores and
-   prediction matrices on `SPG1_STRSG_Olson_2014` and `P53_HUMAN_Kotler_2018`,
-   each run with its own fresh trace cache.
-3. **Independence.** `mv core core.hidden && cargo build --release && cargo test`
-   passes, and the run in (1) still works. The C becomes a development
-   dependency of the differential harnesses, nothing more.
-4. **No speed regression, measured per input shape.** On the ESCOTT corpus,
-   against the all-C configuration:
+### `f2cl`'s stderr is not reproducible
 
-   | shape | four-Rust baseline (2026-09-05) | target |
-   |---|---|---|
-   | 51x393 sub-alignment (where ESCOTT spends its time) | 0.983x | >= 0.98x |
-   | 11x448 sub-alignment (startup-dominated) | 0.971x | >= 0.96x |
+It prints heap pointers (upstream issue #9), different on every run of the C
+against itself. `verify_utils.sh` compares `f2cl` on stdout and exit status
+only.
 
-   Two floors rather than one, because a single number hides which shape moved.
-   The short-input figure is **not** the utilities' doing: the same corpus with
-   only `tbfast`/`disttbfast` swapped measured 0.966x before `countlen-rs` and
-   `version-rs` existed, so the gap is `tbfast-rs` on calls whose DP is too
-   small to amortise fixed costs, and adding the two utilities did not widen
-   it. They do cost something, and it is small: 0.31 ms against 0.25 ms per
-   `version` invocation and 0.35 ms against 0.31 ms per `countlen`, from
-   binaries of 380-420 KB against 16-125 KB. About 0.1 ms per `mafft` call,
-   roughly 4% of the 2.9 ms gap on that shape.
+### The misspelled macro in `partSalignmm.c`
 
-   `dvtditr` is 22% of an L-INS-i call and is the one that can still move
-   these; a port that lands the binary but costs 15% is not done.
+`FASTMACHCALC` (no `T`) guards two functions, is defined nowhere, and the
+`#else` branch it forces differs semantically from the branch it hides —
+`+=` against `=` (upstream issue #11). The port implements the live `#else`.
+Fixing the spelling upstream without also fixing the `=` would change
+alignments.
 
-## Or: a written negative result
+---
 
-If a piece proves genuinely unportable — a path whose reference output is
-undefined, a dependency on C library behaviour with no faithful equivalent —
-stop and write it up: what was tried, what it measured, and why the remaining
-gap is where it is. `bench/OPTIMISATION-LOG.md` is the format. A negative
-result that names the obstacle is worth having; a port that quietly disagrees
-with the C is not.
+## 5. What remains: `dvtditr`
 
-One such case already exists and is the template. `getnumlen_nogap_countn`
-reads an uninitialised `nN` for an input whose first record has an empty body
-(upstream issue #8, valgrind-confirmed), so **there is no bit-exact answer to
-reproduce**. `countlen-rs` picks the defined value, zero, which agrees with the
-C on every input where the C itself is defined, and `verify_utils.sh` scores
-that input `indeterminate` rather than as a pass or a failure. Expect more of
-these in `dvtditr`, and handle them the same way: name the input, prove the
-indeterminacy, choose deliberately, and do not let it hide inside a pass count.
+~2650 lines. Sizes are measured per function, and the reuse column is what
+actually decides the cost — see §7.
 
-## Order, and why
-
-1. **`replaceu`, `restoreu`, `f2cl`** — small, and every bracket runs them, so
-   they are the cheapest reduction in C-process count. The reader they need
-   already exists: `load1SeqWithoutName_realloc_casepreserve` (`io.c:1387`)
-   applies `charfilter()`, which `io.rs` has as `SeqFilter::Text`. Note
-   `getnumlen_casepreserve` (`io.c:2132`) caps sampling at **1000000**, not
-   100000, and calls `countATGC` rather than `countATGCandN` — so issue #8's
-   defect does not exist on that path. Do not conflate the two.
-2. **`dndpre`** — needed by the FFT-NS-i and FFT-NS-2 brackets, and small.
-3. **`partA__align`** (`partSalignmm.c`) — 40.7% of `dvtditr`'s instructions on
-   a 51x393 sub-alignment and 61.7% on an 11x448 one, measured with callgrind
-   on both shapes. It is a sibling of the already-ported `A__align` in
-   `align.rs`; check first whether it carries a `cpmxhist`-style history cache,
-   because in `align.rs` that cache changed the summation order and was
-   load-bearing for bit-exactness.
-### What reading `partSalignmm.c` changed about (3)
-
-Measured against the file rather than its line count, and each of these is a
-saving someone would otherwise spend a day rediscovering:
-
-- **`partA__align_variousdist` (746 lines) is never reached.** Refuse it. It is
-  the single biggest item in the file and none of it is needed.
-- **`st_OpeningGapCount` / `st_FinalGapCount` are live, and already ported.**
-  An earlier revision of this list called them dead, because the copies at the
-  top of `partSalignmm.c` sit inside `#if 0`. That was wrong: those are dead
-  *local duplicates*, and `partA__align`'s calls bind to the real definitions
-  in `mltaln9.c:12837`, declared in `functions.h`. Either way there is nothing
-  to write — `profile.rs` already has `st_opening_gap_count` and
-  `st_final_gap_count`.
-- **`match_calc` is the function `align.rs` already has** — same signature, same
-  sparse-profile walk, same register accumulation (this repo's own patch). The
-  only difference is that `partA__align` reads the global
-  `n_dis_consweight_multi` where `A__align` takes `n_dynamicmtx`; pass
-  `cn.n_dis_consweight_multi` and it is exact. It is now `pub(crate)` for that
-  reason. **Do not write a second copy** — two transliterations of one DP inner
-  loop are free to drift apart, and nothing would catch it but a differential
-  run.
-- **`partA__align` carries no `cpmxhist` cache** (`grep -c` is 0). None of
-  `A__align`'s summation-order subtlety applies here.
-- **The constraint half is done** (`partalign.rs`): `part_imp_match_init_strict`
-  is allocation plus the already-ported `fillimp`, and the two gapmap
-  accumulators are five lines each.
-- **The two tracebacks are NOT reusable — checked, and the guess was wrong.**
-  They open the same way (`partSalignmm`'s `Atracking` starts with
-  `atracking_localhom`'s `outgap == 0` scan, not `atracking`'s `tailgp` form),
-  which is what made reuse look plausible. Diffing the two C
-  `Atracking_localhom` bodies with comments and whitespace stripped gives 148
-  differing lines out of ~185 and ~140:
-
-  * `Salignmm.c`'s builds **gap tables** (`gt1bk` / `gt2bk`, `gaptable1/2`) and
-    takes `ngap1`, `ngap2`, `reuseprofiles`, `gt1`, `gt2` — the profile-reuse
-    machinery that belongs with `cpmxhist`.
-  * `partSalignmm.c`'s writes **directly into `mseq1` / `mseq2`** and takes
-    `start1/end1/start2/end2` plus the gap maps.
-
-  Port them separately. The consolation is that `partSalignmm`'s pair is the
-  *older, simpler* shape — no gap-table bookkeeping at all — so they are easier
-  than the ones already in `align.rs`, not harder. About 290 lines for the two.
-
-  Recording the negative result on purpose: "these two look alike" is exactly
-  the assumption that would have been discovered halfway through a port, by
-  which point the wrong shape is already written.
-
-So what remains is the 696-line DP, the two tracebacks (~290 lines, ported
-fresh), and the `tditeration` driver plus `dvtditr`'s arguments — about 1000
-lines, not the 2125 the file suggests.
-
-**Start it with a full context budget.** It is one long transliteration where a
-single reordered addition changes an alignment, no test says which line did it,
-and the method that works here is instrumenting a scratch `core/` and bisecting
-on f64 bit patterns. That wants the whole budget for the bisect.
-
-### `Falign_localhom` is missing too — 875 lines nobody had counted
-
-Found by asking where `partA__align` is actually called from, rather than
-assuming. The answer is **only `Falign_localhom.c`**, and that file is not
-ported: `falign.rs` covers `Falign` alone, as its own header says.
-
-The two are a pair, and only one of them is done:
-
-| C | calls | Rust |
+| piece | cost | state |
 |---|---|---|
-| `Falign` (`Falign.c`) | `A__align` | ported — `falign.rs` + `align.rs` |
-| `Falign_localhom` (875 lines) | **`partA__align`** | **not ported** |
+| `partA__align` + both tracebacks + constraint half | ~360 Rust | **written, runs, NOT bit-verified** |
+| `Falign_localhom` | **~300 Rust** (713 C) | not started |
+| `TreeDependentIteration` sequential branch | 1188 C | not started |
+| — its missing dependencies | **666 C** | not started |
+| `dvtditr.c` `main` reached path | ~500 C | not started |
 
-`Falign_localhom` is the constrained variant — the FFT anchoring used when
-consistency constraints are in play, which is L-INS-i's whole point. That is
-why `partA__align` shows up at 40-62% of `dvtditr`'s instructions.
+### `partA__align` — written, not verified
 
-Note `tbfast-rs` is byte-identical on L-INS-i **without** it, so `tbfast`'s
-path does not reach `Falign_localhom` even with `-F`; `dvtditr`'s does. Worth
-confirming exactly which size or flag decides that before porting, because it
-bounds what has to work.
+`partalign::PartAlignState::part_a_align` compiles, runs, and passes tests
+that it terminates, preserves every residue, emits equal-width rows, and gives
+the same answer when its state is reused. **None of that is bit-exactness.**
+Nothing has executed it in anger, because `dvtditr-rs` does not exist. Treat
+it as a draft until `verify_tbfast.sh` passes.
 
-**In Rust it is far cheaper than 713 lines, and this is the one correction in
-this document that goes *downward*.** `falign.rs` is factored, not one block:
-`get_kouho`, `alignable_reagion`, `mymergesort`, `block_align2`,
-`getkyokaigap`, `seq_vec_3`, `seq_vec_5` are all separate functions — and it
-already carries a **second entry point**, `falign_givenanchors`, which is proof
-those internals are reusable across entry points rather than a hope.
+`partSalignmm.c`'s other entry point, `partA__align_variousdist` (746 lines),
+is never reached. Refuse it.
 
-`Falign_localhom`'s pipeline is the same chain as `Falign`'s:
+### `Falign_localhom` — mostly reuse
+
+The only caller of `partA__align`. `falign.rs` covers `Falign` alone. Its
+pipeline is the same chain:
 
     seq_vec_* -> fft -> calcNaiseki -> inverse fft -> getKouho
       -> zurasu2 / alignableReagion -> mymergesort -> blockAlign2
       -> per-block getkyokaigap + partA__align
 
-Every step of that is already ported **except** `partA__align`, which is now
-written. So the new code is a third entry point in `falign.rs` doing the
-orchestration and the constrained block loop:
+Every step but `partA__align` is already in `falign.rs`, which is factored into
+separate functions and already carries a **second** entry point,
+`falign_givenanchors` — proof the internals are reusable. Add a third beside
+it, in the same file, since those helpers are module-private. New code: the
+constrained block loop, `gapmap1`/`gapmap2` threading, `impmatch` accumulated
+across blocks, and `commongappick_record` per block under `kobetsubunkatsu`.
 
-- `part_a_align` in place of `a_align`, per block;
-- `gapmap1` / `gapmap2` threaded through, and `impmatch` accumulated across
-  blocks into the C's `*totalimpmatch`;
-- `commongappick_record` on each block under `kobetsubunkatsu` (ported).
+Note `tbfast-rs` is byte-identical on L-INS-i **without** `Falign_localhom`, so
+`tbfast`'s path never reaches it even with `-F`; `dvtditr`'s does. Confirm what
+decides that before porting — it bounds what has to work.
 
-Put it in `falign.rs` itself — the helpers it needs are module-private, and a
-sibling entry point beside `falign_givenanchors` is where it belongs.
+### `TreeDependentIteration` — the expensive one
 
-Estimate for the Rust: **~250-350 lines**, not 713. The C-to-C diff of 509
-lines measures how much the two C functions differ, which is not the same
-question as how much Rust has to be written.
-
-**How much of it `falign.rs` gives you, measured.** Diffing the two C
-functions with comments and whitespace stripped:
-
-- `Falign` 928 normalised lines, `Falign_localhom` 653 — the constrained one is
-  *smaller*.
-- **509 lines differ.** So roughly 40% is shared structure with something
-  already ported, and mirroring `falign.rs` is a genuine head start — but this
-  is not a mechanical transform, and treating it as one is how the constraint
-  plumbing gets dropped.
-
-What actually differs:
-
-- the signature gains `constraint`, `totalimpmatch`, `gapmap1`, `gapmap2`;
-- the scratch becomes `static TLS` where `Falign`'s is local, so the Rust needs
-  an owned state struct rather than locals (the pattern `PartAlignState`
-  already uses);
-- every block alignment calls `partA__align` instead of `A__align`, and
-  accumulates `impmatch` across blocks.
-
-The one consolation: `partA__align`, the largest single function
-`Falign_localhom` depends on, is already written (`partalign.rs`).
-
-### `TreeDependentIteration` has ~666 lines of missing *dependencies*
-
-The same reuse question, asked of the driver, and the answer is the opposite of
-`Falign_localhom`'s. Extracting every function it calls and checking each by
-its C name against the port: **16 of 28 are absent**, and they are not
-incidental — most are a tree/branch-weighting family the progressive aligner
-never needed, because `tbfast` builds its tree a different way.
+The opposite case. It calls 28 functions and **16 are absent from the port**,
+mostly a tree/branch-weighting family `tbfast` never needed:
 
 | lines | function | file |
 |---|---|---|
@@ -283,222 +219,112 @@ never needed, because `tbfast` builds its tree a different way.
 | 11 | `score_calc0` | `mltaln9.c` |
 | ? | `conjuctionfortbfast`, `weightimportance4` | not located by the scan |
 
-**666 lines of dependencies**, on top of `TreeDependentIteration`'s own 1188.
+`athread` (925 lines) is skipped **only** because this port is single-threaded
+and the script passes `-C 0`. A future `-C n` needs it or an equivalent.
 
-Already there and reusable: `counteff_simple`, `fastconjuction_noname`,
-`commongappick`, `commongappick_record`, `intergroup_score`, `Falign`,
-`calcimportance_half`, `naivepairscore11`, `shrinklocalhom`,
-`part_imp_match_*`, and `WriteHat2_pointer`'s equivalent `io::write_hat2`.
+### `dvtditr.c`'s `main`
 
-The lesson for whoever plans this next: **ask what a function calls, not how
-long it is.** `Falign_localhom` looked like 713 lines and is ~300 of Rust
-because its chain was already ported. `TreeDependentIteration` looks like 1188
-and is more, because its chain is not. Neither number was knowable from the
-file.
+Not "mostly argv" — it reads the `hat3` localhom table
+(`readlocalhomtable2_half` / `_target`), builds `topol` / `len` / `eff`,
+handles `--subalignment` tables and `_focus_` targets, then calls
+`TreeDependentIteration`.
 
-### On these estimates
+### The argument vectors, captured from a real run
 
-This is the fourth upward correction in this document, and they have all been
-in the same direction. The pattern is the same each time: an estimate made
-from file listings or a profile, rather than from asking who calls what. The
-running total for the driver has gone ~1000 -> ~1400 -> **~2500 reached
-lines**:
+```
+dvtditr  -W 0.00001 -E 0.0 -s 0.0 -C 0 -t 0 -F -l 2.7 -z 50 -b 62
+         -f -1.53 -Q 100.0 -h 0 -I 16 -X 0.1 -p BAATARI2 -K 0
+```
 
-| piece | reached lines | state |
-|---|---|---|
-| `partA__align` + tracebacks + constraint half | ~360 | **written**, not bit-verified |
-| `Falign_localhom.c` | ~875 | not started |
-| `TreeDependentIteration` sequential branch | ~1188 | not started |
-| `dvtditr.c` `main` | ~500 | not started |
+`-C 0` sequential, `-p BAATARI2`, `-F` fft on, `-I 16` iterations. Capture
+others by wrapping a binary in `$MAFFT_BINARIES` with a script that records
+`"$@"` and stdin, then `exec`s the real one — that is how every argv and
+staged input in this document was obtained, and how a single binary is
+replayed in isolation for benchmarking or diffing.
 
-Anyone continuing should assume this number is still low until they have
-traced the call graph themselves.
+---
 
-### What `dvtditr` actually costs, measured per function
+## 6. Order, and why
 
-This estimate has been corrected three times in this document, each time
-upward, because it was made from file sizes and skim-reading. Measured per
-function it is:
+1. **`Falign_localhom`** — cheapest per line, unblocks `partA__align`, and
+   makes the DP verifiable for the first time.
+2. **The 666 lines of small dependencies** — independent, unit-testable, and
+   they gate everything after.
+3. **`TreeDependentIteration`'s sequential branch.**
+4. **`dvtditr.c`'s `main`**, then swap in and run §3's ladder.
 
-| lines | function | needed on the `-C 0` path? |
-|---|---|---|
-| 1188 | `TreeDependentIteration` (`tditeration.c`) | yes — the sequential refinement loop is the bulk of it |
-| 925 | `athread` (`tditeration.c`) | **no** — the threaded worker; `-C 0` takes the sequential branch |
-| 66 | `classifypairs` | probably; check |
-| 81 | `freelocalarrays`, 81 `Writeoptions`, 20 `shuffle`, 13 `makescoringmatrices` | small |
-| ~500 | `dvtditr.c`'s `main` reached path | `hat3` table reading, `topol`/`len`/`eff`, subalignments, `_focus_` targets |
+Do not ship a partial DP or a partial driver. Every slice above except the DP
+loop and the refinement loop can be unit-tested; those two land whole.
 
-So the driver is roughly **1400 reached lines**, on top of the ~360-line DP
-already written. Earlier notes here said "about 1000 lines" for everything
-remaining; that was wrong, and the difference is not a rounding error.
+---
 
-The saving is real but smaller than it looks: `athread` is skipped only because
-this port is single-threaded, and a future `-C n` would need it or an
-equivalent.
+## 7. What is already ported — check here before writing anything
 
-### Status: the DP is written and **not verified**
-
-`partalign::PartAlignState::part_a_align` exists and compiles, and the suite is
-green — which says nothing about whether it is correct. Nothing has executed
-it: `dvtditr-rs` does not exist, so no differential run has reached it. A DP
-that compiles has not been tested in any sense that matters here.
-
-What will decide it, in order:
-
-1. `dvtditr-rs` calling it, so the code runs at all.
-2. `verify_tbfast.sh` and `verify_e2e.sh` against a built `core/`.
-3. The 840-payload ProteinGym corpus through `mafft --auto`, byte-compared.
-4. ESCOTT end to end on the two assays, SHA-256 compared.
-
-Until (2) passes, treat the DP as a draft. The two `>` comparisons below are
-the most likely place for it to be wrong, and they are also the least likely to
-announce themselves.
-
-### The driver is bigger than an earlier note here claimed
-
-That note said `dvtditr.c`'s 1214 lines "are mostly argv that `params.rs`
-already models". That is wrong, and the correction matters for planning: its
-`main` also reads the `hat3` localhom table (`readlocalhomtable2_half` /
-`_target`), builds `topol` / `len` / `eff`, handles `--subalignment` tables and
-`_focus_` targets, and only then calls `tditeration`. Add `tditeration.c`'s own
-refinement loop and the remaining work is **larger than the DP**, not a thin
-wrapper over it.
-
-Still absent from the Rust side, as far as the reached set goes — and this
-list is now checked rather than assumed, having been wrong twice:
-
-- **the `tditeration` accept/reject loop** (`TreeDependentIteration`'s
-  sequential branch)
-- **`dvtditr`'s `main`**: the `hat3` table read, `topol` / `len` / `eff`,
-  subalignments, `_focus_` targets
-- **`commongappick_record`** — small, and the only helper still missing
-
-Everything else the profile named is already ported. Two entries an earlier
-revision of this list called missing are not:
-
-- **`alignableReagion` is ported**, as `falign::alignable_reagion`. It appeared
-  in `dvtditr`'s callgrind profile because `dvtditr` links and calls `Falign`,
-  not because it lives in `tditeration.c` — it is in `fftFunctions.c`. A
-  profile names what *runs*, not what a file contains, and that is what made
-  the earlier reading wrong.
-- **`new_OpeningGapCount` / `new_FinalGapCount`** are in `profile.rs`, as noted
-  above.
-
-So the driver is the whole of what is left, plus one small helper.
-
-### Read this before writing one line of the DP
-
-**`partA__align` and `A__align` disagree on two tie comparisons, in opposite
-directions.** Copying `align.rs`'s inner loop — the obvious move, since it is
-the same DP and already ported — gives the wrong alignment on every tie, at
-identical score. No unit test and no score check can see it.
-
-| recurrence | `Salignmm.c` / `align.rs` | `partSalignmm.c` |
-|---|---|---|
-| `*prept + *ogcp2pt * gf1vapre` against `mi` | **`>=`** (the `>` form is commented out) | **`>`** (the `>=` form is commented out, `// 2018/Apr`) |
-| `*prept + ogcp1va * *gf2ptpre` against `*mjpt` | **`>=`** (`>` commented out) | **`>`** (`>=` commented out, `// 2018/Apr`) |
-
-Both files carry both forms, one live and one commented, and they are mirror
-images: upstream changed these two in `partSalignmm.c` in April 2018 and left
-`Salignmm.c` on `>=`. It is deliberate, not a bug, so there is nothing to file
-upstream — it is a porting hazard, and the reason this section exists.
-
-The other two comparisons in the same loop (`mi + *fgcp2pt * gf1va` and
-`*mjpt + fgcp1va * *gf2pt`, both against `wm`) use `>` in **both** files.
-
-So: write the DP from `partSalignmm.c`, and use `align.rs` only for the shape
-of the surrounding Rust — buffer ownership, the `previousw`/`currentw` swap,
-how `match_calc` is called. Diff the four comparisons against the C by eye
-before running anything.
-
-### `partA__align`'s 696 lines, sliced
-
-Read off its control flow (`core/partSalignmm.c`, line numbers at the time of
-writing). Nothing here is ported yet; this is the map, so the next session
-starts from structure rather than a wall of code.
-
-| lines | slice | notes |
-|---|---|---|
-| 753-797 | teardown (`seq1 == NULL`) | the C's free-everything call; an owned struct replaces it, as `PartImp` already did |
-| 807-832 | degenerate `lgth1 == 0` / `lgth2 == 0` | fills the other side with `newgapstr`; self-contained, unit-testable |
-| 843-862 | `trywarp` setup | **refuse** — this port rejects `trywarp` before reaching here |
-| 868-985 | scratch growth (`orlgth1/2`, `commonAlloc1/2`) | becomes owned buffers; the C's `static TLS` is not a contract |
-| 991-1029 | gap frequencies from `sgap1`/`egap1`, and `legacygapcost` | two branches, both short; testable on their own |
-| 986-1060 | profile and gap-frequency setup | **entirely wiring** — see the table below; nothing here needs writing |
-| 1064-1097 | boundary row and column, under `outgap` | |
-| 1124-1315 | **the main DP loop** | the real work; the `trywarp` blocks inside (1190-1197, 1249-1290, 1309-1326) are refused |
-| 1329-1335 | `!outgap` last row/column fixup | |
-| 1340-1378 | traceback and result assembly | tracebacks are **done** (`partalign::atracking*`) |
-
-**The whole setup block is already ported.** Every function
-`partA__align` calls between lines 986 and 1060 exists in `profile.rs`:
+This list exists because four estimates in this document were wrong, every one
+of them from assuming instead of checking.
 
 | C | Rust |
 |---|---|
-| `cpmx_calc_new` | `profile::cpmx_calc_new` |
+| `cpmx_calc_new`, `gapcountf`, `outgapcount` | `profile.rs` |
 | `st_OpeningGapCount` / `st_FinalGapCount` | `profile::st_opening_gap_count` / `st_final_gap_count` |
 | `new_OpeningGapCount` / `new_FinalGapCount` | `profile::new_opening_gap_count` / `new_final_gap_count` |
-| `outgapcount` | `profile::outgapcount` |
-| `gapcountf` | `profile::gapcountf` |
-| `match_calc` | `align::match_calc` (now `pub(crate)`) |
-| `fillimp` | `localhom::fillimp`, behind `partalign::PartImp` |
+| `match_calc` | `align::match_calc` (`pub(crate)`) — **do not write a second copy** |
+| `fillimp`, `movereg`, `movereg_swap`, `shrinklocalhom`, `calcimportance_half` | `localhom.rs` |
+| `intergroup_score` | `score.rs` |
+| `Falign`, `getKouho`, `zurasu2`, `alignableReagion`, `blockAlign2`, `mymergesort`, `getkyokaigap` | `falign.rs` |
+| `commongappick`, `commongappick_record` | `addfunctions.rs` |
+| `naivepairscore11`, `naivepairscorefast`, `makeskiptable` | `naivescore.rs` |
+| `counteff_simple` | `compacttree.rs` |
+| `WriteHat2` | `io::write_hat2` |
+| MAFFT's `arguments()` option loop | `cargs.rs` |
+| `partA__align`, `Atracking`, `Atracking_localhom`, `part_imp_*` | `partalign.rs` |
 
-So that slice is calls and arithmetic — the `0.5 * (1.0 - ogcp) * fpenalty *
-gapfreq` scaling, the `legacygapcost` branch, the `1.0 -` inversions — not new
-functions.
+Two traps in that table, both found the hard way:
 
-Two observations that shape the order:
+- **`io::write_hat2` indexes `mtx[i][j - i]`**, an offset layout, where the C's
+  `WriteHat2_pointer` indexes a square matrix. Fill it the way the writer
+  reads it or the last distance comes out zero.
+- **`partSalignmm`'s tracebacks are NOT `align.rs`'s.** Diffing the two C
+  `Atracking_localhom` bodies gives 148 differing lines of ~185: `Salignmm`'s
+  builds gap tables for profile reuse, `partSalignmm`'s writes straight into
+  `mseq`. `partalign.rs` has its own.
 
-- **Only the main loop resists isolated testing.** Every other slice can be
-  unit-tested against hand-built inputs, which is how the tracebacks were done.
-  The loop only becomes verifiable when the whole function runs against the C.
-- **So do not ship a partial DP.** Land the testable slices if you like, but the
-  loop goes in one piece, and the first thing that should pass afterwards is
-  `verify_tbfast.sh` / `verify_e2e.sh` against a built `core/` — not a unit
-  test, which cannot see a reordered addition.
+---
 
-The four `if( chudanpt && *chudanpt != chudanref )` checks (1129, 1203) are the
-C's cooperative-cancellation hooks; nothing in this repo's call path sets
-`chudanpt`, so they are dead here.
+## 8. Rules
 
-4. **`tditeration`'s reached set + the `dvtditr` driver.** `movereg`,
-   `movereg_swap`, `fillimp`, `intergroup_score`, `cpmx_calc_new`, `gapcountf`
-   and `Atracking_localhom` are **already ported** (`localhom.rs`, `score.rs`,
-   `profile.rs`, `align.rs`) — the genuinely missing pieces are
-   `alignableReagion`, `new_OpeningGapCount`, `new_FinalGapCount`,
-   `commongappick_record` and the refinement driver. `dvtditr.c`'s 1214 lines
-   are mostly argv that `params.rs` already models.
-
-`Lalignmm.c` (2563 lines), `Dalignmm.c` (6266) and `rna.c` (527) are never
-reached on any `--auto` path. Refuse them loudly rather than port them; that
-choice is what keeps this at roughly 2-3k lines instead of 11k.
-
-## Rules
-
-- **Measure the reached set, do not infer it.** Every scope claim above came
-  from wrapping the binaries and from callgrind, not from reading Makefiles.
-  A new binary gets the same treatment before anyone estimates it.
-- **Never reassociate f64 arithmetic.** Unchanged from `GOAL.md`. Loop
-  transposition that preserves each accumulator's summation order is fine.
-- **Transliterate; do not improve.** The C's quirks are the contract. Two are
-  already reproduced deliberately — `version`'s missing trailing newline, and
-  `countlen`'s N tally carrying past the sampling cap. Where a quirk is
-  *undefined* rather than merely odd, see "a written negative result" above.
-- **Add to the harnesses, never subtract.** `verify_utils.sh` is the pattern:
-  a wide differential against a live C for anyone extending coverage, and
-  committed fixtures so the suite still runs with no C at all. Freeze new
-  corpora as fixtures; do not narrow an existing one.
-- **Every new binary goes into `bench/coverage.sh`'s `--object` list.** Leaving
-  one out reports it at 0.00% while its tests are in fact driving it — the same
-  under-report that script's header warns about, pointed the other way. It cost
-  a re-run here already.
+- **Ask what a function calls, not how long it is.** `Falign_localhom` looks
+  like 713 lines and is ~300 of Rust; `TreeDependentIteration` looks like 1188
+  and is more. Neither was knowable from the file.
+- **Never reassociate f64 arithmetic.** Loop transposition preserving each
+  accumulator's summation order is fine; changing addition order is not.
+- **Transliterate; do not improve.** The C's quirks are the contract —
+  `version`'s missing trailing newline, `countlen`'s N tally carrying past the
+  sampling cap. Where a quirk is *undefined* rather than odd, see §4.
+- **Add to the harnesses, never subtract.** A wide differential against a live
+  C for extending coverage, committed fixtures so the suite runs with no C.
+- **Every new binary goes in `bench/coverage.sh`'s `--object` list.** Leaving
+  one out reports it at 0.00% while its tests drive it — the same under-report
+  that script's header warns about, pointed the other way.
 - **Keep `#![forbid(unsafe_code)]` and keep the port dependency-free.**
 
-## Method
+## 9. Method
 
-Wrap, trace, then port. `MAFFT_BINARIES` pointed at a directory of logging
-wrappers gives the exact binary set and the exact argument vector a real run
-uses; replaying that vector against a staged working directory is how a single
-binary gets benchmarked and diffed in isolation. When output diverges,
-instrument a scratch copy of `core/` and bisect on f64 bit patterns — every
-mismatch in this port so far was found that way, never by reading.
+Wrap, trace, then port. `MAFFT_BINARIES` pointed at logging wrappers gives the
+exact binary set and argument vector a real run uses; replaying that vector
+against a staged working directory benchmarks or diffs one binary in
+isolation. When output diverges, instrument a scratch copy of `core/` and
+bisect on f64 bit patterns — every mismatch in this port was found that way,
+never by reading.
+
+## 10. Upstream defects found while doing this
+
+All in unmodified MAFFT 7.526, all filed with corrected code:
+[#7](https://github.com/exazyme/mafft-provolut/issues/7) Makefile drops
+`$(MYCFLAGS)` (breaks GCC ≥ 14, mixes TLS storage class),
+[#8](https://github.com/exazyme/mafft-provolut/issues/8) uninitialised `nN`,
+[#9](https://github.com/exazyme/mafft-provolut/issues/9) `f2cl` prints heap
+pointers, [#10](https://github.com/exazyme/mafft-provolut/issues/10)
+`restoreu`'s record-count check is unreachable and a mismatch segfaults,
+[#11](https://github.com/exazyme/mafft-provolut/issues/11) misspelled
+`FASTMACHCALC` hiding an `=`/`+=` difference.
