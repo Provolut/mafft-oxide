@@ -134,7 +134,13 @@ saving someone would otherwise spend a day rediscovering:
 
 - **`partA__align_variousdist` (746 lines) is never reached.** Refuse it. It is
   the single biggest item in the file and none of it is needed.
-- **`st_OpeningGapCount` / `st_FinalGapCount` are inside `#if 0`.** Dead.
+- **`st_OpeningGapCount` / `st_FinalGapCount` are live, and already ported.**
+  An earlier revision of this list called them dead, because the copies at the
+  top of `partSalignmm.c` sit inside `#if 0`. That was wrong: those are dead
+  *local duplicates*, and `partA__align`'s calls bind to the real definitions
+  in `mltaln9.c:12837`, declared in `functions.h`. Either way there is nothing
+  to write — `profile.rs` already has `st_opening_gap_count` and
+  `st_final_gap_count`.
 - **`match_calc` is the function `align.rs` already has** — same signature, same
   sparse-profile walk, same register accumulation (this repo's own patch). The
   only difference is that `partA__align` reads the global
@@ -216,11 +222,28 @@ starts from structure rather than a wall of code.
 | 843-862 | `trywarp` setup | **refuse** — this port rejects `trywarp` before reaching here |
 | 868-985 | scratch growth (`orlgth1/2`, `commonAlloc1/2`) | becomes owned buffers; the C's `static TLS` is not a contract |
 | 991-1029 | gap frequencies from `sgap1`/`egap1`, and `legacygapcost` | two branches, both short; testable on their own |
-| 1031-1060 | profile setup: `cpmx`, `ogcp`/`fgcp`, constraint init | `match_calc` and `fillimp` already exist; wire, do not rewrite |
+| 986-1060 | profile and gap-frequency setup | **entirely wiring** — see the table below; nothing here needs writing |
 | 1064-1097 | boundary row and column, under `outgap` | |
 | 1124-1315 | **the main DP loop** | the real work; the `trywarp` blocks inside (1190-1197, 1249-1290, 1309-1326) are refused |
 | 1329-1335 | `!outgap` last row/column fixup | |
 | 1340-1378 | traceback and result assembly | tracebacks are **done** (`partalign::atracking*`) |
+
+**The whole setup block is already ported.** Every function
+`partA__align` calls between lines 986 and 1060 exists in `profile.rs`:
+
+| C | Rust |
+|---|---|
+| `cpmx_calc_new` | `profile::cpmx_calc_new` |
+| `st_OpeningGapCount` / `st_FinalGapCount` | `profile::st_opening_gap_count` / `st_final_gap_count` |
+| `new_OpeningGapCount` / `new_FinalGapCount` | `profile::new_opening_gap_count` / `new_final_gap_count` |
+| `outgapcount` | `profile::outgapcount` |
+| `gapcountf` | `profile::gapcountf` |
+| `match_calc` | `align::match_calc` (now `pub(crate)`) |
+| `fillimp` | `localhom::fillimp`, behind `partalign::PartImp` |
+
+So that slice is calls and arithmetic — the `0.5 * (1.0 - ogcp) * fpenalty *
+gapfreq` scaling, the `legacygapcost` branch, the `1.0 -` inversions — not new
+functions.
 
 Two observations that shape the order:
 
