@@ -6,7 +6,9 @@
 #   verify_e2e.sh <libexec-dir-with-C-binaries> <path-to-disttbfast-rs> [inputs...]
 #
 # Set TBFAST_RS=<path-to-tbfast-rs> to swap that binary in as well, which
-# brings the L-INS-i / G-INS-i strategies into the comparison.
+# brings the L-INS-i / G-INS-i strategies into the comparison, and
+# DVTDITR_RS=<path-to-dvtditr-rs> for the refinement stage. With all three set,
+# every `--maxiterate` strategy below runs with no C binary in it at all.
 
 set -u
 LIBEXEC="${1:?usage: verify_e2e.sh <libexec-dir> <disttbfast-rs> [inputs...]}"
@@ -41,6 +43,10 @@ if [ -n "${TBFAST_RS:-}" ]; then
   cp "$TBFAST_RS" "$work/rs/tbfast"
   chmod +x "$work/rs/tbfast"
 fi
+if [ -n "${DVTDITR_RS:-}" ]; then
+  cp "$DVTDITR_RS" "$work/rs/dvtditr"
+  chmod +x "$work/rs/dvtditr"
+fi
 
 # Strategies whose alignment work goes through the ported disttbfast path.
 # NW-NS-i also runs dvtditr, which consumes disttbfast's output, so an
@@ -73,7 +79,14 @@ STRATS=(
   "--auto"
 )
 
-pass=0; fail=0; failed=""
+# `--allowshift` passes `dvtditr -s 0.8`, which selects the specificity scoring
+# path (`scoringmatrices`, `classifypairs`, `partA__align_variousdist`) that
+# `dvtditr-rs` refuses rather than approximates. With DVTDITR_RS set, that
+# strategy is expected to be refused, and is counted separately -- not as a
+# pass, which would hide it, and not as a failure, which would be untrue.
+REFUSED_BY_DVTDITR_RS="--allowshift"
+
+pass=0; fail=0; refused=0; failed=""
 for f in "${INPUTS[@]}"; do
   for i in "${!STRATS[@]}"; do
     s="${STRATS[$i]}"
@@ -85,6 +98,11 @@ for f in "${INPUTS[@]}"; do
     if [ $cst -ne 0 ] || [ ! -s "$work/o.c" ]; then
       # The reference run itself failed, so the comparison would be vacuous.
       fail=$((fail+1)); failed="$failed\n  $label (reference run failed: exit $cst)"
+    elif [ -n "${DVTDITR_RS:-}" ] && [ $rst -ne 0 ] \
+         && [ "${s#*$REFUSED_BY_DVTDITR_RS}" != "$s" ]; then
+      # Expected refusal, and only for the strategy named above: any other
+      # non-zero exit still fails.
+      refused=$((refused+1))
     elif [ $cst -ne $rst ]; then
       fail=$((fail+1)); failed="$failed\n  $label (exit $cst vs $rst)"
     elif ! cmp -s "$work/o.c" "$work/o.r"; then
@@ -170,7 +188,7 @@ PYEOF
   done
 done
 
-echo "pass=$pass fail=$fail"
+echo "e2e: pass=$pass fail=$fail refused=$refused"
 if [ $fail -ne 0 ]; then
   printf 'FAILED:%b\n' "$failed"
   exit 1

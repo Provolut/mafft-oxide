@@ -356,9 +356,13 @@ mod tests {
         let (_, at_offset) =
             atracking_localhom(&[0.0; 3], &[0.0; 3], 3, 3, &mut shifted, true, &t1);
 
-        // Each cell moves one row and one column on: 22 -> 33, 11 -> 22.
-        assert_eq!(at_origin, 22.0 + 11.0);
-        assert_eq!(at_offset, 33.0 + 22.0);
+        // Each cell moves one row and one column on: 22 -> 33, 11 -> 22, and
+        // the border cell 00 -> 11. The walk ends *on* (0, 0) and counts it,
+        // as the C does -- at the origin it contributes 0.0 and is invisible,
+        // shifted it contributes 11.0. Confirmed against the C's own
+        // `Atracking_localhom` (verify_flh.sh, 98 of 98 cases bit-identical).
+        assert_eq!(at_origin, 22.0 + 11.0 + 0.0);
+        assert_eq!(at_offset, 33.0 + 22.0 + 11.0);
     }
 
     /// The progressive stage's parameters, matching `tests_unit::tree_constants`.
@@ -395,6 +399,7 @@ mod tests {
             None,
             None,
             b'-',
+            usize::MAX,
         );
         assert_eq!(imp, 0.0, "unconstrained runs carry no constraint score");
         (group1, group2, score)
@@ -449,7 +454,7 @@ mod tests {
         let mut st = PartAlignState::default();
         let (score, _) = st.part_a_align(
             &cn, cn.penalty, cn.penalty_ex, &mut group1, &mut group2,
-            &[1.0], &[1.0], true, false, None, None, b'-',
+            &[1.0], &[1.0], true, false, None, None, b'-', usize::MAX,
         );
         assert_eq!(score, 0.0);
         assert_eq!(group1[0], b"----".to_vec());
@@ -467,7 +472,7 @@ mod tests {
             let mut g2: Vec<Vec<u8>> = vec![b"MKVITA".to_vec()];
             let (score, _) = st.part_a_align(
                 &cn, cn.penalty, cn.penalty_ex, &mut g1, &mut g2,
-                &[1.0], &[1.0], true, false, None, None, b'-',
+                &[1.0], &[1.0], true, false, None, None, b'-', usize::MAX,
             );
             match first {
                 None => first = Some((score, g1, g2)),
@@ -593,26 +598,17 @@ fn track(
             (iin - 1, jin - 1)
         };
 
-        if ifi < 0 && jfi < 0 {
-            // Off the front: the remainder of both rows is terminal gap.
-            let mut l = iin;
-            while {
-                l -= 1;
-                l >= 0
-            } {
-                rev1.push(b'o');
-                rev2.push(b'-');
-            }
-            let mut l = jin;
-            while {
-                l -= 1;
-                l >= 0
-            } {
-                rev1.push(b'-');
-                rev2.push(b'o');
-            }
-            break;
-        }
+        // No "off the front" branch here. The C has one, but it fires on
+        // `ifi == -warpbase && jfi == -warpbase` -- a warp entry, and warp is
+        // refused before reaching this port -- not on any negative pair. The
+        // border cells reach it with `ifi == -1, jfi == -1`, and the ordinary
+        // path below already handles those: both gap-run loops run zero or
+        // `jin` times exactly as the C's do, and the cell still contributes its
+        // constraint score. Taking a shortcut branch there instead drops that
+        // last `part_imp_match_out_sc` from `*impwmpt`, which leaves the rows
+        // and the DP score identical and only the constraint score wrong --
+        // invisible to everything except a differential on `impmatch`, which is
+        // how it was found (verify_flh.sh, 3 of 98 cases).
 
         let mut l = iin - ifi;
         loop {
@@ -756,6 +752,9 @@ impl PartAlignState {
     /// Returns:
     ///     The alignment score, and the accumulated constraint score (the C's
     ///     `*impmatch`, 0.0 when unconstrained).
+    ///
+    /// `alloclen` is the caller's row capacity; the C aborts when the result
+    /// outgrows it.
     #[allow(clippy::too_many_arguments)]
     pub fn part_a_align(
         &mut self,
@@ -771,6 +770,7 @@ impl PartAlignState {
         gaps: Option<PartGaps>,
         constraint: Option<&PartConstraint>,
         newgapstr: u8,
+        alloclen: usize,
     ) -> (f64, f64) {
         use crate::profile;
 
@@ -1025,6 +1025,20 @@ impl PartAlignState {
         }
         for row in group2.iter_mut() {
             *row = profile::gapireru(row, &track.gt2, newgapstr);
+        }
+
+        // `alloclen < resultlen || resultlen > N`, at the end of the C's
+        // `partA__align`. It is an error path, but a real one: the refinement
+        // loop can grow an alignment past the buffer `dvtditr` sized from the
+        // longest input (`nlenmax * 9`), and where the C stops with this
+        // message a port without the check would carry on and produce output
+        // the C never would.
+        const N: usize = 5_000_000;
+        let resultlen = group1[0].len();
+        if alloclen < resultlen || resultlen > N {
+            eprintln!("alloclen={alloclen}, resultlen={resultlen}, N={N}");
+            eprintln!("LENGTH OVER!");
+            std::process::exit(1);
         }
 
         (wm, impmatch)

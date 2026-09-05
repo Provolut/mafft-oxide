@@ -183,11 +183,36 @@ cd core && make                       # build the C reference
 
 rust/verify.sh         core/disttbfast rust/target/release/disttbfast-rs
 rust/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
+rust/verify_flh.sh     core                # Falign_localhom, function level
+rust/verify_td.sh      core                # branch weighting, function level
+rust/verify_tdi.sh     core                # the refinement loop, whole driver
+rust/verify_dvtditr.sh binaries rust/target/release/dvtditr-rs   # the binary
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
   rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
 cargo test --manifest-path rust/Cargo.toml
 ```
+
+`verify_flh.sh` works one level down, because the binary that would exercise
+`Falign_localhom` — `dvtditr` — is not ported yet: `gen_flhharness.c` links the
+real `core/` objects and stages one call directly, `examples/flhref.rs` stages
+the same one in the port, and the two are compared on the aligned rows and on
+the score and constraint score as f64 bit patterns. `gen_flhcases.py` builds the
+corpus: the group shapes `tditeration` produces (one member against the rest,
+even splits) over three alignment widths, both terminal-gap settings, legacy gap
+cost, anchoring parameters on and off their traced defaults, both constraint
+orientations, and the corners — no constraints at all, a single column, no gaps,
+identical rows. `--regenerate` writes the C's answers into `tests/golden/flh/`,
+which `tests/flh.rs` replays with no C present.
+
+`verify_td.sh` does the same for `treeop.rs`: it stages a guide tree — a merge
+sequence with its branch lengths — and compares every branch weight, every
+distance-from-a-branch and path-weight vector, and the group split each
+refinement step starts from. Its corpus covers random, ladder and balanced
+trees from 3 to 36 sequences, with ordinary, zero, negative and sub-`MINLEN`
+branch lengths: the zeros and negatives are the point, since they drive
+`checkMinusLength`'s clamp and the two early returns in `calcW` that are the
+only non-arithmetic paths in the family.
 
 `verify.sh` and `verify_tbfast.sh` run the C binary and the Rust one on the
 same inputs with the same arguments and require every output file to be
@@ -252,16 +277,21 @@ Current status, on this source tree:
 |---|---|
 | `verify.sh`, generated corpus (88 inputs × 36 argument sets, plus `--treein`) | 3520/3520 identical |
 | `verify_tbfast.sh`, generated corpus (40 inputs × 19, plus `--treein`) | 920/920 identical |
-| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
-| upstream `test/script`, the 9 cases runnable here | 9/9 |
-| `cargo test` | 66/66 |
+| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) |
+| `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical |
+| `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
+| `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical |
+| `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical |
+| 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical |
+| upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong |
+| `cargo test` | 221/221 |
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
 RNA folding programs and fail identically with the stock C binaries.)
 
 ## Notes for anyone extending this
 
-Twelve things about the C are load-bearing and easy to "clean up" by accident.
+Thirteen things about the C are load-bearing and easy to "clean up" by accident.
 Most were found the hard way, by a corpus case rather than by reading.
 
 1. **Scratch buffers are never cleared.** `A__align` and friends keep `static`
@@ -337,6 +367,15 @@ Most were found the hard way, by a corpus case rather than by reading.
    to its parent. Together these make the memsave path a different alignment,
    not a cheaper route to the same one: forcing it with `-M -B` moves 17 of
    the 88 corpus inputs, and the second defect alone moves 5.
+
+13. **The tracebacks' "off the front" branch is warp-only.** Both
+   `Atracking` variants open on `ifi == -warpbase && jfi == -warpbase`, and
+   with warp refused no entry can equal that sentinel: the branch is dead, and
+   the border cells go down the ordinary path, whose gap-run loops handle them
+   and whose tail still adds the cell's constraint score. Reading the test as
+   "both negative" makes it live at `(0, 0)` and silently drops that last
+   `part_imp_match_out_sc` — same rows, same DP score, wrong `impmatch`. Only a
+   differential on the constraint score sees it (`verify_flh.sh`, 3 of 98).
 
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a

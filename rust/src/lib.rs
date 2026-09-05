@@ -39,7 +39,9 @@ pub mod params;
 pub mod profile;
 pub mod saalign;
 pub mod score;
+pub mod tditeration;
 pub mod tree;
+pub mod treeop;
 pub mod treebase;
 pub mod warp;
 

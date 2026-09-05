@@ -1,0 +1,48 @@
+bw 0 0 3fd0fc62293e286f
+bw 0 1 400dd2b98ea89f0c
+bw 1 0 3fd0325ef95ac1b6
+bw 1 1 3ff0000000000000
+len 0 0 3f90e30d813be12d
+len 0 1 3f50624dd2f1a9fc
+len 1 0 3fb686a8aea4bb65
+len 1 1 3fb114327c010d3a
+dist 0 0 0 3f50624dd2f1a9fc
+dist 0 0 1 0000000000000000
+dist 0 0 2 3fc3cd6d9552e450
+wt 0 0 0 400dd2b98ea89f0c
+wt 0 0 1 3ff0000000000000
+wt 0 0 2 3fd0325ef95ac1b6
+dist 0 1 0 0000000000000000
+dist 0 1 1 3f90e30d813be12d
+dist 0 1 2 3fc3cd6d9552e450
+wt 0 1 0 3ff0000000000000
+wt 0 1 1 3fd0fc62293e286f
+wt 0 1 2 3fd0325ef95ac1b6
+dist 1 0 0 3f50624dd2f1a9fc
+dist 1 0 1 3f90e30d813be12d
+dist 1 0 2 0000000000000000
+wt 1 0 0 400dd2b98ea89f0c
+wt 1 0 1 3fd0fc62293e286f
+wt 1 0 2 3ff0000000000000
+dist 1 1 0 3f50624dd2f1a9fc
+dist 1 1 1 3f90e30d813be12d
+dist 1 1 2 0000000000000000
+wt 1 1 0 400dd2b98ea89f0c
+wt 1 1 1 3fd0fc62293e286f
+wt 1 1 2 3ff0000000000000
+split 0 0 s 1 0
+split 0 0 m1 0 1
+split 0 0 m2 0 0
+split 0 0 m2 1 2
+split 0 1 s 0 1
+split 0 1 m1 0 0
+split 0 1 m2 0 1
+split 0 1 m2 1 2
+split 1 0 s 2 0
+split 1 0 m1 0 2
+split 1 0 m2 0 0
+split 1 0 m2 1 1
+split 1 1 s 0 2
+split 1 1 m1 0 0
+split 1 1 m1 1 1
+split 1 1 m2 0 2
