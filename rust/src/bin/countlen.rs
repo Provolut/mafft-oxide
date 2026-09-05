@@ -8,6 +8,7 @@
 
 use std::io::Read;
 
+use mafft_rs::cargs::{self, Opt};
 use mafft_rs::io;
 
 /// Format a double the way glibc's `%f` does.
@@ -42,61 +43,22 @@ fn c_format_f64(value: f64) -> String {
 
 /// `arguments()`: the C's option loop, which accepts only `-i`.
 ///
-/// Transliterated including its failure mode: an unknown option prints its
-/// complaint, zeroes the counter so the loop ends, and then trips the
-/// `argc != 0` check into an exit -- so an unknown option is fatal, but only
-/// after the message that names it.
+/// The loop itself lives in `cargs` -- its three easy-to-miss behaviours are
+/// documented there, and three binaries now depend on getting them right.
 ///
 /// Args:
 ///     argv: The arguments, program name excluded.
 ///
 /// Returns:
 ///     The `-i` input file, when one was given.
-fn arguments(args: &[String]) -> Option<String> {
-    // `args` excludes the program name; the C's `argc`/`argv` include it, and
-    // both the decrement and the pointer bump happen inside the loop condition,
-    // so `argv` still advances on the iteration whose `'-'` test fails. That is
-    // what makes a positional argument fatal rather than ignored.
-    let mut argc = args.len() as i64 + 1;
-    let mut p: i64 = -1;
-    let mut inputfile: Option<String> = None;
-    loop {
-        argc -= 1;
-        if argc <= 0 {
-            break;
-        }
-        p += 1;
-        let Some(arg) = args.get(p as usize) else {
-            break;
-        };
-        if !arg.starts_with('-') {
-            break;
-        }
-        let bytes = arg.as_bytes().to_vec();
-        let mut k = 1usize;
-        while k < bytes.len() {
-            let c = bytes[k] as char;
-            if c == 'i' {
-                p += 1;
-                inputfile = args.get(p as usize).cloned();
-                argc -= 1;
-                break;
-            }
-            // The C's `default:` ends in `break`, which leaves the *switch* --
-            // so the scan carries on through the rest of the cluster and
-            // complains once per character. `argc = 0` here is what the
-            // condition's own decrement then turns into -1, tripping the check
-            // below: an unknown option is fatal, but only after it is named.
-            eprintln!("illegal option {c}");
-            argc = 0;
-            k += 1;
-        }
-    }
-    if argc != 0 {
-        eprintln!("options: Check source file !");
-        std::process::exit(1);
-    }
-    inputfile
+fn arguments(argv: &[String]) -> Option<String> {
+    cargs::parse(argv, |c| match c {
+        'i' => Some(Opt::Value),
+        _ => None,
+    })
+    .into_iter()
+    .find(|o| o.c == 'i')
+    .and_then(|o| o.value)
 }
 
 fn main() {

@@ -17,6 +17,7 @@ pub mod addfunctions;
 pub mod align;
 pub mod anchors;
 pub mod blosum;
+pub mod cargs;
 pub mod cerand;
 pub mod compacttree;
 pub mod constants;
