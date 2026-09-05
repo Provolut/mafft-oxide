@@ -76,6 +76,11 @@ int main( int argc, char **argv )
     fftNoAnchStop = 0;
     fftRepeatStop = 0;
     kobetsubunkatsu = 1;
+    /* dvtditr.c sets this at startup, and every other binary leaves it 0. It
+     * is what makes `Falign` compact each block before aligning it, so a
+     * harness that forgets it stages a configuration no caller of this
+     * function ever has. */
+    fftkeika = 1;
     alg = 'A';
     use_fft = 1;
     utree = 1;

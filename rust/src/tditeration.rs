@@ -112,7 +112,13 @@ pub fn tree_dependent_iteration(
     write_pre: &mut dyn FnMut(&[Vec<u8>]),
 ) -> Outcome {
     assert!(p.utree, "dynamic tree rebuilding (utree=0) is not implemented");
-    assert_eq!(p.weight, 4, "only weight=4 is implemented");
+    // `weight` is 4 for every real run, and 0 for the two-sequence case, where
+    // `dvtditr`'s `main` sets it along with `niter = 1`. Nothing else is
+    // implemented.
+    assert!(
+        p.weight == 4 || p.weight == 0,
+        "only weight=4 (and weight=0, which dvtditr sets for two sequences) is implemented"
+    );
     assert_eq!(p.score_check, 1, "only score_check=1 is implemented");
     assert_eq!(p.nkozo, 0, "structural (kozo) weighting is not implemented");
     assert!(p.use_fft, "the C refuses !use_fft here itself");
@@ -147,7 +153,9 @@ pub fn tree_dependent_iteration(
     // `stopol[-1]`, so the C guards on `locnjob > 2` and so does this.
     let mut stopol = Vec::new();
     let mut branch_weight = vec![[0.0f64; 2]; locnjob];
-    if locnjob > 2 {
+    // Two sequences have one branch and no weighting to do, and `tree_cnv`
+    // would index `stopol[locnjob-3]`; the C guards this the same way.
+    if locnjob > 2 && (p.weight == 4 || p.weight == 0) {
         stopol = tree_cnv(locnjob, topol, len);
         calc_branch_weight(&mut branch_weight, locnjob, &stopol, topol);
     }
@@ -196,16 +204,18 @@ pub fn tree_dependent_iteration(
                 let m2: Vec<i32> = mem2.iter().copied().take_while(|&v| v != -1).collect();
                 let (s1, s2) = (m1[0] as usize, m2[0] as usize);
 
-                let mut effarr = vec![0.0f64; locnjob];
-                weight_from_a_branch(
-                    locnjob,
-                    &mut effarr,
-                    &stopol,
-                    &branch_weight,
-                    topol,
-                    li,
-                    k,
-                );
+                let mut effarr = vec![1.0f64; locnjob];
+                if p.weight == 4 {
+                    weight_from_a_branch(
+                        locnjob,
+                        &mut effarr,
+                        &stopol,
+                        &branch_weight,
+                        topol,
+                        li,
+                        k,
+                    );
+                }
 
                 for i in 0..locnjob {
                     aseq[i] = bseq[i].clone();
@@ -289,6 +299,10 @@ pub fn tree_dependent_iteration(
                         &mut fftlog,
                         p.newgapstr,
                         p.alg,
+                        // `dvtditr` sets `kobetsubunkatsu`, which turns off the
+                        // FFT anchoring inside `Falign` exactly as it does in
+                        // `Falign_localhom`.
+                        true,
                     );
                 }
 

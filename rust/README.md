@@ -186,6 +186,7 @@ rust/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
 rust/verify_flh.sh     core                # Falign_localhom, function level
 rust/verify_td.sh      core                # branch weighting, function level
 rust/verify_tdi.sh     core                # the refinement loop, whole driver
+rust/verify_dvtditr.sh binaries rust/target/release/dvtditr-rs   # the binary
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
   rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
@@ -276,11 +277,13 @@ Current status, on this source tree:
 |---|---|
 | `verify.sh`, generated corpus (88 inputs × 36 argument sets, plus `--treein`) | 3520/3520 identical |
 | `verify_tbfast.sh`, generated corpus (40 inputs × 19, plus `--treein`) | 920/920 identical |
-| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
+| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) |
 | `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical |
 | `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
 | `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical |
-| upstream `test/script`, the 9 cases runnable here | 9/9 |
+| `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical |
+| 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical |
+| upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong |
 | `cargo test` | 221/221 |
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external

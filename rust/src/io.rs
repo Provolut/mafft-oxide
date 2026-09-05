@@ -696,3 +696,150 @@ mod charfilter_tests {
         assert_eq!(r.seq[0], b"ABCD".to_vec());
     }
 }
+
+/// `input_new()`: one fixed-width number from a `hat2` matrix.
+///
+/// `D` is 6, and the field really is positional -- the C reads six characters
+/// and calls `atof` on them, so a value that needs more room silently loses its
+/// tail on both sides. One leading newline is skipped, which is what lets the
+/// writer break the matrix into lines.
+fn input_new(fp: &mut CFile, d: usize) -> f64 {
+    let c = fp.getc();
+    if c != Some(b'\n') {
+        fp.ungetc(c);
+    }
+    let mut s = String::new();
+    for _ in 0..d {
+        match fp.getc() {
+            Some(ch) => s.push(ch as char),
+            None => break,
+        }
+    }
+    // `atof` on a partly-numeric field takes the leading number and ignores the
+    // rest, and returns 0.0 when there is none.
+    let t = s.trim_start();
+    let end = t
+        .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E'))
+        .unwrap_or(t.len());
+    t[..end].parse::<f64>().unwrap_or(0.0)
+}
+
+/// Consume one line, as `fgets`/`myfgets` do.
+fn skip_line(fp: &mut CFile) {
+    while let Some(c) = fp.getc() {
+        if c == b'\n' {
+            return;
+        }
+    }
+}
+
+/// `readhat2_pointer()`: the pairwise distance matrix `dvtditr` builds its tree
+/// from.
+///
+/// Three header lines, then one line per sequence (the names, which the C reads
+/// and discards -- its name check is `#if 0`), then the upper triangle.
+///
+/// Args:
+///     bytes: The `hat2` file.
+///     nseq: How many sequences it must describe.
+///
+/// Returns:
+///     `mtx[i][j]` for `i < j`; the rest is zero, as the C leaves it.
+pub fn read_hat2(bytes: Vec<u8>, nseq: usize) -> Vec<Vec<f64>> {
+    let mut fp = CFile::new(bytes);
+    skip_line(&mut fp);
+    let mut second = Vec::new();
+    while let Some(c) = fp.getc() {
+        if c == b'\n' {
+            break;
+        }
+        second.push(c);
+    }
+    // `b[5] = 0` before `atoi`: the count is the first five characters.
+    second.truncate(5);
+    let nseq0: usize = String::from_utf8_lossy(&second).trim().parse().unwrap_or(0);
+    if nseq != nseq0 {
+        eprintln!("hat2 is wrong.");
+        std::process::exit(1);
+    }
+    skip_line(&mut fp);
+    for _ in 0..nseq {
+        skip_line(&mut fp);
+    }
+    let mut mtx = vec![vec![0.0f64; nseq]; nseq];
+    for i in 0..nseq.saturating_sub(1) {
+        for j in i + 1..nseq {
+            mtx[i][j] = input_new(&mut fp, 6);
+        }
+    }
+    mtx
+}
+
+/// `readlocalhomtable2_half()`: the `hat3` constraint table.
+///
+/// One segment per line: `i j overlapaa opt start1 end1 start2 end2 infor`,
+/// with `i < j` required. Several segments between the same pair chain onto one
+/// another.
+///
+/// The `opt` stored is not the `opt` read: the C rescales it by `/ 5.8 * 600`.
+///
+/// Args:
+///     bytes: The `hat3` file.
+///     njob: Number of sequences.
+///     table: The half table to fill, from `localhom::new_table`.
+///
+/// Returns:
+///     Which sequences carry a structural (`korh == 'k'`) constraint.
+pub fn read_localhomtable2_half(
+    bytes: Vec<u8>,
+    njob: usize,
+    table: &mut crate::localhom::LocalHomTable,
+) -> Vec<bool> {
+    let mut kozoarivec = vec![false; njob];
+    for line in bytes.split(|&c| c == b'\n') {
+        if line.is_empty() {
+            continue;
+        }
+        let text = String::from_utf8_lossy(line);
+        let f: Vec<&str> = text.split_whitespace().collect();
+        if f.len() < 8 {
+            continue;
+        }
+        let i: usize = f[0].parse().unwrap_or(0);
+        let j: usize = f[1].parse().unwrap_or(0);
+        let overlapaa: i32 = f[2].parse().unwrap_or(0);
+        let opt: f64 = f[3].parse().unwrap_or(0.0);
+        let start1: i32 = f[4].parse().unwrap_or(0);
+        let end1: i32 = f[5].parse().unwrap_or(0);
+        let start2: i32 = f[6].parse().unwrap_or(0);
+        let end2: i32 = f[7].parse().unwrap_or(0);
+        let korh = f.get(8).and_then(|s| s.bytes().next()).unwrap_or(b'h');
+        if korh == b'k' {
+            kozoarivec[i] = true;
+            kozoarivec[j] = true;
+        }
+        if j <= i || i >= njob || j >= njob {
+            eprintln!("Check hat3.  The first sequence must be younger than the second one.");
+            std::process::exit(1);
+        }
+        let e = crate::localhom::LocalHom {
+            start1,
+            end1,
+            start2,
+            end2,
+            opt: opt / 5.8 * 600.0,
+            overlapaa,
+            korh,
+            ..crate::localhom::LocalHom::default()
+        };
+        let chain = &mut table[i][j - i];
+        // The C tracks `nokori` to decide between filling the head slot and
+        // appending; the head is the one `new_table` made.
+        if chain[0].opt == -1.0 && chain.len() == 1 {
+            chain[0] = e;
+        } else {
+            chain.push(e);
+        }
+    }
+    kozoarivec
+}
