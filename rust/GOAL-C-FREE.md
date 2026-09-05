@@ -184,6 +184,49 @@ single reordered addition changes an alignment, no test says which line did it,
 and the method that works here is instrumenting a scratch `core/` and bisecting
 on f64 bit patterns. That wants the whole budget for the bisect.
 
+### `Falign_localhom` is missing too — 875 lines nobody had counted
+
+Found by asking where `partA__align` is actually called from, rather than
+assuming. The answer is **only `Falign_localhom.c`**, and that file is not
+ported: `falign.rs` covers `Falign` alone, as its own header says.
+
+The two are a pair, and only one of them is done:
+
+| C | calls | Rust |
+|---|---|---|
+| `Falign` (`Falign.c`) | `A__align` | ported — `falign.rs` + `align.rs` |
+| `Falign_localhom` (875 lines) | **`partA__align`** | **not ported** |
+
+`Falign_localhom` is the constrained variant — the FFT anchoring used when
+consistency constraints are in play, which is L-INS-i's whole point. That is
+why `partA__align` shows up at 40-62% of `dvtditr`'s instructions.
+
+Note `tbfast-rs` is byte-identical on L-INS-i **without** it, so `tbfast`'s
+path does not reach `Falign_localhom` even with `-F`; `dvtditr`'s does. Worth
+confirming exactly which size or flag decides that before porting, because it
+bounds what has to work.
+
+The one consolation: `partA__align`, the largest single function
+`Falign_localhom` depends on, is already written (`partalign.rs`).
+
+### On these estimates
+
+This is the fourth upward correction in this document, and they have all been
+in the same direction. The pattern is the same each time: an estimate made
+from file listings or a profile, rather than from asking who calls what. The
+running total for the driver has gone ~1000 -> ~1400 -> **~2500 reached
+lines**:
+
+| piece | reached lines | state |
+|---|---|---|
+| `partA__align` + tracebacks + constraint half | ~360 | **written**, not bit-verified |
+| `Falign_localhom.c` | ~875 | not started |
+| `TreeDependentIteration` sequential branch | ~1188 | not started |
+| `dvtditr.c` `main` | ~500 | not started |
+
+Anyone continuing should assume this number is still low until they have
+traced the call graph themselves.
+
 ### What `dvtditr` actually costs, measured per function
 
 This estimate has been corrected three times in this document, each time
