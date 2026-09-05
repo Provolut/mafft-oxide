@@ -34,12 +34,26 @@ byte-identical through `mafft --auto`, upstream's own suite, and provolut-ml's
 ESCOTT scorer SHA-256-identical on two assays. Speed 0.989× (51×393 windows)
 and 0.981× (11×448) against the all-C build.
 
-With `dvtditr-rs` added, `verify_dvtditr.sh` (16 staged runs), `verify_e2e.sh`
-(56 wrapper strategies, 2 refused) and upstream's `test/script` (8 of the 9
-runnable cases; the ninth is `--allowshift`) are green. **The ProteinGym corpus
-and the ESCOTT check have not been re-run against `dvtditr-rs`** — they are
-§3's top rung and the reason it exists; run them before calling this done for
-provolut-ml's purposes.
+With `dvtditr-rs` added, the whole ladder is green:
+
+| rung | result |
+|---|---|
+| `verify_dvtditr.sh` | 32/32 staged runs identical (`pre`, `order`, `infile.tree`) |
+| `verify_e2e.sh` | 56 strategies identical, 2 refused (`--allowshift`) |
+| upstream `test/script` | 8 of the 9 runnable cases; the ninth is `--allowshift` |
+| ProteinGym payloads, rebuilt per §3 | **120/120 identical** through `mafft --auto` |
+| provolut-ml's `test_mafft_builds_agree.py` | both tests pass with `PML_MAFFT_BIN` on an all-Rust build — aligner bytes **and** the GEMME/iGEMME/ESCOTT matrices, bit for bit |
+
+The ESCOTT rung was run through provolut-ml's own test rather than by hand, and
+sanity-checked the way §3 says to: pointing `PML_MAFFT_BIN` at a path that does
+not exist makes it fail, so the pass is the Rust build's and not a skip.
+
+The corpus is 120 payloads — every sub-alignment `sample_sub_alignments` draws
+from `P53_HUMAN_full_04-29-2022_b09.a2m` and
+`SPG1_STRSG_full_11-26-2021_b07.a2m` at the iGEMME defaults. Not the 840 of the
+earlier run, which came from more assays. **It earned its keep**: the first pass
+over it failed 105 of 120 and found the `pre`-written-once defect in §4, which
+every other gate had passed over.
 
 `f2cl` implements the **FASTA path only**; clustal and phylip are refused
 rather than approximated. `--clustalout` / `--phylipout` still need the C.

@@ -281,7 +281,8 @@ Current status, on this source tree:
 | `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical |
 | `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
 | `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical |
-| `verify_dvtditr.sh`, 16 staged `dvtditr` runs | 16/16 identical |
+| `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical |
+| 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical |
 | upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong |
 | `cargo test` | 221/221 |
 
