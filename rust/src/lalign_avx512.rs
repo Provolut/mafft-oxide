@@ -14,9 +14,10 @@
 //! `core::arch::x86_64` intrinsics, which are `unsafe` because calling one on a
 //! CPU lacking the feature is undefined. That is the *whole* of the unsafety
 //! here, and [`row`] discharges it the way the standard library intends: it is
-//! `#[target_feature]`-gated and reached only through [`available`], which asks
-//! the CPU at runtime. Every memory access inside is a `loadu`/`storeu` on a
-//! slice whose length the caller checked -- the loop stops at `jj + 8 <= lastj`.
+//! `#[target_feature]`-gated and reached only through [`row_checked`], which
+//! asks the CPU at runtime and asserts the lengths. Every memory access inside
+//! is a `loadu`/`storeu` within a slice the wrapper has already measured -- the
+//! loop stops at `jj + 8 <= lastj`.
 //!
 //! This is better than the C's arrangement, not merely equal to it: the C
 //! compiles the kernel in behind `#if defined(__AVX512F__)`, so a binary built
@@ -232,6 +233,12 @@ pub unsafe fn row(
 ///     Where the caller's scalar tail should resume and the best cell seen, or
 ///     `None` when the kernel is unavailable and the caller must run the whole
 ///     row itself.
+///
+/// Panics:
+///     When `jj0` is zero, or when a buffer is shorter than the row -- the
+///     bounds [`row`] would otherwise read past. Being safe to call is what
+///     lets the rest of the crate stay `deny(unsafe_code)`, so these are
+///     checked, not documented.
 #[allow(clippy::too_many_arguments)]
 pub fn row_checked(
     jj0: usize,
@@ -255,16 +262,35 @@ pub fn row_checked(
         if !available() {
             return None;
         }
+        // `row`'s preconditions, enforced rather than assumed. This is a safe
+        // function, so nothing may stop it being called with arguments that
+        // would make the kernel read out of bounds -- a debug-only check would
+        // leave exactly that hole in a release build. One comparison per row
+        // against a loop that does eight cells at a time.
+        assert!(jj0 >= 1, "the kernel reads `pw[jj - 1]`");
+        assert!(
+            pw.len() + 1 >= lastj,
+            "previousw is read up to `lastj - 2`"
+        );
+        assert!(
+            miv.len() >= lastj
+                && mpiv.len() >= lastj
+                && mm.len() >= lastj
+                && mpp.len() >= lastj
+                && ijpi.len() >= lastj
+                && cw.len() >= lastj,
+            "every other buffer is read and written up to `lastj - 1`"
+        );
         // SAFETY: `available()` just confirmed avx512f and avx512vl on this
-        // CPU, which is the whole of `row`'s requirement; its loads and stores
-        // stay inside the slices because it stops at `jj + 8 <= lastj` and each
-        // slice is at least `lastj` long.
-        return Some(unsafe {
+        // CPU, which is the whole of `row`'s target-feature requirement; the
+        // asserts above establish the rest of it, so every load and store stays
+        // inside its slice -- the loop stops at `jj + 8 <= lastj`.
+        Some(unsafe {
             row(
                 jj0, lastj, pw, miv, mpiv, mm, mpp, ijpi, cw, i, fpenalty, fpenalty_ex,
                 localthr, localthr2, localstop,
             )
-        });
+        })
     }
     #[cfg(not(target_arch = "x86_64"))]
     {
@@ -273,5 +299,88 @@ pub fn row_checked(
             localthr2, localstop,
         );
         None
+    }
+}
+
+#[cfg(all(test, target_arch = "x86_64"))]
+mod tests {
+    use super::*;
+
+    /// A row's worth of every buffer the kernel touches, long enough that only
+    /// the argument under test is wrong.
+    struct Row {
+        pw: Vec<f64>,
+        miv: Vec<f64>,
+        mpiv: Vec<i32>,
+        m: Vec<f64>,
+        mp: Vec<i32>,
+        ijp: Vec<i32>,
+        cw: Vec<f64>,
+    }
+
+    impl Row {
+        fn new() -> Self {
+            Self {
+                pw: vec![0.0; 8],
+                miv: vec![0.0; 8],
+                mpiv: vec![0; 8],
+                m: vec![0.0; 8],
+                mp: vec![0; 8],
+                ijp: vec![0; 8],
+                cw: vec![0.0; 8],
+            }
+        }
+
+        fn call(&mut self, jj0: usize) {
+            row_checked(
+                jj0,
+                8,
+                &self.pw,
+                &self.miv,
+                &self.mpiv,
+                &mut self.m,
+                &mut self.mp,
+                &mut self.ijp,
+                &mut self.cw,
+                1,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0,
+            );
+        }
+    }
+
+    /// `pw.as_ptr().add(jj - 1)` wraps at `jj == 0`, so the wrapper has to stop
+    /// it before the kernel is entered.
+    #[test]
+    #[should_panic(expected = "pw[jj - 1]")]
+    fn rejects_a_zero_start() {
+        assert!(available(), "pw[jj - 1]: skipped, no AVX-512 on this CPU");
+        Row::new().call(0);
+    }
+
+    /// Half a row of `cw` -- the kernel would store eight doubles into it.
+    #[test]
+    #[should_panic(expected = "read and written up to")]
+    fn rejects_a_short_buffer() {
+        assert!(
+            available(),
+            "read and written up to: skipped, no AVX-512 on this CPU"
+        );
+        let mut row = Row::new();
+        row.cw.truncate(4);
+        row.call(1);
+    }
+
+    /// The lengths the aligner actually passes are accepted.
+    #[test]
+    fn accepts_a_whole_row() {
+        if !available() {
+            return;
+        }
+        let mut row = Row::new();
+        row.call(1);
     }
 }

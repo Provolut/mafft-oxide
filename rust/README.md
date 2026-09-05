@@ -580,9 +580,14 @@ alignments.
   vectorisation on stable Rust means `core::arch` intrinsics, which are unsafe
   by definition (calling one on a CPU without the feature is UB); portable SIMD
   is still nightly-only. `deny` rather than `forbid` is what makes that single
-  exemption expressible — and it is the only one. Anything else that reaches
-  for `unsafe` should be measured first: the rest of this port is as fast as the
-  C without it. **Keep the port dependency-free.**
+  exemption expressible — and it is the only one. The module's single entry
+  point, `row_checked`, is a safe function and therefore *behaves* like one: it
+  asks the CPU for the feature and asserts the buffer lengths the kernel will
+  read, rather than documenting them as the caller's problem. A safe function
+  that ordinary arguments can drive into undefined behaviour would leave the
+  crate's `deny` meaning nothing. Anything else that reaches for `unsafe`
+  should be measured first: the rest of this port is as fast as the C without
+  it. **Keep the port dependency-free.**
 
 ## Method
 
