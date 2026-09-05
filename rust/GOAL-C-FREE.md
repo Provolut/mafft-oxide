@@ -178,6 +178,39 @@ single reordered addition changes an alignment, no test says which line did it,
 and the method that works here is instrumenting a scratch `core/` and bisecting
 on f64 bit patterns. That wants the whole budget for the bisect.
 
+### `partA__align`'s 696 lines, sliced
+
+Read off its control flow (`core/partSalignmm.c`, line numbers at the time of
+writing). Nothing here is ported yet; this is the map, so the next session
+starts from structure rather than a wall of code.
+
+| lines | slice | notes |
+|---|---|---|
+| 753-797 | teardown (`seq1 == NULL`) | the C's free-everything call; an owned struct replaces it, as `PartImp` already did |
+| 807-832 | degenerate `lgth1 == 0` / `lgth2 == 0` | fills the other side with `newgapstr`; self-contained, unit-testable |
+| 843-862 | `trywarp` setup | **refuse** — this port rejects `trywarp` before reaching here |
+| 868-985 | scratch growth (`orlgth1/2`, `commonAlloc1/2`) | becomes owned buffers; the C's `static TLS` is not a contract |
+| 991-1029 | gap frequencies from `sgap1`/`egap1`, and `legacygapcost` | two branches, both short; testable on their own |
+| 1031-1060 | profile setup: `cpmx`, `ogcp`/`fgcp`, constraint init | `match_calc` and `fillimp` already exist; wire, do not rewrite |
+| 1064-1097 | boundary row and column, under `outgap` | |
+| 1124-1315 | **the main DP loop** | the real work; the `trywarp` blocks inside (1190-1197, 1249-1290, 1309-1326) are refused |
+| 1329-1335 | `!outgap` last row/column fixup | |
+| 1340-1378 | traceback and result assembly | tracebacks are **done** (`partalign::atracking*`) |
+
+Two observations that shape the order:
+
+- **Only the main loop resists isolated testing.** Every other slice can be
+  unit-tested against hand-built inputs, which is how the tracebacks were done.
+  The loop only becomes verifiable when the whole function runs against the C.
+- **So do not ship a partial DP.** Land the testable slices if you like, but the
+  loop goes in one piece, and the first thing that should pass afterwards is
+  `verify_tbfast.sh` / `verify_e2e.sh` against a built `core/` — not a unit
+  test, which cannot see a reordered addition.
+
+The four `if( chudanpt && *chudanpt != chudanref )` checks (1129, 1203) are the
+C's cooperative-cancellation hooks; nothing in this repo's call path sets
+`chudanpt`, so they are dead here.
+
 4. **`tditeration`'s reached set + the `dvtditr` driver.** `movereg`,
    `movereg_swap`, `fillimp`, `intergroup_score`, `cpmx_calc_new`, `gapcountf`
    and `Atracking_localhom` are **already ported** (`localhom.rs`, `score.rs`,
