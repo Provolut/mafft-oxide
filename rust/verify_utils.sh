@@ -29,7 +29,8 @@ CORPUS="${2:-}"
 RSDIR="$here/target/release"
 GOLDEN="$here/tests/golden/utils"
 
-for b in "$CORE/countlen" "$CORE/version" "$RSDIR/countlen-rs" "$RSDIR/version-rs"; do
+for b in "$CORE/countlen" "$CORE/version" "$CORE/replaceu" "$CORE/f2cl" \
+         "$RSDIR/countlen-rs" "$RSDIR/version-rs" "$RSDIR/replaceu-rs" "$RSDIR/f2cl-rs"; do
   [ -x "$b" ] || { echo "verify_utils: $b is not executable" 1>&2; exit 2; }
 done
 
@@ -94,6 +95,26 @@ is_indeterminate() {
   case " $INDETERMINATE " in *" $1 "*) return 0 ;; *) return 1 ;; esac
 }
 
+# Compare stdout and exit status only. For `f2cl`, whose stderr carries heap
+# addresses from a `reporterr` left in the shipped binary -- different on every
+# run of the C against itself, ASLR -- stderr cannot be a contract, so it is
+# not compared. `rescale = 1`, printed from `constants()`, is on the same
+# stream and is skipped for the same reason: the FASTA path never needs the
+# scoring constants, and the script sends this stream to /dev/null.
+cmp_stdout() {
+  local label="$1" cbin="$2" rbin="$3"; shift 3
+  local co cs ro rs
+  co=$("$cbin" "$@" </dev/null 2>/dev/null); cs=$?
+  ro=$("$rbin" "$@" </dev/null 2>/dev/null); rs=$?
+  if [ "$co" = "$ro" ] && [ "$cs" = "$rs" ]; then
+    pass=$((pass+1))
+  else
+    fail=$((fail+1))
+    echo "FAIL $label (status C=$cs RS=$rs)"
+    [ "$co" = "$ro" ] || { echo "  stdout C : $(echo "$co" | head -c 200)"; echo "  stdout RS: $(echo "$ro" | head -c 200)"; }
+  fi
+}
+
 # Compare one argument vector on both binaries: stdout, stderr and status.
 cmp_run() {
   local label="$1" cbin="$2" rbin="$3"; shift 3
@@ -146,6 +167,80 @@ cmp_run "countlen -i f extra"    "$CORE/countlen" "$RSDIR/countlen-rs" -i "$inpu
 cmp_run "countlen --"            "$CORE/countlen" "$RSDIR/countlen-rs" --
 cmp_run "countlen -i /nope"      "$CORE/countlen" "$RSDIR/countlen-rs" -i /nope
 cmp_run "version"                "$CORE/version"  "$RSDIR/version-rs"
+
+# replaceu: the alphabet fold and the `_os_<i>_oe_<name>` marker restoreu reads.
+# Its own indeterminate set is the same one, for the same reason -- it shares
+# the reader, though not `getnumlen_nogap_countn`, so only the argument paths
+# below can reach an undefined value.
+for f in "$inputs"/*; do
+  base=$(basename "$f")
+  is_indeterminate "$base" && continue
+  cmp_run "replaceu -i $base" "$CORE/replaceu" "$RSDIR/replaceu-rs" -i "$f"
+done
+
+for f in "$inputs"/*; do
+  is_indeterminate "$(basename "$f")" && continue
+  co=$("$CORE/replaceu" < "$f" 2>/dev/null); cs=$?
+  ro=$("$RSDIR/replaceu-rs" < "$f" 2>/dev/null); rs=$?
+  if [ "$co" = "$ro" ] && [ "$cs" = "$rs" ]; then
+    pass=$((pass+1))
+  else
+    fail=$((fail+1))
+    echo "FAIL replaceu < $(basename "$f")"
+    echo "  C : $(echo "$co" | head -c 200) (status $cs)"
+    echo "  RS: $(echo "$ro" | head -c 200) (status $rs)"
+  fi
+done
+
+# The seed offset shifts every `_os_` index, and `-D`/`-P` pick the fold that
+# is applied -- both change the bytes downstream, so both are compared.
+dnaf="$inputs/edge_dna_n.fa"
+protf="$inputs/sample.fa"
+cmp_run "replaceu -o 7"          "$CORE/replaceu" "$RSDIR/replaceu-rs" -o 7 -i "$protf"
+cmp_run "replaceu -o -3"         "$CORE/replaceu" "$RSDIR/replaceu-rs" -o -3 -i "$protf"
+cmp_run "replaceu -o junk"       "$CORE/replaceu" "$RSDIR/replaceu-rs" -o junk -i "$protf"
+cmp_run "replaceu -D on protein" "$CORE/replaceu" "$RSDIR/replaceu-rs" -D -i "$protf"
+cmp_run "replaceu -P on dna"     "$CORE/replaceu" "$RSDIR/replaceu-rs" -P -i "$dnaf"
+cmp_run "replaceu -Do clustered" "$CORE/replaceu" "$RSDIR/replaceu-rs" -Do 2 -i "$protf"
+cmp_run "replaceu -Z"            "$CORE/replaceu" "$RSDIR/replaceu-rs" -Z
+cmp_run "replaceu positional"    "$CORE/replaceu" "$RSDIR/replaceu-rs" "$protf"
+cmp_run "replaceu -i /nope"      "$CORE/replaceu" "$RSDIR/replaceu-rs" -i /nope
+
+# f2cl: only the FASTA path is ported (see the binary's own header), so only
+# the FASTA path is compared. `-n -1 -f -l 60` is what `--auto` passes.
+for f in "$inputs"/*; do
+  base=$(basename "$f")
+  is_indeterminate "$base" && continue
+  co=$("$CORE/f2cl" -n -1 -f -l 60 < "$f" 2>/dev/null); cs=$?
+  ro=$("$RSDIR/f2cl-rs" -n -1 -f -l 60 < "$f" 2>/dev/null); rs=$?
+  if [ "$co" = "$ro" ] && [ "$cs" = "$rs" ]; then
+    pass=$((pass+1))
+  else
+    fail=$((fail+1))
+    echo "FAIL f2cl -f -l 60 < $base (status C=$cs RS=$rs)"
+  fi
+done
+
+# The unwrapped branch is a different code path in the C, and differs from the
+# wrapped one on an empty record: no sequence line at all against a blank one.
+for f in "$inputs"/*; do
+  base=$(basename "$f")
+  is_indeterminate "$base" && continue
+  co=$("$CORE/f2cl" -n -1 -f < "$f" 2>/dev/null); cs=$?
+  ro=$("$RSDIR/f2cl-rs" -n -1 -f < "$f" 2>/dev/null); rs=$?
+  if [ "$co" = "$ro" ] && [ "$cs" = "$rs" ]; then
+    pass=$((pass+1))
+  else
+    fail=$((fail+1))
+    echo "FAIL f2cl -f (unwrapped) < $base (status C=$cs RS=$rs)"
+  fi
+done
+
+cmp_stdout "f2cl -l 1"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 1 -i "$inputs/sample.fa"
+cmp_stdout "f2cl -l 7"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 7 -i "$inputs/sample.fa"
+cmp_stdout "f2cl -l 0"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 0 -i "$inputs/sample.fa"
+cmp_stdout "f2cl -i /nope" "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -i /nope
+cmp_stdout "f2cl -Z"    "$CORE/f2cl" "$RSDIR/f2cl-rs" -Z
 
 # A run that compared nothing is vacuous, not green.
 if [ "$pass" -eq 0 ]; then

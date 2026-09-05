@@ -25,6 +25,18 @@ path = "src/bin/countlen.rs"
 name = "version-rs"
 path = "src/bin/version.rs"
 
+[[bin]]
+name = "replaceu-rs"
+path = "src/bin/replaceu.rs"
+
+[[bin]]
+name = "f2cl-rs"
+path = "src/bin/f2cl.rs"
+
+[[bin]]
+name = "restoreu-rs"
+path = "src/bin/restoreu.rs"
+
 [profile.release]
 opt-level = 3
 debug = false
