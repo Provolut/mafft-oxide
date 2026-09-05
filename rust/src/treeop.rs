@@ -552,3 +552,44 @@ pub fn one_cluster_and_the_other_fast(
 
     (memlist1, memlist2)
 }
+
+/// `GETA3` from `mltaln.h`.
+const GETA3: f64 = 0.001;
+
+/// `counteff_simple()` (`mltaln9.c`), the variant `tditeration` calls.
+///
+/// Not the one `tree.rs` ports: that is the memsave form, which rebuilds each
+/// side's members from `Treedep` and clamps negative branch lengths with a
+/// warning first. This one reads the full member lists straight out of `topol`
+/// and does no clamping, because by the time `tditeration` calls it `treeCnv`
+/// has already raised every length to `MINLEN` in place.
+///
+/// Args:
+///     nseq: Number of sequences.
+///     topol: The merge sequence.
+///     len: Branch lengths.
+///
+/// Returns:
+///     One weight per sequence, summing to 1.
+pub fn counteff_simple(nseq: usize, topol: &Topol, len: &[[f64; 2]]) -> Vec<f64> {
+    let mut rootnode = vec![0.0f64; nseq];
+    let mut eff = vec![1.0f64; nseq];
+
+    for i in 0..nseq - 1 {
+        for side in 0..2 {
+            for &s in &topol[i][side] {
+                if s <= -1 {
+                    break;
+                }
+                let s = s as usize;
+                rootnode[s] += len[i][side] * eff[s];
+                eff[s] *= 0.5;
+            }
+        }
+    }
+    for v in rootnode.iter_mut() {
+        *v += GETA3;
+    }
+    let total: f64 = rootnode.iter().sum();
+    rootnode.iter().map(|v| v / total).collect()
+}

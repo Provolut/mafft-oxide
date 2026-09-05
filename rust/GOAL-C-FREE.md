@@ -19,7 +19,7 @@ byte-identical.** The ninth, `dvtditr`, is the whole of what remains.
 |---|---|
 | `disttbfast`, `tbfast` | Rust, byte-identical (pre-existing) |
 | `countlen`, `version`, `replaceu`, `restoreu`, `f2cl`, `dndpre` | Rust, byte-identical |
-| **`dvtditr`** | **not done** — its DP and block splitter are, its driver is not; see §5 |
+| **`dvtditr`** | **not done** — its DP, block splitter and refinement loop are; its `main` is not. See §5 |
 | `splittbfast` | **out of scope** — parttree bracket only, ≥200000 sequences |
 
 Verified with eight Rust binaries in place: the 840-payload ProteinGym corpus
@@ -78,6 +78,10 @@ addition; only these can.**
    never sees, and both harnesses refuse it rather than run it.
    `./verify_td.sh ../core` — the branch-weighting family on 96 staged guide
    trees.
+   `./verify_tdi.sh ../core` — the whole refinement loop on 126 staged runs.
+   That one compares a driver, not a function: hundreds of accept/reject
+   decisions feed each other, so one differing bit anywhere lands as a
+   different alignment.
    Both need only a built `core/`, run in seconds, and `--regenerate`
    refreshes the fixtures `cargo test` replays. **This is what proved the DP**,
    and it is where the next slice should be proved too: staging one function
@@ -157,6 +161,24 @@ the wrong value. `verify_flh.sh` caught it on 3 of 98 cases (fixed).
 `align.rs` had it right; the same shape appears in every traceback still to be
 ported, so compare against `-warpbase` rather than against zero.
 
+### `LENGTH OVER` is behaviour, and only one aligner has it
+
+`partA__align` ends by checking `alloclen < resultlen || resultlen > N` and
+calling `ErrorExit`. It is an error path, but a reachable one — the refinement
+loop can grow an alignment past the buffer `dvtditr` sized from the longest
+input (`alloclen = nlenmax * 9`) — and it is a *behavioural* difference of the
+worst kind: where the C stops, a port without the check carries on and produces
+output the C never would. `part_a_align` now carries it, and `alloclen` is
+threaded from `IterParams`.
+
+**`A__align` and `Falign` have the same check and the port still does not.**
+Those predate this stack and are reached through `treebase`, whose callers would
+all have to thread `alloclen` — a change with its own verification, against
+`tbfast-rs` and `disttbfast-rs`. It is left open deliberately: on real input the
+limit is nine times the longest sequence and nothing approaches it, and the
+synthetic cases that did were random noise at 25% gaps. Close it when
+`dvtditr-rs` lands, where `alloclen` is already in hand.
+
 ### An input with no bit-exact answer
 
 `getnumlen_nogap_countn` reads an uninitialised `nN` when a record has an empty
@@ -193,7 +215,7 @@ actually decides the cost — see §7.
 | `partA__align` + both tracebacks + constraint half | ~360 Rust | **bit-verified** through `verify_flh.sh` |
 | `Falign_localhom` | 223 Rust (875 C) | **done, bit-verified**, 98/98 |
 | the branch-weighting family (`treeop.rs`) | 470 Rust | **done, bit-verified**, 96/96 |
-| `TreeDependentIteration` sequential branch | 1188 C | not started |
+| `TreeDependentIteration` sequential branch | 350 Rust (1188 C) | **done, bit-verified**, 126/126 |
 | `dvtditr.c` `main` reached path | ~500 C | not started |
 
 ### `partA__align` — verified
@@ -273,10 +295,16 @@ tree (an `extern` in `functions.h` and commented-out call sites), and
 than assuming it: at `-C 0` the callgrind output contains
 `TreeDependentIteration` and no `athread` at all. A future `-C n` needs it.
 
-What remains for this function is its own body: the iteration loop, the
-`score_check` accounting, the `imp` initialisation per branch, the dispatch
-between `Falign` and `Falign_localhom`, the gap-map handling and the
-convergence test.
+Its body is ported — `tditeration::tree_dependent_iteration`, 350 lines — for
+the configuration a traced `dvtditr` reports on every strategy:
+`utree=1 weight=4 score_check=1 nkozo=0 rnakozo=0 alg='A' use_fft=1 nthread=0`,
+with `constraint` 2 or 0. That single line of trace output is what makes the
+port small: `utree=0` alone would have brought a second tree builder
+(`substitution_hosei` and four clustering methods) that nothing runs.
+
+Everything outside it is refused with an assertion naming the setting, not
+approximated: dynamic tree rebuilding, other weightings, `score_check=2`, kozo,
+RNA, `--target`, `specificityconsideration`, `alg != 'A'`, `-C n`, BESTFIRST.
 
 ### `dvtditr.c`'s `main`
 
@@ -313,7 +341,7 @@ replayed in isolation for benchmarking or diffing.
    the DP is verified.
 2. ~~**The small dependencies**~~ — done. Six functions ran, not sixteen; the
    rest are refused. See the table above.
-3. **`TreeDependentIteration`'s sequential branch.**
+3. ~~**`TreeDependentIteration`'s sequential branch.**~~ — done.
 4. **`dvtditr.c`'s `main`**, then swap in and run §3's ladder.
 
 Do not ship a partial DP or a partial driver. Every slice above except the DP
@@ -344,6 +372,8 @@ of them from assuming instead of checking.
 | `Falign_localhom` (`kobetsubunkatsu == 1` only) | `falign::falign_localhom` |
 | `treeCnv`, `calcBranchWeight`, `distFromABranch`, `weightFromABranch`, `OneClusterAndTheOther_fast`, and their helpers | `treeop.rs` |
 | `msshrinklocalhom_fast_half` | `localhom::fastshrinklocalhom_half` — **same function, different name** |
+| `TreeDependentIteration` (sequential) | `tditeration::tree_dependent_iteration` |
+| `counteff_simple` (the full-`topol` one) | `treeop::counteff_simple` — **not** `tree.rs`'s, which is the memsave form and clamps negative lengths |
 
 Two traps in that table, both found the hard way:
 

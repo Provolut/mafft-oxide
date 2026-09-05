@@ -185,6 +185,7 @@ rust/verify.sh         core/disttbfast rust/target/release/disttbfast-rs
 rust/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
 rust/verify_flh.sh     core                # Falign_localhom, function level
 rust/verify_td.sh      core                # branch weighting, function level
+rust/verify_tdi.sh     core                # the refinement loop, whole driver
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
   rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
@@ -278,8 +279,9 @@ Current status, on this source tree:
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
 | `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical |
 | `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
+| `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
-| `cargo test` | 220/220 |
+| `cargo test` | 221/221 |
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
 RNA folding programs and fail identically with the stock C binaries.)
