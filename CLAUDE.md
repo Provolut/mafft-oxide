@@ -57,6 +57,14 @@ what fired, why you think it is wrong, and what you would change.
 
 A gate an agent can talk itself past is not a gate.
 
+## `grep -a`, always
+
+`constants.c`, `io.c`, `Lalign11.c`, `Lalignmm.c` and `MSalignmm.c` are
+ISO-8859. GNU grep in a UTF-8 locale silently skips them — no match, no count,
+no warning — so a plain `grep` cannot tell you who calls what in a fifteenth of
+this tree, including the memsave aligner and the whole of I/O. Every "used
+nowhere" claim needs `grep -a` or `LC_ALL=C` behind it.
+
 ## What to do when output diverges
 
 Instrument a scratch copy of `core/`, dump the intermediates as f64 bit
@@ -82,7 +90,8 @@ are added is not, whatever the compiler flags allow.
 
 - `rust/tests/matrix.rs` — 553 cases whose expected bytes came from the real C.
   Runs in `cargo test`, needs no `core/` build. This is the fast gate.
-- `rust/verify.sh`, `verify_tbfast.sh`, `verify_e2e.sh`, `verify_gaplen.sh` —
+- `rust/verify.sh`, `verify_tbfast.sh`, `verify_e2e.sh`, `verify_gaplen.sh`,
+  `verify_flh.sh` —
   differential harnesses against a compiled `core/`. Tens of thousands of
   comparisons, about an hour. These are the thorough gate; run them before
   claiming a change is safe, not just the fast one.
