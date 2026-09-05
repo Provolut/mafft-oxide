@@ -29,8 +29,15 @@ CORPUS="${2:-}"
 RSDIR="$here/target/release"
 GOLDEN="$here/tests/golden/utils"
 
-for b in "$CORE/countlen" "$CORE/version" "$CORE/replaceu" "$CORE/f2cl" \
-         "$RSDIR/countlen-rs" "$RSDIR/version-rs" "$RSDIR/replaceu-rs" "$RSDIR/f2cl-rs"; do
+# Absolute, because the `dndpre` cases below run each side in a scratch
+# directory of its own -- `dndpre` writes `hat2` into the working directory, so
+# comparing the two means changing into them, and a relative `../core` stops
+# resolving the moment that happens.
+CORE=$(cd "$CORE" 2>/dev/null && pwd) || { echo "verify_utils: no such core dir" 1>&2; exit 2; }
+
+for b in "$CORE/countlen" "$CORE/version" "$CORE/replaceu" "$CORE/f2cl" "$CORE/dndpre" \
+         "$RSDIR/countlen-rs" "$RSDIR/version-rs" "$RSDIR/replaceu-rs" "$RSDIR/f2cl-rs" \
+         "$RSDIR/dndpre-rs"; do
   [ -x "$b" ] || { echo "verify_utils: $b is not executable" 1>&2; exit 2; }
 done
 
@@ -241,6 +248,27 @@ cmp_stdout "f2cl -l 7"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 7 -i "$inputs/
 cmp_stdout "f2cl -l 0"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 0 -i "$inputs/sample.fa"
 cmp_stdout "f2cl -i /nope" "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -i /nope
 cmp_stdout "f2cl -Z"    "$CORE/f2cl" "$RSDIR/f2cl-rs" -Z
+
+# dndpre: needs an *aligned* input and writes `hat2` into the working
+# directory, so each side runs in its own and the files are compared. Uses the
+# committed alignments, which is the only part of this corpus that is aligned.
+for f in "$GOLDEN"/aligned/*; do
+  [ -f "$f" ] || continue
+  cd1=$(mktemp -d); cd2=$(mktemp -d)
+  ( cd "$cd1" && "$CORE/dndpre" -y hat2 -b 62 -M 2 -C 0 -i "$f" >/dev/null 2>/dev/null )
+  ( cd "$cd2" && "$RSDIR/dndpre-rs" -y hat2 -b 62 -M 2 -C 0 -i "$f" >/dev/null 2>/dev/null )
+  if cmp -s "$cd1/hat2" "$cd2/hat2"; then
+    pass=$((pass+1))
+  else
+    fail=$((fail+1))
+    echo "FAIL dndpre $(basename "$f")"
+    diff "$cd1/hat2" "$cd2/hat2" | head -6
+  fi
+  rm -rf "$cd1" "$cd2"
+done
+
+cmp_stdout "dndpre -y zzz"  "$CORE/dndpre" "$RSDIR/dndpre-rs" -y zzz -i "$GOLDEN/aligned/sample.fa"
+cmp_stdout "dndpre 1 record" "$CORE/dndpre" "$RSDIR/dndpre-rs" -y hat2 -i "$GOLDEN/in/one.fa"
 
 # A run that compared nothing is vacuous, not green.
 if [ "$pass" -eq 0 ]; then

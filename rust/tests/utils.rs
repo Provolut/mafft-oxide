@@ -473,3 +473,63 @@ fn restoreu_reports_an_original_that_does_not_fit_the_alignment() {
     assert_eq!(code, Some(1));
     assert!(err.contains("(2)"), "stderr was: {err}");
 }
+
+
+#[test]
+fn dndpre_matches_the_c_on_every_aligned_fixture() {
+    // `dndpre` writes `hat2` into the working directory rather than to stdout,
+    // so each case runs in a directory of its own -- and that is also what
+    // stops one case reading the previous one's file and passing on it.
+    let bin = env!("CARGO_BIN_EXE_dndpre-rs");
+    let cases = expected_digests("dndpre.expected");
+    assert!(!cases.is_empty(), "fixture table is empty");
+    for (name, want) in cases {
+        let input = Path::new(GOLDEN).join("aligned").join(&name);
+        let dir = std::env::temp_dir().join(format!("dndpre_case_{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("case dir");
+        let status = Command::new(bin)
+            .args(["-y", "hat2", "-b", "62", "-M", "2", "-C", "0", "-i"])
+            .arg(&input)
+            .current_dir(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .expect("run dndpre-rs");
+        assert!(status.success(), "dndpre-rs failed on {name}");
+        let got = std::fs::read(dir.join("hat2")).expect("dndpre-rs wrote no hat2");
+        assert_eq!(sha256_hex(&got), want, "dndpre disagrees with the C on {name}");
+    }
+}
+
+#[test]
+fn dndpre_refuses_fewer_than_two_records() {
+    let bin = env!("CARGO_BIN_EXE_dndpre-rs");
+    let input = Path::new(GOLDEN).join("in").join("one.fa");
+    let (_, err, code) = run_full(bin, &["-y", "hat2", "-i", input.to_str().unwrap()]);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("At least 2 sequences"), "stderr was: {err}");
+}
+
+#[test]
+fn dndpre_refuses_an_unaligned_input() {
+    // Its whole job is re-deriving distances from an alignment, so ragged
+    // input is a caller error rather than something to measure.
+    let bin = env!("CARGO_BIN_EXE_dndpre-rs");
+    let dir = std::env::temp_dir().join("dndpre_ragged_fixture");
+    let _ = std::fs::create_dir_all(&dir);
+    let input = dir.join("ragged.fa");
+    std::fs::write(&input, ">a\nMKVL\n>b\nMK\n").expect("write");
+    let (_, err, code) = run_full(bin, &["-y", "hat2", "-i", input.to_str().unwrap()]);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("Not aligned!"), "stderr was: {err}");
+}
+
+#[test]
+fn dndpre_rejects_a_distance_format_it_does_not_know() {
+    let bin = env!("CARGO_BIN_EXE_dndpre-rs");
+    let input = Path::new(GOLDEN).join("aligned").join("sample.fa");
+    let (_, err, code) = run_full(bin, &["-y", "zzz", "-i", input.to_str().unwrap()]);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("Set -y c or -y h"), "stderr was: {err}");
+}

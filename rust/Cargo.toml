@@ -37,6 +37,10 @@ path = "src/bin/f2cl.rs"
 name = "restoreu-rs"
 path = "src/bin/restoreu.rs"
 
+[[bin]]
+name = "dndpre-rs"
+path = "src/bin/dndpre.rs"
+
 [profile.release]
 opt-level = 3
 debug = false

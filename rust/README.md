@@ -16,12 +16,15 @@ same argument vector, same input, same output files:
 | `replaceu-rs` | `replaceu` | folds the input to a known alphabet and stamps the `_os_<i>_oe_<name>` markers |
 | `restoreu-rs` | `restoreu` | writes the original characters back onto the finished alignment's gap pattern |
 | `f2cl-rs` | `f2cl` | the output writer, **FASTA path only** -- clustal and phylip are refused, not approximated |
+| `dndpre-rs` | `dndpre` | re-derives the `hat2` distance matrix from a finished alignment, for the second progressive cycle |
 
 The two aligners handle protein and nucleotide input, which the reader tells
 apart the same way the C does.
 
-**Six of the seven binaries a `mafft --auto` L-INS-i run executes are now
-Rust**; only `dvtditr` is still the C's. See `GOAL-C-FREE.md` for the whole
+**Eight of the nine binaries `mafft --auto` can execute are now Rust**; only
+`dvtditr` is still the C's, plus `splittbfast` for the parttree bracket, which
+is out of scope. Both the L-INS-i and FFT-NS-i brackets come out byte-identical
+against an all-C run. See `GOAL-C-FREE.md` for the whole
 target and what is left. The utilities' differential harness is
 `verify_utils.sh` (needs a built `core/`), and `tests/utils.rs` pins the same
 behaviour against committed fixtures, so the suite still runs on a machine

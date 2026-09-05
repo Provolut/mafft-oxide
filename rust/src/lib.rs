@@ -32,6 +32,7 @@ pub mod keeplength;
 pub mod lalign;
 pub mod localhom;
 pub mod msalign;
+pub mod naivescore;
 pub mod pairalign;
 pub mod params;
 pub mod profile;
