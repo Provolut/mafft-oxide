@@ -165,14 +165,21 @@ quietly returning a different alignment:
   own past 30000 columns) is ported, both its DP and its FFT anchoring, and so
   is `-&` (`Aalign`).
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
-- **threads.** The port is single-threaded and refuses `-C > 0`. Note this is
-  a "not implemented", not a "cannot be implemented": measured on 39 corpus
-  inputs x 3 repeats, the C's own `disttbfast` and `tbfast` give byte-identical
-  `pre`, `order`, `hat2` and `hat3` at `-C 4` as at `-C 0`, including on an
-  80-sequence input where four threads are a real 3.3x speedup. In `dvtditr`
-  the threaded worker (`athread`) is skipped for the same reason, and a
-  callgrind profile confirms it never runs at `-C 0`. Run with `-C 0` /
-  `-C 0-0`, which is what the wrapper passes by default.
+- **threads.** The port is single-threaded and refuses `-C > 0`. For
+  `disttbfast` and `tbfast` that is a "not implemented", not a "cannot be":
+  measured on 39 corpus inputs x 3 repeats, the C's own binaries give
+  byte-identical `pre`, `order`, `hat2` and `hat3` at `-C 4` as at `-C 0`,
+  including on an 80-sequence input where four threads are a real 3.3x speedup.
+  For `dvtditr` it is closer to "cannot": the C's threaded refinement is
+  **nondeterministic** — three `--thread 4` runs of one input give three
+  different alignments — so there is no fixed reference to be byte-identical
+  to. A callgrind profile confirms `athread` never runs at `-C 0`. Run with
+  `-C 0` / `-C 0-0`, which is what the wrapper passes by default.
+
+The six configurations that still need the C, and what porting each would take,
+are in [`WHAT-STILL-NEEDS-THE-C.md`](WHAT-STILL-NEEDS-THE-C.md). One of them —
+`--thread n` — is not a porting task at all: the C's own threaded `dvtditr` is
+nondeterministic, so there is no fixed answer to match.
 
 `dvtditr` -- iterative refinement -- **is** ported, for the configuration
 `scripts/mafft` produces: `utree=1 weight=4 score_check=1 nkozo=0 alg='A'
