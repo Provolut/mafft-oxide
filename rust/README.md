@@ -4,16 +4,39 @@ A transliteration of MAFFT 7.526's multiple-sequence-alignment algorithms from
 C into Rust, written to produce **bit-identical output**, not to be fast. Where
 the C and a cleaner formulation disagree, the C wins.
 
-Two binaries, both drop-in replacements for their `libexec/mafft/` originals —
+Four binaries, all drop-in replacements for their `libexec/mafft/` originals —
 same argument vector, same input, same output files:
 
-| binary | replaces | strategies |
+| binary | replaces | covers |
 |---|---|---|
 | `disttbfast-rs` | `disttbfast` | FFT-NS-1/2, NW-NS-1/2, `--add`, `--addprofile`, `--keeplength`, `--allowshift`, `--aamatrix`, `--text`, `--oneiteration`, `--merge`, `--treein` (plain `mafft`, `fftns`, `nwns`) |
 | `tbfast-rs` | `tbfast` | L-INS-1/i, G-INS-1/i, E-INS-1/i, `--add`, `--addprofile`, `--allowshift` (`linsi`, `ginsi`, `einsi`) |
+| `countlen-rs` | `countlen` | the record count, longest and shortest ungapped lengths, and sequence type the `mafft` script reads to pick a strategy |
+| `version-rs` | `version` | the version string, with the missing trailing newline the script relies on |
+| `replaceu-rs` | `replaceu` | folds the input to a known alphabet and stamps the `_os_<i>_oe_<name>` markers |
+| `restoreu-rs` | `restoreu` | writes the original characters back onto the finished alignment's gap pattern |
+| `f2cl-rs` | `f2cl` | the output writer, **FASTA path only** -- clustal and phylip are refused, not approximated |
+| `dndpre-rs` | `dndpre` | re-derives the `hat2` distance matrix from a finished alignment, for the second progressive cycle |
 
-Both handle protein and nucleotide input, which the reader tells apart the same
-way the C does.
+The two aligners handle protein and nucleotide input, which the reader tells
+apart the same way the C does.
+
+**Eight of the nine binaries `mafft --auto` can execute are now Rust**; only
+`dvtditr` is still the C's, plus `splittbfast` for the parttree bracket, which
+is out of scope. Both the L-INS-i and FFT-NS-i brackets come out byte-identical
+against an all-C run. See `GOAL-C-FREE.md` for the whole
+target and what is left. The utilities' differential harness is
+`verify_utils.sh` (needs a built `core/`), and `tests/utils.rs` pins the same
+behaviour against committed fixtures, so the suite still runs on a machine
+with no C toolchain.
+
+Three defects in the C were found by building these and are filed upstream:
+issue #8 (`countlen` reads uninitialised memory), #9 (`f2cl` prints heap
+pointers to stderr, making its stderr non-reproducible) and #10 (`restoreu`
+segfaults on a record-count mismatch, because its own check is unreachable).
+The port diverges from the C deliberately in two of those, in both cases where
+the C's behaviour is undefined; each divergence is commented at the site and
+scored `indeterminate` rather than as a pass by `verify_utils.sh`.
 
 Dropped into a MAFFT installation, upstream's own test suite passes 9/9 and
 `mafft --auto` is byte-identical. The `-i` (iterative refinement) variants come

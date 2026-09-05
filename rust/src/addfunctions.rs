@@ -14,6 +14,52 @@ use crate::constants::Constants;
 ///
 /// The C's loop runs to `<= len`, so it also examines the NUL terminator; that
 /// position is never all-gap, so it is copied and becomes the new terminator.
+/// `commongappick_record()`: [`commongappick`], plus where each kept column
+/// came from.
+///
+/// `dvtditr` uses the map to translate positions in the compacted alignment
+/// back to the original when it re-expands a refined region.
+///
+/// The C walks `i <= len`, one past the residues, because at that index every
+/// row holds the NUL terminator — not a `-`, so the column is "kept" and the
+/// terminator is copied down to end the compacted string. That trailing entry
+/// is in the map too, and it is reproduced here rather than trimmed: a caller
+/// that indexes `map[count]` after the last real column would otherwise read
+/// past the end.
+///
+/// Args:
+///     seq: The rows, compacted in place.
+///
+/// Returns:
+///     The original index of each kept column, with the terminator's index
+///     last.
+pub fn commongappick_record(seq: &mut [Vec<u8>]) -> Vec<usize> {
+    if seq.is_empty() {
+        return Vec::new();
+    }
+    let len = seq[0].len();
+    let mut map: Vec<usize> = Vec::with_capacity(len + 1);
+    for i in 0..=len {
+        // At `i == len` every row is past its end, which stands in for the C's
+        // terminator: not a gap, so the column is kept.
+        let all_gap = i < len && seq.iter().all(|s| s.get(i).copied().unwrap_or(0) == b'-');
+        if !all_gap {
+            map.push(i);
+        }
+    }
+    for s in seq.iter_mut() {
+        let old = s.clone();
+        let mut out = Vec::with_capacity(map.len());
+        for &p in &map {
+            if p < len {
+                out.push(old[p]);
+            }
+        }
+        *s = out;
+    }
+    map
+}
+
 pub fn commongappick(seq: &mut [Vec<u8>]) {
     if seq.is_empty() {
         return;
