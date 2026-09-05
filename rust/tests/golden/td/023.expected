@@ -1,0 +1,90 @@
+bw 0 0 3fed363d1848dcbe
+bw 0 1 3fed363d1848dcbe
+bw 1 0 3fed363d1848dcbe
+bw 1 1 3fed363d1848dcbe
+bw 2 0 3fda222222222221
+bw 2 1 3ff0000000000000
+len 0 0 3f50624dd2f1a9fc
+len 0 1 3f50624dd2f1a9fc
+len 1 0 3f50624dd2f1a9fc
+len 1 1 3f50624dd2f1a9fc
+len 2 0 3f50624dd2f1a9fc
+len 2 1 3f50624dd2f1a9fc
+dist 0 0 0 0000000000000000
+dist 0 0 1 3f50624dd2f1a9fc
+dist 0 0 2 3f689374bc6a7efa
+dist 0 0 3 3f689374bc6a7efa
+wt 0 0 0 3ff0000000000000
+wt 0 0 1 3fed363d1848dcbe
+wt 0 0 2 3fd7db3a6d6eb445
+wt 0 0 3 3fd7db3a6d6eb445
+dist 0 1 0 3f50624dd2f1a9fc
+dist 0 1 1 0000000000000000
+dist 0 1 2 3f689374bc6a7efa
+dist 0 1 3 3f689374bc6a7efa
+wt 0 1 0 3fed363d1848dcbe
+wt 0 1 1 3ff0000000000000
+wt 0 1 2 3fd7db3a6d6eb445
+wt 0 1 3 3fd7db3a6d6eb445
+dist 1 0 0 3f689374bc6a7efa
+dist 1 0 1 3f689374bc6a7efa
+dist 1 0 2 0000000000000000
+dist 1 0 3 3f50624dd2f1a9fc
+wt 1 0 0 3fd7db3a6d6eb445
+wt 1 0 1 3fd7db3a6d6eb445
+wt 1 0 2 3ff0000000000000
+wt 1 0 3 3fed363d1848dcbe
+dist 1 1 0 3f689374bc6a7efa
+dist 1 1 1 3f689374bc6a7efa
+dist 1 1 2 3f50624dd2f1a9fc
+dist 1 1 3 0000000000000000
+wt 1 1 0 3fd7db3a6d6eb445
+wt 1 1 1 3fd7db3a6d6eb445
+wt 1 1 2 3fed363d1848dcbe
+wt 1 1 3 3ff0000000000000
+dist 2 0 0 3f50624dd2f1a9fc
+dist 2 0 1 3f50624dd2f1a9fc
+dist 2 0 2 3f50624dd2f1a9fc
+dist 2 0 3 3f50624dd2f1a9fc
+wt 2 0 0 3fed363d1848dcbe
+wt 2 0 1 3fed363d1848dcbe
+wt 2 0 2 3fed363d1848dcbe
+wt 2 0 3 3fed363d1848dcbe
+dist 2 1 0 3f50624dd2f1a9fc
+dist 2 1 1 3f50624dd2f1a9fc
+dist 2 1 2 3f50624dd2f1a9fc
+dist 2 1 3 3f50624dd2f1a9fc
+wt 2 1 0 3fed363d1848dcbe
+wt 2 1 1 3fed363d1848dcbe
+wt 2 1 2 3fed363d1848dcbe
+wt 2 1 3 3fed363d1848dcbe
+split 0 0 s 0 1
+split 0 0 m1 0 0
+split 0 0 m2 0 1
+split 0 0 m2 1 2
+split 0 0 m2 2 3
+split 0 1 s 1 0
+split 0 1 m1 0 1
+split 0 1 m2 0 0
+split 0 1 m2 1 2
+split 0 1 m2 2 3
+split 1 0 s 2 0
+split 1 0 m1 0 2
+split 1 0 m2 0 0
+split 1 0 m2 1 1
+split 1 0 m2 2 3
+split 1 1 s 3 0
+split 1 1 m1 0 3
+split 1 1 m2 0 0
+split 1 1 m2 1 1
+split 1 1 m2 2 2
+split 2 0 s 0 2
+split 2 0 m1 0 0
+split 2 0 m1 1 1
+split 2 0 m2 0 2
+split 2 0 m2 1 3
+split 2 1 s 2 0
+split 2 1 m1 0 2
+split 2 1 m1 1 3
+split 2 1 m2 0 0
+split 2 1 m2 1 1

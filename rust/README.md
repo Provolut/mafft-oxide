@@ -184,6 +184,7 @@ cd core && make                       # build the C reference
 rust/verify.sh         core/disttbfast rust/target/release/disttbfast-rs
 rust/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
 rust/verify_flh.sh     core                # Falign_localhom, function level
+rust/verify_td.sh      core                # branch weighting, function level
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
   rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
@@ -201,6 +202,15 @@ cost, anchoring parameters on and off their traced defaults, both constraint
 orientations, and the corners — no constraints at all, a single column, no gaps,
 identical rows. `--regenerate` writes the C's answers into `tests/golden/flh/`,
 which `tests/flh.rs` replays with no C present.
+
+`verify_td.sh` does the same for `treeop.rs`: it stages a guide tree — a merge
+sequence with its branch lengths — and compares every branch weight, every
+distance-from-a-branch and path-weight vector, and the group split each
+refinement step starts from. Its corpus covers random, ladder and balanced
+trees from 3 to 36 sequences, with ordinary, zero, negative and sub-`MINLEN`
+branch lengths: the zeros and negatives are the point, since they drive
+`checkMinusLength`'s clamp and the two early returns in `calcW` that are the
+only non-arithmetic paths in the family.
 
 `verify.sh` and `verify_tbfast.sh` run the C binary and the Rust one on the
 same inputs with the same arguments and require every output file to be
@@ -266,9 +276,10 @@ Current status, on this source tree:
 | `verify.sh`, generated corpus (88 inputs × 36 argument sets, plus `--treein`) | 3520/3520 identical |
 | `verify_tbfast.sh`, generated corpus (40 inputs × 19, plus `--treein`) | 920/920 identical |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies | 44/44 identical |
-| `verify_flh.sh`, 98 staged `Falign_localhom` calls | 98/98 identical |
+| `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical |
+| `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
 | upstream `test/script`, the 9 cases runnable here | 9/9 |
-| `cargo test` | 218/218 |
+| `cargo test` | 220/220 |
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
 RNA folding programs and fail identically with the stock C binaries.)

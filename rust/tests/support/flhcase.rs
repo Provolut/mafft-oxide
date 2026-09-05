@@ -10,7 +10,28 @@ use mafft_rs::localhom::LocalHom;
 use mafft_rs::params::Args;
 use mafft_rs::partalign::{PartAlignState, PartImp};
 
-/// Run one case and return what the C harness prints for it.
+/// The state a run of calls shares, as the C shares its `static TLS` buffers.
+///
+/// `dvtditr` calls `Falign_localhom` hundreds of times in one process --- 271
+/// on `test/sample` --- and every one of them lands on buffers the previous
+/// call left behind: the result rows, `alignable_reagion`'s `stra` and the
+/// threshold it computes once, the DP arrays, and the constraint matrix's
+/// grow-only allocation. Verifying single calls says nothing about that, so
+/// this state is what both the golden replay and the sequence differential
+/// drive.
+#[derive(Default)]
+pub struct SharedState {
+    fs: Option<FalignState>,
+    past: PartAlignState,
+    imp: PartImp,
+    /// `njob` and the alignment width, fixed by the first call. `tditeration`
+    /// holds both constant for the life of a run, and the C's statics are
+    /// sized on them; a sequence that changes either is staging something the
+    /// C never sees, so both sides refuse it rather than run it.
+    sizes: Option<(usize, usize)>,
+}
+
+/// Run one case against fresh state and return what the C harness prints.
 ///
 /// Args:
 ///     a: The case's argument vector, as `gen_flhcases.py` emits it.
@@ -19,6 +40,31 @@ use mafft_rs::partalign::{PartAlignState, PartImp};
 ///     The score and constraint score as f64 bit patterns, then every row of
 ///     both groups.
 pub fn run(a: &[String]) -> String {
+    let mut st = SharedState::default();
+    let body = run_with(&mut st, a);
+    body
+}
+
+/// Run a sequence of cases through one state, prefixing each line with its
+/// index, exactly as `gen_flhharness.c --sequence` does.
+///
+/// Args:
+///     cases: The argument vectors, in the order they are to run.
+///
+/// Returns:
+///     Every case's output, in order.
+pub fn run_sequence(cases: &[Vec<String>]) -> String {
+    let mut st = SharedState::default();
+    let mut out = String::new();
+    for (i, a) in cases.iter().enumerate() {
+        for line in run_with(&mut st, a).lines() {
+            out.push_str(&format!("{} {}\n", i, line));
+        }
+    }
+    out
+}
+
+fn run_with(st: &mut SharedState, a: &[String]) -> String {
     let mut p = 0usize;
     let n1: usize = a[p].parse().unwrap();
     p += 1;
@@ -48,6 +94,16 @@ pub fn run(a: &[String]) -> String {
     p += 1;
     let nlh: usize = a[p].parse().unwrap();
     p += 1;
+
+    let lgth = g1[0].len();
+    match st.sizes {
+        None => st.sizes = Some((n1 + n2, lgth)),
+        Some((njob, w)) => assert!(
+            njob == n1 + n2 && w == lgth,
+            "sequence changes njob ({njob} -> {}) or length ({w} -> {lgth})",
+            n1 + n2
+        ),
+    }
 
     // One chain per member pair, in the shape `fillimp` walks. `korh` is 'h'
     // and `rimportance` mirrors `importance`, as `msshrinklocalhom_fast_half`
@@ -92,8 +148,7 @@ pub fn run(a: &[String]) -> String {
     };
     let cn = Constants::new(&args);
 
-    let lgth = g1[0].len();
-    let mut imp = PartImp::new();
+    let imp = &mut st.imp;
     {
         let r1: Vec<&[u8]> = g1.iter().map(std::vec::Vec::as_slice).collect();
         let r2: Vec<&[u8]> = g2.iter().map(std::vec::Vec::as_slice).collect();
@@ -102,12 +157,11 @@ pub fn run(a: &[String]) -> String {
         );
     }
 
-    let mut fs = FalignState::new();
-    let mut past = PartAlignState::default();
+    let fs = st.fs.get_or_insert_with(FalignState::new);
     let (score, totalimp) = falign_localhom(
-        &mut fs,
-        &mut past,
-        &imp,
+        fs,
+        &mut st.past,
+        imp,
         &cn,
         &mut g1,
         &mut g2,
