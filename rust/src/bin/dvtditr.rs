@@ -213,6 +213,19 @@ fn main() {
     let nlenmax = seq_g[0].len();
     let alloclen = nlenmax * 9;
 
+    // `dvtditr.c`: above 50000 residues an unconstrained run silently switches
+    // to `alg = 'M'`, the memsave aligner -- a *different alignment*, not a
+    // cheaper route to the same one (`rust/README.md`, "Notes for anyone
+    // extending this", item 12). Refuse rather than keep running `'A'` and
+    // quietly disagree with the C on the one input class where it matters.
+    if nlenmax > 50000 && opt.constraint == 0 {
+        eprintln!(
+            "dvtditr-rs: nlenmax={nlenmax} > 50000 unconstrained, where the C switches \
+             to the memsave aligner (alg='M'); that path is not implemented"
+        );
+        std::process::exit(1);
+    }
+
     let cargs_for_constants = Args {
         nwildcard: opt.nwildcard,
         nblosum: opt.nblosum,
@@ -231,13 +244,30 @@ fn main() {
     // `trace` carries progress only, and nothing reads it back.
     std::fs::write("trace", format!("PID = {}\n", std::process::id())).expect("write trace");
 
-    if njob == 2 {
-        // The C writes the input straight back out and stops: with two
-        // sequences there is no branch to refine.
+    // `pre` is written **once, at the end**. `writePre` takes a `force` flag,
+    // and with `USE_XCED` 0 -- which is how this is built -- its whole body is
+    // `if( force ) { rewind( prep_g ); writeData_pointer( ... ); }`. Every call
+    // from inside the refinement loop passes 0, so it does nothing; only
+    // `dvtditr`'s own final call passes 1.
+    //
+    // That matters more than it looks. A port that wrote on every improvement
+    // would leave a *longer* intermediate alignment's tail behind the final,
+    // shorter one, because the C rewinds without truncating -- 324 stray bytes
+    // on `test/sample`, found by exactly this comparison.
+    let write_pre_final = |rows: &[Vec<u8>]| {
         let mut out = Vec::new();
-        io::write_data(&mut out, &name, &seq_g);
+        io::write_data(&mut out, &name, rows);
         std::fs::write("pre", out).expect("write pre");
-        return;
+    };
+
+    // With two sequences the C does not stop early -- that branch is `#if 0`'d
+    // out. It drops to equal weights and a single pass, and still builds the
+    // tree and writes `infile.tree`.
+    let mut weight = 4;
+    let mut niter = opt.niter;
+    if njob == 2 {
+        weight = 0;
+        niter = 1;
     }
 
     // --- the guide tree, from the distance matrix the previous stage wrote ---
@@ -307,12 +337,12 @@ fn main() {
     anchors.push(seq_g[0].len() as i32);
 
     let params = IterParams {
-        niter: opt.niter,
+        niter,
         cut: opt.cut,
         cooling: true,
         minimumweight: opt.minimumweight,
         constraint: opt.constraint,
-        weight: 4,
+        weight,
         score_check: 1,
         use_fft: opt.use_fft,
         utree: true,
@@ -333,12 +363,16 @@ fn main() {
         let to = anchors[iseg + 1] as usize;
         let mut aseq: Vec<Vec<u8>> = seq_g.iter().map(|s| s[from..to].to_vec()).collect();
         let mut bseq = aseq.clone();
+        // The C measures this from the *output* built so far, not from the
+        // input offsets, so the printed ranges overlap once a segment has been
+        // refined shorter than it started.
+        let pos = res_g[0].len();
         eprintln!(
             "Segment {:3}/{:3} {:4}-{:4}",
             iseg + 1,
             anchors.len() - 1,
-            from + 1,
-            from + 1 + (to - from)
+            pos + 1,
+            pos + 1 + (to - from)
         );
         tree_dependent_iteration(
             &cn,
@@ -350,14 +384,9 @@ fn main() {
             &mut len_for_iter,
             &skipthisbranch,
             table.as_mut(),
-            &mut |best| {
-                // `writePre`: the C rewinds `pre` and rewrites it whenever the
-                // alignment improves, so a killed run leaves the best so far.
-                // Mid-run it holds this segment only, exactly as the C's does.
-                let mut out = Vec::new();
-                io::write_data(&mut out, &name, best);
-                let _ = std::fs::write("pre", out);
-            },
+            // The C's `writePre( ..., 0 )` from inside the loop: a no-op here,
+            // for the reason above.
+            &mut |_| {},
         );
         for (i, row) in bseq.iter().enumerate() {
             res_g[i].extend_from_slice(row);
@@ -365,7 +394,5 @@ fn main() {
     }
 
     eprintln!("done");
-    let mut out = Vec::new();
-    io::write_data(&mut out, &name, &res_g);
-    std::fs::write("pre", out).expect("write pre");
+    write_pre_final(&res_g);
 }

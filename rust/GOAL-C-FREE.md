@@ -197,6 +197,30 @@ limit is nine times the longest sequence and nothing approaches it, and the
 synthetic cases that did were random noise at 25% gaps. Close it when
 `dvtditr-rs` lands, where `alloclen` is already in hand.
 
+### `pre` is written once, and the flag that says so is easy to miss
+
+`writePre` takes a `force` flag. With `USE_XCED` 0 -- which is how this builds --
+its entire body is `if( force ) { rewind( prep_g ); writeData_pointer( ... ); }`.
+Every call from inside the refinement loop passes **0**, so `dvtditr` writes
+`pre` exactly once, from its own final call.
+
+A port that reads the loop's `writePre( ..., 0 )` as "save progress" and writes
+on every improvement gets away with it only while the final alignment is the
+longest one: the C *rewinds without truncating*, so the tail of a longer
+intermediate would survive. Writing on every improvement and then truncating
+produced a `pre` 324 bytes shorter than the C's on `test/sample` -- same
+alignment, different file. The staged binary differential caught it; nothing
+else would have.
+
+### With two sequences, `dvtditr` does not stop early
+
+The `njob == 2` block that writes the input back and returns is inside the
+`#if 0` half of `dvtditr.c`. The live branch is `weight = 0; niter = 1;` -- so a
+two-sequence run still builds the tree, still writes `infile.tree`, and still
+refines once, with equal weights instead of branch weights. A port that took the
+disabled branch produces the right alignment and the wrong `infile.tree`, which
+is what `mafft --treeout` hands the user.
+
 ### A global the harness has to set, or it stages a configuration nobody runs
 
 `Falign` compacts each block before aligning it when `kobetsubunkatsu &&
@@ -373,7 +397,16 @@ than assumed:
 **Refused, by name, at startup:** `-s` non-zero (the specificity path;
 `--allowshift` is the strategy that reaches it), `-C n`, `-K n` (`--add`, which
 needs the `skipthisbranch` computation), a `hat3` carrying `korh == 'k'`
-structural constraints, and any option letter `dvtditr` does not define.
+structural constraints, an unconstrained input over 50000 residues (where the C
+silently switches to the memsave aligner, which is a *different alignment*), and
+any option letter `dvtditr` does not define.
+
+`verify_dvtditr.sh` generates two inputs the repo's test data does not have: a
+wide alignment with three conserved blocks, which is what makes `searchAnchors`
+cut it into four segments -- otherwise the segment loop only ever runs once and
+the concatenation across segments is never exercised -- and a two-sequence
+input for the `weight = 0` path above. It compares `pre`, `order` and
+`infile.tree`.
 
 ### The argument vectors, captured from a real run
 

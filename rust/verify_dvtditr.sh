@@ -25,16 +25,48 @@ RBIN=$(abspath "$RBIN")
 [ -x "$RBIN" ] || { echo "verify_dvtditr: $RBIN is not executable" 1>&2; exit 2; }
 [ -x "$LIBEXEC/dvtditr" ] || { echo "verify_dvtditr: no dvtditr in $LIBEXEC" 1>&2; exit 2; }
 
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# Two inputs the repo's own test data does not cover, generated here so nothing
+# has to be committed:
+#
+#  * a wide alignment with three strongly conserved blocks, which is what makes
+#    `searchAnchors` cut it into four segments. Without it the segment loop only
+#    ever runs once, and the concatenation across segments is never exercised.
+#  * a two-sequence input, which takes dvtditr's early exit -- no branch to
+#    refine, so it writes its input straight back.
+python3 - "$work/segments.fa" "$work/pair.fa" <<'GENPY'
+import random, sys
+random.seed(5)
+AA = "ACDEFGHIKLMNPQRSTVWY"
+blocks = ["".join(random.choice("WFYLIVM") for _ in range(90)) for _ in range(3)]
+rows = []
+for _ in range(8):
+    parts = []
+    for b in blocks:
+        parts.append("".join(random.choice(AA) for _ in range(70)))
+        parts.append(b)
+    parts.append("".join(random.choice(AA) for _ in range(70)))
+    rows.append("".join(parts))
+with open(sys.argv[1], "w") as fh:
+    for i, r in enumerate(rows):
+        fh.write(">seg%d\n%s\n" % (i, r))
+base = "".join(random.choice(AA) for _ in range(120))
+other = list(base)
+for p in range(0, 120, 7):
+    other[p] = random.choice(AA)
+with open(sys.argv[2], "w") as fh:
+    fh.write(">a\n%s\n>b\n%s\n" % (base, "".join(other)))
+GENPY
+
 INPUTS=("$@")
 if [ ${#INPUTS[@]} -eq 0 ]; then
-  INPUTS=("$here/../test/sample" "$here/../test/samplerna")
+  INPUTS=("$here/../test/sample" "$here/../test/samplerna" "$work/segments.fa" "$work/pair.fa")
 fi
 
 MAFFT="${MAFFT:-$here/../scripts/mafft}"
 [ -x "$MAFFT" ] || { echo "verify_dvtditr: cannot find the mafft wrapper" 1>&2; exit 2; }
-
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
 
 # A libexec copy whose dvtditr stages what it was called with, then runs the C.
 cp -r "$LIBEXEC" "$work/stager"
@@ -96,6 +128,9 @@ for f in "${INPUTS[@]}"; do
       fail=$((fail+1)); failed="$failed\n  $label (refined alignment differs)"
     elif ! cmp -s "$work/c/order" "$work/r/order"; then
       fail=$((fail+1)); failed="$failed\n  $label (order differs)"
+    elif ! cmp -s "$work/c/infile.tree" "$work/r/infile.tree"; then
+      # The guide tree dvtditr writes; `mafft --treeout` hands it to the user.
+      fail=$((fail+1)); failed="$failed\n  $label (infile.tree differs)"
     else
       pass=$((pass+1))
     fi
