@@ -69,11 +69,19 @@ addition; only these can.**
 2. `./verify_utils.sh ../core [corpus-dir]` — the utilities, wide. Pass a
    directory of FASTA files to widen it.
    `./verify_flh.sh ../core` — `Falign_localhom` and, through it,
-   `partA__align`, against the real C on 98 staged calls. Needs only a built
-   `core/`, runs in seconds, and `--regenerate` refreshes the fixtures
-   `cargo test` replays. **This is what proved the DP**, and it is where the
-   next slice of `dvtditr` should be proved too: staging one function against
-   the C costs an hour and finds what no unit test can.
+   `partA__align`, against the real C on 98 staged calls **plus a 60-call
+   sequence run through one process on each side**. The sequence is not a
+   bigger corpus: single calls cannot see what a call leaves in the scratch
+   buffers, and a real run makes hundreds of calls that each land on the
+   previous one's leftovers. It holds `njob` and the width constant, as
+   `tditeration` does — a sequence that varies either stages something the C
+   never sees, and both harnesses refuse it rather than run it.
+   `./verify_td.sh ../core` — the branch-weighting family on 96 staged guide
+   trees.
+   Both need only a built `core/`, run in seconds, and `--regenerate`
+   refreshes the fixtures `cargo test` replays. **This is what proved the DP**,
+   and it is where the next slice should be proved too: staging one function
+   against the C costs an hour and finds what no unit test can.
 3. `./verify.sh`, `./verify_tbfast.sh`, `./verify_e2e.sh` — the aligners,
    against a built `core/`. About an hour. **This is what decides `dvtditr`.**
 4. `./bench/coverage.sh` — 85% floor.
@@ -184,8 +192,8 @@ actually decides the cost — see §7.
 |---|---|---|
 | `partA__align` + both tracebacks + constraint half | ~360 Rust | **bit-verified** through `verify_flh.sh` |
 | `Falign_localhom` | 223 Rust (875 C) | **done, bit-verified**, 98/98 |
+| the branch-weighting family (`treeop.rs`) | 470 Rust | **done, bit-verified**, 96/96 |
 | `TreeDependentIteration` sequential branch | 1188 C | not started |
-| — its missing dependencies | **666 C** | not started |
 | `dvtditr.c` `main` reached path | ~500 C | not started |
 
 ### `partA__align` — verified
@@ -197,7 +205,8 @@ and the constraint score as raw f64 bit patterns over 98 cases. All 98 agree,
 and `tests/golden/flh/` replays them in `cargo test` with no C present.
 
 Verifying it found one defect the tests could not — the traceback branch in §4 —
-and nothing else.
+and nothing else. The state a call leaves behind is covered too: `verify_flh.sh`
+replays a 60-call sequence through one process on each side, and they agree.
 
 `partSalignmm.c`'s other entry point, `partA__align_variousdist` (746 lines), is
 still never reached: it needs `scoringmatrices`, which `tditeration.c` allocates
@@ -236,29 +245,38 @@ left open: `tbfast` never reaches `Falign_localhom` because it never calls it �
 
 ### `TreeDependentIteration` — the expensive one
 
-The opposite case. It calls 28 functions and **16 are absent from the port**,
-mostly a tree/branch-weighting family `tbfast` never needed:
+**Its dependency list was wrong, and the correction is large enough to change
+the plan.** The previous revision listed sixteen absent functions from a source
+scan. A callgrind profile of the real `dvtditr`, replayed from a
+wrapper-captured argument vector and stdin across L-INS-i, FFT-NS-i and E-INS-i,
+says which of them a run actually enters:
 
-| lines | function | file |
+| runs | ported here | note |
 |---|---|---|
-| 157 | `treeCnv` | `treeOperation.c` |
-| 68 | `SSPscore` | `mltaln9.c` |
-| 65 | `classifypairs` | `tditeration.c` |
-| 59 | `nodeFromABranch` | `tddis.c` |
-| 54 | `OneClusterAndTheOther_fast` | `tddis.c` |
-| 48 | `distFromABranch` | `treeOperation.c` |
-| 45 | `countnode_int` | `mltaln9.c` |
-| 44 | `calcBranchWeight` | `treeOperation.c` |
-| 39 | `weightFromABranch` | `treeOperation.c` |
-| 26 | `msshrinklocalhom_fast_half` | `tddis.c` |
-| 22 | `substitution_hosei` | `mltaln9.c` |
-| 15 | `plainscore` | `mltaln9.c` |
-| 13 | `node_eff` | `tddis.c` |
-| 11 | `score_calc0` | `mltaln9.c` |
-| ? | `conjuctionfortbfast`, `weightimportance4` | not located by the scan |
+| `treeCnv`, `calcBranchWeight`, `distFromABranch`(`_rec`), `weightFromABranch`(`_rec`), `OneClusterAndTheOther_fast` | yes — `treeop.rs` | plus the support cast the scan missed: `isLeaf`, `searchParent`, `syntheticLength`, `negativeMember2`, `checkMinusLength`, `calcW`, `stopolInit`, `IntExistsInVec` |
+| `msshrinklocalhom_fast_half` | already was | it is `fastshrinklocalhom_half` under another name — same body, one iterating by index and one by pointer. `localhom::fastshrinklocalhom_half` covers it |
+| `fastconjuction_noname` | already was | `treebase::fastconjuction_noname` |
 
-`athread` (925 lines) is skipped **only** because this port is single-threaded
-and the script passes `-C 0`. A future `-C n` needs it or an equivalent.
+Never entered, on any of the three strategies: `SSPscore`, `classifypairs`,
+`nodeFromABranch`, `countnode_int`, `node_eff`, `plainscore`,
+`substitution_hosei`, `score_calc0`, `msshrinklocalhom_fast_target`,
+`fastconjuction_noname_kozo`. They are the `score_check`, `--target` and kozo
+paths. **Refuse them**, the way `-T` and `partA__align_variousdist` are refused;
+do not port on the strength of a source scan.
+
+Two were dead outright: `weightimportance4` has no definition anywhere in the
+tree (an `extern` in `functions.h` and commented-out call sites), and
+`conjuctionfortbfast`'s live counterpart in the sequential branch is
+`fastconjuction_noname`, which the port already had.
+
+`athread` (925 lines) stays out of scope, and the profile settles why rather
+than assuming it: at `-C 0` the callgrind output contains
+`TreeDependentIteration` and no `athread` at all. A future `-C n` needs it.
+
+What remains for this function is its own body: the iteration loop, the
+`score_check` accounting, the `imp` initialisation per branch, the dispatch
+between `Falign` and `Falign_localhom`, the gap-map handling and the
+convergence test.
 
 ### `dvtditr.c`'s `main`
 
@@ -293,8 +311,8 @@ replayed in isolation for benchmarking or diffing.
 
 1. ~~**`Falign_localhom`**~~ — done, and it did what it was ordered first for:
    the DP is verified.
-2. **The 666 lines of small dependencies** — independent, unit-testable, and
-   they gate everything after.
+2. ~~**The small dependencies**~~ — done. Six functions ran, not sixteen; the
+   rest are refused. See the table above.
 3. **`TreeDependentIteration`'s sequential branch.**
 4. **`dvtditr.c`'s `main`**, then swap in and run §3's ladder.
 
@@ -324,6 +342,8 @@ of them from assuming instead of checking.
 | MAFFT's `arguments()` option loop | `cargs.rs` |
 | `partA__align`, `Atracking`, `Atracking_localhom`, `part_imp_*` | `partalign.rs` |
 | `Falign_localhom` (`kobetsubunkatsu == 1` only) | `falign::falign_localhom` |
+| `treeCnv`, `calcBranchWeight`, `distFromABranch`, `weightFromABranch`, `OneClusterAndTheOther_fast`, and their helpers | `treeop.rs` |
+| `msshrinklocalhom_fast_half` | `localhom::fastshrinklocalhom_half` — **same function, different name** |
 
 Two traps in that table, both found the hard way:
 

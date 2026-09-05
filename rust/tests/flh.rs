@@ -18,6 +18,25 @@ use std::path::PathBuf;
 /// Directory holding the argument vectors and the expected outputs.
 const GOLDEN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/flh");
 
+/// The C's answers for a run of calls made in one process, replayed here
+/// through one state object.
+///
+/// Separate from the per-case fixtures because it pins something they cannot:
+/// what each call leaves in the scratch buffers for the next one to read.
+#[test]
+fn falign_localhom_matches_the_c_across_a_call_sequence() {
+    let dir = PathBuf::from(GOLDEN);
+    let raw = std::fs::read_to_string(dir.join("sequence.cases")).unwrap();
+    let expected = std::fs::read_to_string(dir.join("sequence.expected")).unwrap();
+    let cases: Vec<Vec<String>> = raw
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.split('\t').map(String::from).collect())
+        .collect();
+    assert!(cases.len() >= 20, "only {} calls in the sequence", cases.len());
+    assert_eq!(flhcase::run_sequence(&cases), expected);
+}
+
 #[test]
 fn falign_localhom_matches_the_c_on_every_fixture() {
     let dir = PathBuf::from(GOLDEN);

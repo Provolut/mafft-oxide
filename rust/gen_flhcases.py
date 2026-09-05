@@ -19,7 +19,7 @@ import sys
 AA = "ACDEFGHIKLMNPQRSTVWY"
 
 
-def rows(rng, n, length, gap_rate, sim):
+def rows_of(rng, n, length, gap_rate, sim):
     """`n` rows of one alignment: a common backbone, mutated, with gap columns."""
     base = [rng.choice(AA) for _ in range(length)]
     out = []
@@ -54,8 +54,8 @@ def chains(rng, n1, n2, length, density):
 
 def case(rng, n1, n2, length, gap_rate, sim, density, outgap, legacy,
          fthr=2.7, fftwin=20, fftthr=50, swap=False):
-    g1 = rows(rng, n1, length, gap_rate, sim)
-    g2 = rows(rng, n2, length, gap_rate, sim)
+    g1 = rows_of(rng, n1, length, gap_rate, sim)
+    g2 = rows_of(rng, n2, length, gap_rate, sim)
     e1 = [rng.uniform(0.05, 1.0) for _ in range(n1)]
     e2 = [rng.uniform(0.05, 1.0) for _ in range(n2)]
     # `fillimp` reads a constraint's two halves the other way round when the
@@ -78,7 +78,41 @@ def case(rng, n1, n2, length, gap_rate, sim, density, outgap, legacy,
     return "\t".join(f)
 
 
+def sequence(rng, steps, n1, n2, length):
+    """A run of calls the way `tditeration` makes them.
+
+    Same `njob`, same alignment width, same weights every time -- only the
+    split and the rows move, because the refinement loop walks branch by branch
+    over one alignment it keeps editing. That is what makes the C's persistent
+    buffers reachable: each call lands on what the previous one left.
+    """
+    rows = rows_of(rng, n1 + n2, length, 0.08, 0.8)
+    e = [rng.uniform(0.05, 1.0) for _ in range(n1 + n2)]
+    out = []
+    for step in range(steps):
+        # Rotate which members form group 1, as walking the tree does.
+        order = rows[step % len(rows):] + rows[: step % len(rows)]
+        g1, g2 = order[:n1], order[n1:]
+        e1, e2 = e[:n1], e[n1:]
+        o1 = list(range(n1))
+        o2 = list(range(n1, n1 + n2))
+        lh = chains(rng, n1, n2, length, 0.6)
+        f = ["%d" % n1] + g1 + ["%.17g" % v for v in e1] + ["%d" % v for v in o1]
+        f += ["%d" % n2] + g2 + ["%.17g" % v for v in e2] + ["%d" % v for v in o2]
+        f += ["1", "0", "%.17g" % 2.7, "20", "50", "%d" % len(lh)]
+        for (i, j, s1, e1_, s2, e2_, opt, imp) in lh:
+            f += ["%d" % i, "%d" % j, "%d" % s1, "%d" % e1_, "%d" % s2, "%d" % e2_,
+                  "%.17g" % opt, "%.17g" % imp]
+        out.append("\t".join(f))
+    return out
+
+
 def main():
+    if "--sequence" in sys.argv:
+        rng = random.Random(4242)
+        for line in sequence(rng, 60, 2, 6, 90):
+            print(line)
+        return
     rng = random.Random(20260905)
     out = []
     # The shapes tditeration produces: one member against the rest, and even

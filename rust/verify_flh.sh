@@ -68,9 +68,34 @@ while IFS= read -r line; do
   fi
 done < "$work/cases.txt"
 
+# Single calls say nothing about the buffers a call leaves behind, and a real
+# run makes hundreds of calls in one process. This stage replays a coherent run
+# -- constant njob and width, as tditeration keeps them -- through one process
+# on the C side and one state object on the port's.
+python3 "$here/gen_flhcases.py" --sequence > "$work/seq.txt"
+seqn=$(wc -l < "$work/seq.txt")
+if [ "$seqn" -lt 20 ]; then echo "verify_flh: sequence has only $seqn calls; refusing" 1>&2; exit 2; fi
+"$work/flhharness" --sequence < "$work/seq.txt" > "$work/seq_c.txt" 2>/dev/null || {
+  echo "verify_flh: the C failed on the sequence" 1>&2; exit 1; }
+if [ ! -s "$work/seq_c.txt" ]; then
+  echo "verify_flh: the C printed nothing for the sequence" 1>&2; exit 1; fi
 if [ $REGEN -eq 1 ]; then
-  echo "falign_localhom: wrote $pass fixtures to $golden"
+  cp "$work/seq.txt" "$golden/sequence.cases"
+  cp "$work/seq_c.txt" "$golden/sequence.expected"
+  seqres="wrote $seqn-call sequence"
 else
-  echo "falign_localhom: pass=$pass fail=$fail"
+  "$RREF" --sequence < "$work/seq.txt" > "$work/seq_r.txt" 2>/dev/null || {
+    echo "verify_flh: the port failed on the sequence" 1>&2; exit 1; }
+  if cmp -s "$work/seq_c.txt" "$work/seq_r.txt"; then
+    seqres="sequence of $seqn calls identical"
+  else
+    seqres="SEQUENCE DIFFERS"; fail=$((fail+1))
+  fi
+fi
+
+if [ $REGEN -eq 1 ]; then
+  echo "falign_localhom: wrote $pass fixtures to $golden, $seqres"
+else
+  echo "falign_localhom: pass=$pass fail=$fail, $seqres"
 fi
 if [ $fail -ne 0 ]; then printf 'FAILED:%b\n' "$failed" | head -20; exit 1; fi
