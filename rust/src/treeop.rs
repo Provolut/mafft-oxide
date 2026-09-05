@@ -593,3 +593,143 @@ pub fn counteff_simple(nseq: usize, topol: &Topol, len: &[[f64; 2]]) -> Vec<f64>
     let total: f64 = rootnode.iter().sum();
     rootnode.iter().map(|v| v / total).collect()
 }
+
+/// Expand a memsave `Tree` into the full member lists `tditeration` needs.
+///
+/// `dvtditr` builds its tree with `fixed_musclesupg_double_treeout`, which
+/// records every member of both sides at every step;
+/// `tree::upgma_treeout` ports the *memsave* variant, which records each side's
+/// representative and a `Treedep` saying which earlier step it came from. The
+/// two C functions are separate copies of one algorithm, and they agree: on 40
+/// staged distance matrices — 3 to 36 sequences, with ties, zeros, near-equal
+/// and sub-micro distances — every branch length matched bit for bit, and the
+/// full member lists were exactly this reconstruction. So the port keeps one
+/// tree builder and expands its output here, rather than carrying a second
+/// 380-line copy.
+///
+/// Order matters and is the C's: a step's list is its first child's members
+/// followed by its second's, each in the order that child recorded them.
+///
+/// Args:
+///     nseq: Number of sequences.
+///     tree: The memsave tree.
+///
+/// Returns:
+///     `nseq` rows, the last a placeholder, each side `-1`-terminated.
+pub fn expand_topol(nseq: usize, tree: &crate::tree::Tree) -> Topol {
+    let mut memhist: Vec<Vec<i32>> = vec![Vec::new(); nseq.saturating_sub(1)];
+    let mut out: Topol = Vec::with_capacity(nseq);
+    for i in 0..nseq - 1 {
+        let m0: Vec<i32> = if tree.dep[i].child0 == -1 {
+            vec![tree.topol[i][0]]
+        } else {
+            memhist[tree.dep[i].child0 as usize].clone()
+        };
+        let m1: Vec<i32> = if tree.dep[i].child1 == -1 {
+            vec![tree.topol[i][1]]
+        } else {
+            memhist[tree.dep[i].child1 as usize].clone()
+        };
+        let mut merged = m0.clone();
+        merged.extend_from_slice(&m1);
+        memhist[i] = merged;
+
+        let mut s0 = m0;
+        s0.push(-1);
+        let mut s1 = m1;
+        s1.push(-1);
+        out.push([s0, s1]);
+    }
+    // The C allocates `nseq` rows and leaves the last unused.
+    out.push([vec![-1], vec![-1]]);
+    out
+}
+
+/// `SEGMENTSIZE` from `fftFunctions.c`, as `searchAnchors` uses it.
+const SEGMENTSIZE: i32 = 150;
+
+/// `searchAnchors()` (`mltaln9.c`): where an alignment may be cut in two.
+///
+/// `dvtditr` refines a long alignment in segments rather than whole, and this
+/// picks the cut points: a sliding window over the column-wise mean pairwise
+/// score, and every run of columns scoring above the threshold becomes a
+/// segment whose centre is a cut. Conserved blocks are what it finds, which is
+/// the point — cutting through one would be cutting through the part the
+/// alignment is most sure about.
+///
+/// Only reached unconstrained and with segmentation on: `-l` (which every
+/// constrained call passes) turns it off.
+///
+/// Args:
+///     cn: Scoring constants, for `n_dis` and the alphabet map.
+///     seq: The alignment.
+///     div_win_size: `divWinSize`, 20.
+///     div_threshold: `divThreshold`, 65.
+///
+/// Returns:
+///     Each segment's centre column, in order.
+pub fn search_anchors(
+    cn: &crate::constants::Constants,
+    seq: &[Vec<u8>],
+    div_win_size: i32,
+    div_threshold: i32,
+) -> Vec<i32> {
+    let nseq = seq.len();
+    let len = seq[0].len();
+    // The C computes the threshold in ints and then divides, so the truncation
+    // is part of the answer.
+    let threshold = f64::from(div_threshold) / 100.0 * 600.0 * f64::from(div_win_size);
+
+    let mut stra = vec![0.0f64; len];
+    for (i, v) in stra.iter_mut().enumerate() {
+        let mut acc = 0.0f64;
+        for k in 0..nseq - 1 {
+            for j in k + 1..nseq {
+                let a = cn.amino_n[seq[k][i] as usize] as usize;
+                let b = cn.amino_n[seq[j][i] as usize] as usize;
+                acc += f64::from(cn.n_dis[a][b]);
+            }
+        }
+        *v = acc / (nseq as f64 * (nseq as f64 - 1.0) / 2.0);
+    }
+
+    let mut centers = Vec::new();
+    let mut status = false;
+    let mut cumscore = 0.0f64;
+    let mut length = 0i32;
+    let mut start = 0i32;
+    let mut score: f64 = stra.iter().take(div_win_size as usize).sum();
+
+    let mut i = 1i32;
+    while i < len as i32 - div_win_size {
+        score = score - stra[(i - 1) as usize] + stra[(i + div_win_size - 1) as usize];
+        if score > threshold {
+            if !status {
+                status = true;
+                start = i;
+                length = 0;
+                cumscore = 0.0;
+            }
+            length += 1;
+            cumscore += score;
+        }
+        // Not an `else`: a run longer than SEGMENTSIZE is closed on the same
+        // column that extended it.
+        if score <= threshold || length > SEGMENTSIZE {
+            if status {
+                centers.push((start + i + div_win_size) / 2);
+                length = 0;
+                cumscore = 0.0;
+                status = false;
+            }
+        }
+        i += 1;
+    }
+    let _ = cumscore;
+    if status {
+        // `i` here is the loop counter's exit value, as in the C -- the first
+        // column the loop did not process, not the last one it did.
+        centers.push((start + i + div_win_size) / 2);
+    }
+    centers
+}

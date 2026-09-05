@@ -10,6 +10,10 @@ name = "mafft_rs"
 path = "src/lib.rs"
 
 [[bin]]
+name = "dvtditr-rs"
+path = "src/bin/dvtditr.rs"
+
+[[bin]]
 name = "disttbfast-rs"
 path = "src/bin/disttbfast.rs"
 

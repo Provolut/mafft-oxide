@@ -289,6 +289,10 @@ pub fn tree_dependent_iteration(
                         &mut fftlog,
                         p.newgapstr,
                         p.alg,
+                        // `dvtditr` sets `kobetsubunkatsu`, which turns off the
+                        // FFT anchoring inside `Falign` exactly as it does in
+                        // `Falign_localhom`.
+                        true,
                     );
                 }
 

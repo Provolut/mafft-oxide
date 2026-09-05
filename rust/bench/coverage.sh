@@ -56,7 +56,7 @@ for o in $objects \
          target/debug/disttbfast-rs target/debug/tbfast-rs \
          target/debug/countlen-rs target/debug/version-rs \
          target/debug/replaceu-rs target/debug/restoreu-rs target/debug/f2cl-rs \
-         target/debug/dndpre-rs; do
+         target/debug/dndpre-rs target/debug/dvtditr-rs; do
   args+=(--object "$o")
 done
 

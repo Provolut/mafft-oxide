@@ -502,6 +502,12 @@ pub fn falign(
     // and every block through `MSalignmm` with no 1x1 shortcut. `'a'` stays
     // in `Falign` but sends every block to `Aalign`, also with no shortcut.
     alg: u8,
+    // `kobetsubunkatsu`, which only `dvtditr` sets. It turns the FFT half of
+    // this function off: one candidate lag of zero, anchors straight from
+    // `alignable_reagion`, no `blockAlign2`, and every block compacted before
+    // it is aligned (`fftkeika` is 1 in `dvtditr` and 0 everywhere else, so the
+    // two conditions the C tests separately are one condition here).
+    kobetsubunkatsu: bool,
 ) -> f64 {
     let memsave = alg == b'M';
     let nkouho = if memsave { NKOUHO_LONG } else { NKOUHO };
@@ -518,7 +524,7 @@ pub fn falign(
     }
     let nlen2 = nlen / 2;
 
-    if fs.n_alloc < nlen {
+    if !kobetsubunkatsu && fs.n_alloc < nlen {
         fs.naiseki_no_wa = vec![Cpx::default(); nlen];
         fs.naiseki = vec![Cpx::default(); nlen];
         fs.seq_vector1 = vec![Cpx::default(); nlen + 1];
@@ -528,6 +534,9 @@ pub fn falign(
     }
 
     // --- build the two signals ---
+    // Skipped entirely when `kobetsubunkatsu`: the C allocates none of these
+    // and asks for one candidate lag of zero.
+    if !kobetsubunkatsu {
     // `n20or4or2` is 1 in this function for both sequence types, so there is a
     // single vector each side. For protein it carries polarity in the real part
     // and volume in the imaginary one; for nucleotides the branch taken is
@@ -590,6 +599,13 @@ pub fn falign(
     }
 
     get_kouho(&mut fs.kouho, nkouho, &mut fs.soukan, nlen);
+    }
+    let nkouho = if kobetsubunkatsu {
+        fs.kouho[0] = 0;
+        1
+    } else {
+        nkouho
+    };
 
     // --- collect anchors at each candidate lag ---
     let mut count = 0usize;
@@ -707,29 +723,41 @@ pub fn falign(
         fs.segment2[s].number = i as i32;
     }
 
-    let mut crossscore = vec![vec![0.0f64; count + 2]; count + 2];
-    for i in 0..count {
-        crossscore[fs.segment1[i].number as usize + 1][fs.segment2[i].number as usize + 1] =
-            fs.segment1[i].score;
-        fs.cut1[i + 1] = fs.segment1[sorted1[i]].center;
-        fs.cut2[i + 1] = fs.segment2[sorted2[i]].center;
-    }
-    crossscore[0][0] = 10000000.0;
-    fs.cut1[0] = 0;
-    fs.cut2[0] = 0;
-    crossscore[count + 1][count + 1] = 10000000.0;
-    fs.cut1[count + 1] = len1 as i32;
-    fs.cut2[count + 1] = len2 as i32;
-    count += 2;
+    if kobetsubunkatsu {
+        for i in 0..count {
+            fs.cut1[i + 1] = fs.segment1[sorted1[i]].center;
+            fs.cut2[i + 1] = fs.segment2[sorted2[i]].center;
+        }
+        fs.cut1[0] = 0;
+        fs.cut2[0] = 0;
+        fs.cut1[count + 1] = len1 as i32;
+        fs.cut2[count + 1] = len2 as i32;
+        count += 2;
+    } else {
+        let mut crossscore = vec![vec![0.0f64; count + 2]; count + 2];
+        for i in 0..count {
+            crossscore[fs.segment1[i].number as usize + 1][fs.segment2[i].number as usize + 1] =
+                fs.segment1[i].score;
+            fs.cut1[i + 1] = fs.segment1[sorted1[i]].center;
+            fs.cut2[i + 1] = fs.segment2[sorted2[i]].center;
+        }
+        crossscore[0][0] = 10000000.0;
+        fs.cut1[0] = 0;
+        fs.cut2[0] = 0;
+        crossscore[count + 1][count + 1] = 10000000.0;
+        fs.cut1[count + 1] = len1 as i32;
+        fs.cut2[count + 1] = len2 as i32;
+        count += 2;
 
-    block_align2(
-        &mut fs.block,
-        cn.penalty,
-        &mut fs.cut1,
-        &mut fs.cut2,
-        &crossscore,
-        &mut count,
-    );
+        block_align2(
+            &mut fs.block,
+            cn.penalty,
+            &mut fs.cut1,
+            &mut fs.cut2,
+            &crossscore,
+            &mut count,
+        );
+    }
 
     // --- align each block between consecutive cuts ---
     let mut result1: Vec<Vec<u8>> = vec![Vec::new(); clus1];
@@ -770,6 +798,12 @@ pub fn falign(
             .iter()
             .map(|s| s[fs.cut2[i] as usize..fs.cut2[i + 1] as usize].to_vec())
             .collect();
+        if kobetsubunkatsu {
+            // `kobetsubunkatsu && fftkeika`, and `fftkeika` is 1 exactly when
+            // `dvtditr` is the caller.
+            crate::addfunctions::commongappick(&mut block1);
+            crate::addfunctions::commongappick(&mut block2);
+        }
 
         if memsave {
             let (sc, _) = crate::msalign::msalignmm(

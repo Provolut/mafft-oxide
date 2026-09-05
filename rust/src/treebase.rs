@@ -309,6 +309,9 @@ pub fn treebase(
                     &mut fftlog[m1],
                     newgapstr,
                     alg,
+                    // `tbfast` leaves `kobetsubunkatsu` at 0; only `dvtditr`
+                    // sets it.
+                    false,
                 );
             } else if alg == b'M' {
                 // `case( 'M' )` has no `clus1 == 1 && clus2 == 1` shortcut --
@@ -533,6 +536,7 @@ pub fn dooneiteration(
                 // `alg` cannot have been flipped by `treebase` because the
                 // two do not share it here.
                 b'A',
+                false,
             );
         } else {
             fftlog[m1] = 0;

@@ -12,20 +12,34 @@ baseline; its numbers are not this goal's to move.
 
 ## 1. Status
 
-Nine binaries can run under `mafft --auto`. **Eight are Rust and verified
-byte-identical.** The ninth, `dvtditr`, is the whole of what remains.
+**Reached.** Nine binaries can run under `mafft --auto`, and all nine are Rust
+and verified byte-identical. A traced `mafft --auto` on `test/sample` executes
+`countlen`, `version`, `f2cl`, `tbfast` and `dvtditr` and nothing else, all of
+them the Rust builds, and its output matches the all-C run byte for byte.
+
+One strategy outside `--auto` still needs the C: `--allowshift`, which passes
+`dvtditr -s 0.8` and so selects the specificity scoring path
+(`scoringmatrices`, `classifypairs`, `smalldistmtx`,
+`partA__align_variousdist`). `dvtditr-rs` refuses it by name. See §5.
 
 | binary | state |
 |---|---|
 | `disttbfast`, `tbfast` | Rust, byte-identical (pre-existing) |
 | `countlen`, `version`, `replaceu`, `restoreu`, `f2cl`, `dndpre` | Rust, byte-identical |
-| **`dvtditr`** | **not done** — its DP, block splitter and refinement loop are; its `main` is not. See §5 |
+| `dvtditr` | Rust, byte-identical — except `--allowshift`, refused (§5) |
 | `splittbfast` | **out of scope** — parttree bracket only, ≥200000 sequences |
 
 Verified with eight Rust binaries in place: the 840-payload ProteinGym corpus
 byte-identical through `mafft --auto`, upstream's own suite, and provolut-ml's
 ESCOTT scorer SHA-256-identical on two assays. Speed 0.989× (51×393 windows)
 and 0.981× (11×448) against the all-C build.
+
+With `dvtditr-rs` added, `verify_dvtditr.sh` (16 staged runs), `verify_e2e.sh`
+(56 wrapper strategies, 2 refused) and upstream's `test/script` (8 of the 9
+runnable cases; the ninth is `--allowshift`) are green. **The ProteinGym corpus
+and the ESCOTT check have not been re-run against `dvtditr-rs`** — they are
+§3's top rung and the reason it exists; run them before calling this done for
+provolut-ml's purposes.
 
 `f2cl` implements the **FASTA path only**; clustal and phylip are refused
 rather than approximated. `--clustalout` / `--phylipout` still need the C.
@@ -86,7 +100,11 @@ addition; only these can.**
    refreshes the fixtures `cargo test` replays. **This is what proved the DP**,
    and it is where the next slice should be proved too: staging one function
    against the C costs an hour and finds what no unit test can.
-3. `./verify.sh`, `./verify_tbfast.sh`, `./verify_e2e.sh` — the aligners,
+3. `./verify_dvtditr.sh ../binaries target/release/dvtditr-rs` — the whole
+   binary, staged out of a real `mafft` run by the §9 wrapper method and
+   replayed against both. Minutes, not an hour, and it is the first thing to
+   run after touching anything the refinement path reaches.
+   `./verify.sh`, `./verify_tbfast.sh`, `./verify_e2e.sh` — the aligners,
    against a built `core/`. About an hour. **This is what decides `dvtditr`.**
 4. `./bench/coverage.sh` — 85% floor.
 5. The ProteinGym corpus and ESCOTT, below.
@@ -179,6 +197,17 @@ limit is nine times the longest sequence and nothing approaches it, and the
 synthetic cases that did were random noise at 25% gaps. Close it when
 `dvtditr-rs` lands, where `alloclen` is already in hand.
 
+### A global the harness has to set, or it stages a configuration nobody runs
+
+`Falign` compacts each block before aligning it when `kobetsubunkatsu &&
+fftkeika`. `dvtditr` sets **both** — `fftkeika = 1` is on line 51 of
+`dvtditr.c`, and every other binary leaves it 0 — so the two conditions are one
+condition in practice. A harness that sets `kobetsubunkatsu` and forgets
+`fftkeika` stages a `Falign` no caller has: 52 of 126 refinement runs then
+"failed" against a port that was right, and the fix was one line in the C
+harness, not in the port. When a differential turns red after a change that
+made the port *more* faithful, suspect the staging first.
+
 ### An input with no bit-exact answer
 
 `getnumlen_nogap_countn` reads an uninitialised `nN` when a record has an empty
@@ -216,7 +245,7 @@ actually decides the cost — see §7.
 | `Falign_localhom` | 223 Rust (875 C) | **done, bit-verified**, 98/98 |
 | the branch-weighting family (`treeop.rs`) | 470 Rust | **done, bit-verified**, 96/96 |
 | `TreeDependentIteration` sequential branch | 350 Rust (1188 C) | **done, bit-verified**, 126/126 |
-| `dvtditr.c` `main` reached path | ~500 C | not started |
+| `dvtditr.c` `main` reached path | 300 Rust (~500 C) | **done**, 16/16 staged runs identical |
 
 ### `partA__align` — verified
 
@@ -320,6 +349,32 @@ Not "mostly argv" — it reads the `hat3` localhom table
 handles `--subalignment` tables and `_focus_` targets, then calls
 `TreeDependentIteration`.
 
+### `dvtditr-rs`
+
+`src/bin/dvtditr.rs`, 300 lines: `dvtditr`'s own `arguments()`, the `pre` /
+`hat2` / `hat3` reads, the guide tree, `order`, the segment loop and the write
+back to `pre`.
+
+Two things it does not do the way the C's `main` does, both measured rather
+than assumed:
+
+- **The tree builder is not ported twice.** `dvtditr` calls
+  `fixed_musclesupg_double_treeout`, a full-matrix copy of the memsave UPGMA
+  `tree::upgma_treeout` already ports. Running both C functions on 40 staged
+  distance matrices — 3 to 36 sequences, with ties, zeros, near-equal and
+  sub-micro distances — gives **bit-identical branch lengths in every case**,
+  and the full member lists are exactly the `Treedep` reconstruction
+  `treeop::expand_topol` performs. So the port keeps one builder.
+- **`searchAnchors` is ported** (`treeop::search_anchors`): FFT-NS-i runs
+  unconstrained with segmentation on, and then the refinement really does work
+  segment by segment. Only `-l` — which every constrained call passes — turns
+  it off.
+
+**Refused, by name, at startup:** `-s` non-zero (the specificity path;
+`--allowshift` is the strategy that reaches it), `-C n`, `-K n` (`--add`, which
+needs the `skipthisbranch` computation), a `hat3` carrying `korh == 'k'`
+structural constraints, and any option letter `dvtditr` does not define.
+
 ### The argument vectors, captured from a real run
 
 ```
@@ -342,7 +397,8 @@ replayed in isolation for benchmarking or diffing.
 2. ~~**The small dependencies**~~ — done. Six functions ran, not sixteen; the
    rest are refused. See the table above.
 3. ~~**`TreeDependentIteration`'s sequential branch.**~~ — done.
-4. **`dvtditr.c`'s `main`**, then swap in and run §3's ladder.
+4. ~~**`dvtditr.c`'s `main`**, then swap in and run §3's ladder.~~ — done,
+   except the ProteinGym and ESCOTT rungs (§1).
 
 Do not ship a partial DP or a partial driver. Every slice above except the DP
 loop and the refinement loop can be unit-tested; those two land whole.
@@ -374,6 +430,10 @@ of them from assuming instead of checking.
 | `msshrinklocalhom_fast_half` | `localhom::fastshrinklocalhom_half` — **same function, different name** |
 | `TreeDependentIteration` (sequential) | `tditeration::tree_dependent_iteration` |
 | `counteff_simple` (the full-`topol` one) | `treeop::counteff_simple` — **not** `tree.rs`'s, which is the memsave form and clamps negative lengths |
+| `fixed_musclesupg_double_treeout` | `tree::upgma_treeout` + `treeop::expand_topol` — the two C builders agree bit for bit (§5) |
+| `searchAnchors` | `treeop::search_anchors` |
+| `readhat2_pointer`, `input_new`, `readlocalhomtable2_half` | `io::read_hat2`, `io::read_localhomtable2_half` |
+| `dvtditr.c` `main` + its `arguments()` | `src/bin/dvtditr.rs` |
 
 Two traps in that table, both found the hard way:
 
