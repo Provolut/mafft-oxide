@@ -12,8 +12,34 @@
 //! makes `A__align`'s summation order subtle, and its absence here means the
 //! profile is rebuilt per call, with nothing to keep consistent across calls.
 //!
-//! This module currently holds the constraint ("localhom") half. The DP itself
-//! is not ported yet, so `dvtditr` still runs the C.
+//! # STATUS: NOT BIT-VERIFIED. Treat everything here as a draft.
+//!
+//! This module holds `partA__align`, both of `partSalignmm.c`'s tracebacks, and
+//! the constraint ("localhom") half. All of it compiles and the tests below
+//! pass — but **nothing has ever executed it against the C**, because
+//! `dvtditr-rs` does not exist yet and no other binary calls it. It is
+//! unreachable from every shipped binary, so it cannot currently affect any
+//! output; it is groundwork for `dvtditr`.
+//!
+//! What the tests here do and do not establish:
+//!
+//! * They **do** show the DP terminates, preserves every residue, emits
+//!   equal-width rows, and gives the same answer when its state is reused
+//!   (which would catch stale scratch buffers).
+//! * They **do not** show bit-exactness, and no unit test can. A single
+//!   reordered addition or a flipped tie comparison changes an alignment while
+//!   leaving its score identical, and nothing in `cargo test` would notice.
+//!
+//! What will decide it, in order: `dvtditr-rs` calling this so it runs at all;
+//! then `verify_tbfast.sh` and `verify_e2e.sh` against a built `core/`; then
+//! the ProteinGym corpus through `mafft --auto`, byte-compared; then
+//! provolut-ml's ESCOTT scorer, SHA-256 compared. `GOAL-C-FREE.md` §3 has the
+//! commands.
+//!
+//! **The likeliest place for this to be wrong** is the pair of gap-open tie
+//! comparisons in `part_a_align`, which use `>` where `align.rs`'s `A__align`
+//! uses `>=` — deliberately, because the two C files disagree there. See the
+//! note on that function, and `GOAL-C-FREE.md` §4.
 
 use crate::localhom::{fillimp, LocalHom};
 
