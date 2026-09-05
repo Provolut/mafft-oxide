@@ -516,15 +516,21 @@ Two traps in that table, both found the hard way:
 
 ## 9. Method
 
-**`grep` lies about five files.** `constants.c`, `io.c`, `Lalign11.c`,
-`Lalignmm.c` and `MSalignmm.c` are ISO-8859, not UTF-8, so GNU grep in a UTF-8
-locale treats them as binary and reports *nothing* — not a match, not a count,
-not a "binary file matches" line. A "this function is called nowhere" or "this
-macro is used nowhere" conclusion drawn without `grep -a` (or `LC_ALL=C`) is
-therefore worthless, and this cost an hour here: `FFT_WINSIZE_P` looked unused,
-which made `constants()`'s ordinary default assignment look like memory
-corruption until a watchpoint pointed straight at `constants.c`. Use `grep -a`
-on this tree.
+**`grep` used to lie about eight files, and will again after an upstream
+import.** Upstream ships `constants.c`, `io.c`, `mltaln9.c`, `Lalign11.c`,
+`Lalignmm.c` and `MSalignmm.c` (plus one file each under `MPI/` and
+`extensions/`) as EUC-JP, and GNU grep in a UTF-8 locale treats such a file as
+binary and reports *nothing* for it — not a match, not a count, not a "binary
+file matches" line. A "this function is called nowhere" conclusion drawn over
+those files was therefore worthless, and it cost an hour here: `FFT_WINSIZE_P`
+looked unused, which made `constants()`'s ordinary default assignment look like
+memory corruption until a watchpoint pointed straight at `constants.c`.
+
+They are converted now and `pre-push` refuses a source that is not valid UTF-8,
+so ordinary `grep` is trustworthy again. **After importing a new upstream
+release, run `scripts/check-encoding.sh --fix`** — the release brings the EUC-JP
+files back, and until it is run every "used nowhere" claim over them is
+unfounded.
 
 Wrap, trace, then port. `MAFFT_BINARIES` pointed at logging wrappers gives the
 exact binary set and argument vector a real run uses; replaying that vector
