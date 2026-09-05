@@ -261,6 +261,81 @@ mod tests {
     }
 
     #[test]
+    fn the_localhom_walk_matches_the_plain_one_table_for_table() {
+        // Sharing the walk is only safe if adding the constraint term does not
+        // disturb it. Same inputs, both entry points, tables must be identical.
+        for v in -3i32..=3 {
+            let mut a = ijp_of(3, 3);
+            a[3][3] = v;
+            let plain = atracking(&[0.0; 3], &[0.0; 3], 3, 3, &mut a, true);
+
+            let mut b = ijp_of(3, 3);
+            b[3][3] = v;
+            let imp = seeded(8, 8);
+            let t = ImpTrack {
+                imp: &imp,
+                gapmap1: &[0, 1, 2, 3],
+                gapmap2: &[0, 1, 2, 3],
+                start1: 0,
+                start2: 0,
+            };
+            let (with_imp, _) = atracking_localhom(&[0.0; 3], &[0.0; 3], 3, 3, &mut b, true, &t);
+
+            assert_eq!(plain.gt1, with_imp.gt1, "entry value {v}");
+            assert_eq!(plain.gt2, with_imp.gt2, "entry value {v}");
+        }
+    }
+
+    #[test]
+    fn the_constraint_score_sums_the_cells_the_path_passes_through() {
+        // Straight diagonal on a 3x3: the walk visits (2,2) then (1,1), and the
+        // entry corner (3,3) is excluded by the C's `iin != lgth1` guard. With
+        // the seeded matrix those are 22 and 11.
+        let mut ijp = ijp_of(3, 3);
+        let imp = seeded(8, 8);
+        let t = ImpTrack {
+            imp: &imp,
+            gapmap1: &[0, 1, 2, 3],
+            gapmap2: &[0, 1, 2, 3],
+            start1: 0,
+            start2: 0,
+        };
+        let (_, score) = atracking_localhom(&[0.0; 3], &[0.0; 3], 3, 3, &mut ijp, true, &t);
+        assert_eq!(score, 22.0 + 11.0);
+    }
+
+    #[test]
+    fn the_window_offsets_shift_which_cells_are_read() {
+        // `start1` / `start2` are what make this the *partial* aligner: the same
+        // path reads a different part of the constraint matrix.
+        let imp = seeded(8, 8);
+        let mut plain = ijp_of(3, 3);
+        let t0 = ImpTrack {
+            imp: &imp,
+            gapmap1: &[0, 1, 2, 3],
+            gapmap2: &[0, 1, 2, 3],
+            start1: 0,
+            start2: 0,
+        };
+        let (_, at_origin) = atracking_localhom(&[0.0; 3], &[0.0; 3], 3, 3, &mut plain, true, &t0);
+
+        let mut shifted = ijp_of(3, 3);
+        let t1 = ImpTrack {
+            imp: &imp,
+            gapmap1: &[0, 1, 2, 3],
+            gapmap2: &[0, 1, 2, 3],
+            start1: 1,
+            start2: 1,
+        };
+        let (_, at_offset) =
+            atracking_localhom(&[0.0; 3], &[0.0; 3], 3, 3, &mut shifted, true, &t1);
+
+        // Each cell moves one row and one column on: 22 -> 33, 11 -> 22.
+        assert_eq!(at_origin, 22.0 + 11.0);
+        assert_eq!(at_offset, 33.0 + 22.0);
+    }
+
+    #[test]
     fn the_matrix_grows_only_when_a_window_no_longer_fits() {
         let mut p = PartImp::new();
         p.alloclen = 10;
@@ -284,21 +359,32 @@ pub struct PartTrack {
     pub gt2: Vec<u8>,
 }
 
-/// `Atracking()` from `partSalignmm.c`.
+/// Where the constraint score comes from, for the `localhom` traceback.
 ///
-/// The **walk** is the same algorithm as `align.rs`'s `atracking`: identical
-/// branch structure on the sign of `ijp`, identical gap-run loops, identical
-/// "jump straight off the front" terminal case. What differs, and why this is
-/// not a call into that one:
+/// Bundled because the five values are only ever used together, at one line of
+/// the walk, and threading them as separate parameters would put the shared
+/// walk over any reasonable argument count.
+pub struct ImpTrack<'a> {
+    pub imp: &'a PartImp,
+    pub gapmap1: &'a [i32],
+    pub gapmap2: &'a [i32],
+    pub start1: usize,
+    pub start2: usize,
+}
+
+/// The traceback walk shared by `Atracking` and `Atracking_localhom`.
 ///
-/// * **the entry cell.** `Salignmm`'s picks it under `tailgp`, starting from
-///   `lasthorizontalw[lgth2-1] - 1.0`; this one picks it under `outgap`,
-///   starting from `lastverticalw[0]` and scanning with `>=` so the *last*
-///   maximum wins. A traceback that enters one cell over gives the same score
-///   and a different alignment, which is exactly the class of bug no score
-///   check catches.
-/// * the caller's window (`start1..end1`) is applied by `partA__align` before
-///   this runs, so the walk itself needs no offsets.
+/// The two C functions are the same walk; the `localhom` one additionally sums
+/// the constraint score of every cell it passes through. Written once here for
+/// the reason the `match_calc` note in `GOAL-C-FREE.md` gives: two
+/// transliterations of one walk are free to drift apart, and a traceback that
+/// drifts changes an alignment without changing its score.
+///
+/// The **walk itself** matches `align.rs`'s `atracking`: same branch structure
+/// on the sign of `ijp`, same gap-run loops, same "off the front" terminal
+/// case. The **entry cell** does not -- `Salignmm`'s picks it under `tailgp`,
+/// this one under `outgap`, scanning with `>=` so a tie keeps the *later*
+/// maximum.
 ///
 /// The warp branches are omitted, as in `align.rs`: a `trywarp` configuration
 /// is refused before reaching here.
@@ -310,17 +396,20 @@ pub struct PartTrack {
 ///     lgth2: Columns.
 ///     ijp: The traceback matrix, edited at its borders as the C does.
 ///     outgap: Whether terminal gaps are free, which decides the entry cell.
+///     imp: Present for the `localhom` variant only.
 ///
 /// Returns:
-///     The two gap tables, in forward order.
-pub fn atracking(
+///     The two gap tables in forward order, and the accumulated constraint
+///     score (0.0 when `imp` is `None`).
+fn track(
     lasthorizontalw: &[f64],
     lastverticalw: &[f64],
     lgth1: usize,
     lgth2: usize,
     ijp: &mut [Vec<i32>],
     outgap: bool,
-) -> PartTrack {
+    imp: Option<&ImpTrack>,
+) -> (PartTrack, f64) {
     if !outgap {
         let mut wm = lastverticalw[0];
         for i in 0..lgth1 {
@@ -347,6 +436,7 @@ pub fn atracking(
 
     let (mut rev1, mut rev2) = (Vec::new(), Vec::new());
     let (mut iin, mut jin) = (lgth1 as i64, lgth2 as i64);
+    let mut impwm = 0.0f64;
     let limk = lgth1 + lgth2 + 1;
     for _ in 0..limk {
         let v = ijp[iin as usize][jin as usize];
@@ -398,6 +488,18 @@ pub fn atracking(
             rev2.push(b'o');
         }
 
+        // Before the break below, so the cell the walk stops on still counts.
+        // The guard skips the entry corner, as the C's `iin != lgth1 && jin !=
+        // lgth2` does.
+        if let Some(t) = imp {
+            if iin as usize != lgth1 && jin as usize != lgth2 {
+                impwm += t.imp.score(
+                    t.gapmap1[iin as usize] as usize + t.start1,
+                    t.gapmap2[jin as usize] as usize + t.start2,
+                );
+            }
+        }
+
         if iin <= 0 || jin <= 0 {
             break;
         }
@@ -409,5 +511,43 @@ pub fn atracking(
 
     rev1.reverse();
     rev2.reverse();
-    PartTrack { gt1: rev1, gt2: rev2 }
+    (PartTrack { gt1: rev1, gt2: rev2 }, impwm)
+}
+
+/// `Atracking()` from `partSalignmm.c`: the walk with no constraint term.
+pub fn atracking(
+    lasthorizontalw: &[f64],
+    lastverticalw: &[f64],
+    lgth1: usize,
+    lgth2: usize,
+    ijp: &mut [Vec<i32>],
+    outgap: bool,
+) -> PartTrack {
+    track(lasthorizontalw, lastverticalw, lgth1, lgth2, ijp, outgap, None).0
+}
+
+/// `Atracking_localhom()` from `partSalignmm.c`.
+///
+/// Returns:
+///     The gap tables and the C's `*impwmpt` -- the constraint score summed
+///     over every cell the path passes through, which the caller adds to the
+///     alignment's score.
+pub fn atracking_localhom(
+    lasthorizontalw: &[f64],
+    lastverticalw: &[f64],
+    lgth1: usize,
+    lgth2: usize,
+    ijp: &mut [Vec<i32>],
+    outgap: bool,
+    imp: &ImpTrack,
+) -> (PartTrack, f64) {
+    track(
+        lasthorizontalw,
+        lastverticalw,
+        lgth1,
+        lgth2,
+        ijp,
+        outgap,
+        Some(imp),
+    )
 }
