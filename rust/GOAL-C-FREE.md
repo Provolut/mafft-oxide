@@ -184,6 +184,38 @@ single reordered addition changes an alignment, no test says which line did it,
 and the method that works here is instrumenting a scratch `core/` and bisecting
 on f64 bit patterns. That wants the whole budget for the bisect.
 
+### Status: the DP is written and **not verified**
+
+`partalign::PartAlignState::part_a_align` exists and compiles, and the suite is
+green — which says nothing about whether it is correct. Nothing has executed
+it: `dvtditr-rs` does not exist, so no differential run has reached it. A DP
+that compiles has not been tested in any sense that matters here.
+
+What will decide it, in order:
+
+1. `dvtditr-rs` calling it, so the code runs at all.
+2. `verify_tbfast.sh` and `verify_e2e.sh` against a built `core/`.
+3. The 840-payload ProteinGym corpus through `mafft --auto`, byte-compared.
+4. ESCOTT end to end on the two assays, SHA-256 compared.
+
+Until (2) passes, treat the DP as a draft. The two `>` comparisons below are
+the most likely place for it to be wrong, and they are also the least likely to
+announce themselves.
+
+### The driver is bigger than an earlier note here claimed
+
+That note said `dvtditr.c`'s 1214 lines "are mostly argv that `params.rs`
+already models". That is wrong, and the correction matters for planning: its
+`main` also reads the `hat3` localhom table (`readlocalhomtable2_half` /
+`_target`), builds `topol` / `len` / `eff`, handles `--subalignment` tables and
+`_focus_` targets, and only then calls `tditeration`. Add `tditeration.c`'s own
+refinement loop and the remaining work is **larger than the DP**, not a thin
+wrapper over it.
+
+Still absent from the Rust side, as far as the reached set goes:
+`alignableReagion`, `new_OpeningGapCount`'s tail-gap siblings already noted,
+the `tditeration` accept/reject loop, and `dvtditr`'s table reading.
+
 ### Read this before writing one line of the DP
 
 **`partA__align` and `A__align` disagree on two tie comparisons, in opposite
