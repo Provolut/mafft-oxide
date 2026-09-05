@@ -329,10 +329,11 @@ pub fn fillimp(
     orinum2: &[i32],
     fastathreshold: f64,
 ) {
+    // `fill` lowers to a memset; the element-by-element loop it replaces did
+    // not, and this matrix is re-zeroed once per branch of every refinement
+    // round. Same values written, so nothing downstream can tell.
     for row in impmtx.iter_mut().take(lgth1) {
-        for v in row.iter_mut().take(lgth2) {
-            *v = 0.0;
-        }
+        row[..lgth2].fill(0.0);
     }
     let effijx = fastathreshold;
     for i in 0..clus1 {
