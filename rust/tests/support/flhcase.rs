@@ -170,6 +170,9 @@ fn run_with(st: &mut SharedState, a: &[String]) -> String {
         outgap,
         legacygapcost,
         b'-',
+        // The same capacity `gen_flhharness.c` allocates, so the C's
+        // `LENGTH OVER` check and the port's fire on the same inputs.
+        lgth * 4 + 100,
     );
 
     let mut out = String::new();
