@@ -34,6 +34,7 @@ pub mod localhom;
 pub mod msalign;
 pub mod naivescore;
 pub mod pairalign;
+pub mod partalign;
 pub mod params;
 pub mod profile;
 pub mod saalign;
