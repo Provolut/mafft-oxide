@@ -127,6 +127,43 @@ indeterminacy, choose deliberately, and do not let it hide inside a pass count.
    `align.rs`; check first whether it carries a `cpmxhist`-style history cache,
    because in `align.rs` that cache changed the summation order and was
    load-bearing for bit-exactness.
+### What reading `partSalignmm.c` changed about (3)
+
+Measured against the file rather than its line count, and each of these is a
+saving someone would otherwise spend a day rediscovering:
+
+- **`partA__align_variousdist` (746 lines) is never reached.** Refuse it. It is
+  the single biggest item in the file and none of it is needed.
+- **`st_OpeningGapCount` / `st_FinalGapCount` are inside `#if 0`.** Dead.
+- **`match_calc` is the function `align.rs` already has** — same signature, same
+  sparse-profile walk, same register accumulation (this repo's own patch). The
+  only difference is that `partA__align` reads the global
+  `n_dis_consweight_multi` where `A__align` takes `n_dynamicmtx`; pass
+  `cn.n_dis_consweight_multi` and it is exact. It is now `pub(crate)` for that
+  reason. **Do not write a second copy** — two transliterations of one DP inner
+  loop are free to drift apart, and nothing would catch it but a differential
+  run.
+- **`partA__align` carries no `cpmxhist` cache** (`grep -c` is 0). None of
+  `A__align`'s summation-order subtlety applies here.
+- **The constraint half is done** (`partalign.rs`): `part_imp_match_init_strict`
+  is allocation plus the already-ported `fillimp`, and the two gapmap
+  accumulators are five lines each.
+- **The two tracebacks look like `align.rs::atracking_localhom`** with and
+  without its `imp` term — `partSalignmm`'s `Atracking` opens with exactly that
+  function's `outgap == 0` scan, not with `align.rs::atracking`'s `tailgp`
+  form. Likely reuse, **not yet verified**: diff them line by line before
+  reusing, because a traceback that picks a different cell on a tie changes the
+  alignment without changing its score.
+
+So what remains is the 696-line DP, the two tracebacks (reuse pending that
+diff), and the `tditeration` driver plus `dvtditr`'s arguments — about 1000
+lines, not the 2125 the file suggests.
+
+**Start it with a full context budget.** It is one long transliteration where a
+single reordered addition changes an alignment, no test says which line did it,
+and the method that works here is instrumenting a scratch `core/` and bisecting
+on f64 bit patterns. That wants the whole budget for the bisect.
+
 4. **`tditeration`'s reached set + the `dvtditr` driver.** `movereg`,
    `movereg_swap`, `fillimp`, `intergroup_score`, `cpmx_calc_new`, `gapcountf`
    and `Atracking_localhom` are **already ported** (`localhom.rs`, `score.rs`,

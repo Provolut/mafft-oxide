@@ -146,7 +146,12 @@ impl AlignState {
 /// `match_calc()`: profile-profile score of column `i1` of group 1 against
 /// every column of group 2.
 #[allow(clippy::too_many_arguments)]
-fn match_calc(
+/// Shared with `partalign`: `partSalignmm.c`'s `match_calc` is this same
+/// function, differing only in that it reads the global
+/// `n_dis_consweight_multi` where `A__align` is handed `n_dynamicmtx`.
+/// Exposed rather than copied -- two transliterations of one DP inner
+/// loop would be free to drift apart.
+pub(crate) fn match_calc(
     n_dynamicmtx: &[Vec<f64>],
     out: &mut [f64],
     cpmx1: &[Vec<f64>],
