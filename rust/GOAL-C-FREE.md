@@ -148,15 +148,29 @@ saving someone would otherwise spend a day rediscovering:
 - **The constraint half is done** (`partalign.rs`): `part_imp_match_init_strict`
   is allocation plus the already-ported `fillimp`, and the two gapmap
   accumulators are five lines each.
-- **The two tracebacks look like `align.rs::atracking_localhom`** with and
-  without its `imp` term — `partSalignmm`'s `Atracking` opens with exactly that
-  function's `outgap == 0` scan, not with `align.rs::atracking`'s `tailgp`
-  form. Likely reuse, **not yet verified**: diff them line by line before
-  reusing, because a traceback that picks a different cell on a tie changes the
-  alignment without changing its score.
+- **The two tracebacks are NOT reusable — checked, and the guess was wrong.**
+  They open the same way (`partSalignmm`'s `Atracking` starts with
+  `atracking_localhom`'s `outgap == 0` scan, not `atracking`'s `tailgp` form),
+  which is what made reuse look plausible. Diffing the two C
+  `Atracking_localhom` bodies with comments and whitespace stripped gives 148
+  differing lines out of ~185 and ~140:
 
-So what remains is the 696-line DP, the two tracebacks (reuse pending that
-diff), and the `tditeration` driver plus `dvtditr`'s arguments — about 1000
+  * `Salignmm.c`'s builds **gap tables** (`gt1bk` / `gt2bk`, `gaptable1/2`) and
+    takes `ngap1`, `ngap2`, `reuseprofiles`, `gt1`, `gt2` — the profile-reuse
+    machinery that belongs with `cpmxhist`.
+  * `partSalignmm.c`'s writes **directly into `mseq1` / `mseq2`** and takes
+    `start1/end1/start2/end2` plus the gap maps.
+
+  Port them separately. The consolation is that `partSalignmm`'s pair is the
+  *older, simpler* shape — no gap-table bookkeeping at all — so they are easier
+  than the ones already in `align.rs`, not harder. About 290 lines for the two.
+
+  Recording the negative result on purpose: "these two look alike" is exactly
+  the assumption that would have been discovered halfway through a port, by
+  which point the wrong shape is already written.
+
+So what remains is the 696-line DP, the two tracebacks (~290 lines, ported
+fresh), and the `tditeration` driver plus `dvtditr`'s arguments — about 1000
 lines, not the 2125 the file suggests.
 
 **Start it with a full context budget.** It is one long transliteration where a
