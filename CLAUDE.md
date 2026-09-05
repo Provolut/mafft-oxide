@@ -57,13 +57,25 @@ what fired, why you think it is wrong, and what you would change.
 
 A gate an agent can talk itself past is not a gate.
 
-## `grep -a`, always
+## Sources are UTF-8, and a hook keeps them that way
 
-`constants.c`, `io.c`, `Lalign11.c`, `Lalignmm.c` and `MSalignmm.c` are
-ISO-8859. GNU grep in a UTF-8 locale silently skips them — no match, no count,
-no warning — so a plain `grep` cannot tell you who calls what in a fifteenth of
-this tree, including the memsave aligner and the whole of I/O. Every "used
-nowhere" claim needs `grep -a` or `LC_ALL=C` behind it.
+Upstream ships eight files whose Japanese comments are EUC-JP. That is not a
+cosmetic problem: GNU grep in a UTF-8 locale treats such a file as binary and
+reports **nothing** for it -- no match, no count, no warning -- so a "nothing
+calls this function" or "this macro is unused" conclusion silently excludes
+whichever files happen to be affected. Here that was `constants.c`, `io.c`,
+`mltaln9.c`, `Lalign11.c`, `Lalignmm.c` and `MSalignmm.c`: all of I/O, the
+memsave aligner, and the file `fillimp` lives in. It has already produced two
+wrong statements in this repo's own documents.
+
+They are converted, and `scripts/check-encoding.sh` (run by `pre-push`) refuses
+a source that is not valid UTF-8. **After importing a new upstream release, run
+`scripts/check-encoding.sh --fix`** -- the release will bring the EUC-JP files
+back.
+
+Converting is safe, and that was measured rather than assumed: every affected
+byte is inside a comment, and `core/` built before and after the conversion
+gives 34 of 34 binaries byte-identical.
 
 ## What to do when output diverges
 

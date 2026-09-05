@@ -94,7 +94,7 @@ class NRVec {
     NRVec(const NRVec &rhs);  // Copy constructor
     NRVec & operator=(const NRVec &rhs); //assignment
     NRVec & operator=(const T &a); //assign a to every element
-    inline T & operator[](const int i); //i¡Çth element
+    inline T & operator[](const int i); //iâ€™th element
     inline const T & operator[](const int i) const;
     void Allocator(int i = 0); // by Steffen, mpg
     inline int size() const;

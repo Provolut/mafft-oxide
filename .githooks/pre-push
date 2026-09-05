@@ -5,7 +5,8 @@
 # Install once:
 #     git config core.hooksPath .githooks
 #
-# Takes about 40 seconds: the test suite is 4 s, the coverage run is the rest.
+# Takes about 40 seconds: the encoding check is instant, the test suite is 4 s,
+# the coverage run is the rest.
 # That is deliberate -- a hook slow enough to be worth skipping gets skipped,
 # and then it is not a gate. `--no-verify` bypasses it when you genuinely need
 # to push a work-in-progress branch.
@@ -23,6 +24,17 @@
 
 set -u
 here=$(cd "$(dirname "$0")/.." && pwd)
+
+# Cheap and first: a source file that is not UTF-8 is invisible to grep in a
+# UTF-8 locale -- no match, no count, no warning -- so "nothing calls this"
+# stops being a safe conclusion. Upstream ships eight such files; see
+# scripts/check-encoding.sh.
+if ! "$here/scripts/check-encoding.sh" > /dev/null; then
+  "$here/scripts/check-encoding.sh" 1>&2
+  echo "pre-push: push refused. Use --no-verify to override." 1>&2
+  exit 1
+fi
+
 cd "$here/rust" || exit 0   # nothing to check if the port is not present
 
 FLOOR=85
