@@ -853,6 +853,229 @@ pub fn falign(
     totalscore
 }
 
+/// `Falign_localhom()` from `core/Falign_localhom.c`, for the one
+/// configuration `dvtditr` reaches.
+///
+/// `tditeration.c` is the only caller, from two sites guarded by
+/// `constraint == 2 && use_fft` with `alg != 'd'`; `tbfast` never calls it at
+/// all. A traced `mafft --auto` run (L-INS-i, `test/sample`) enters it 271
+/// times and every call has `kobetsubunkatsu == 1`, `alg == 'A'` and
+/// `scoringmatrices == NULL`. `scripts/mafft` passes `-T` -- the flag that
+/// would clear `kobetsubunkatsu` -- to `disttbfast` and `pairlocalalign` only,
+/// never on the `dvtditr` line, and `-s 0.0` (`specificityconsideration`) is
+/// what keeps `scoringmatrices` null, which is also why
+/// `partA__align_variousdist` is unreachable.
+///
+/// So the FFT half of the C -- signal vectors, cross-correlation, candidate
+/// lags, `blockAlign2` -- is dead here and is not ported. It is also not
+/// [`falign`]'s code: `Falign_localhom.c` keeps the older `n20or4or2` of
+/// 4 / 2 / 20 with one real vector per property, where `Falign.c` packs
+/// polarity and volume into a single complex vector (`n20or4or2 == 1`).
+/// Porting it would mean new, never-exercised arithmetic for a branch nothing
+/// runs; `dvtditr-rs` refuses `-T` instead.
+///
+/// What is left with `kobetsubunkatsu == 1`: one candidate lag, zero, so
+/// `zurasu2` shifts nothing and the anchors come from `alignable_reagion` on
+/// the groups as they stand. Their centres cut both groups into blocks; each
+/// block is compacted by `commongappick_record`, aligned by `partA__align`
+/// under the constraint, and the blocks are concatenated back.
+///
+/// The multithreaded interrupt (`chudanpt` / `chudanres`) is absent for the
+/// same reason `athread` is: this port is single-threaded and the script runs
+/// `dvtditr -C 0`.
+///
+/// Args:
+///     fs: Anchor-finding scratch, shared with [`falign`] as the C shares
+///         `fftFunctions.c`'s statics between its two callers.
+///     past: `partA__align`'s scratch buffers, reused across blocks.
+///     imp: The constraint matrix, already built by `part_imp_match_init_strict`.
+///     cn: The scoring constants.
+///     group1: Members of the first group; replaced by the new alignment.
+///     group2: Members of the second group; replaced by the new alignment.
+///     eff1: Weight of each member of `group1`.
+///     eff2: Weight of each member of `group2`.
+///     outgap: The C's global of the same name.
+///     legacygapcost: The C's global of the same name.
+///     newgapstr: The character a newly opened gap is written as.
+///
+/// Returns:
+///     The summed block scores, and the accumulated constraint score (the C's
+///     `*totalimpmatch`).
+#[allow(clippy::too_many_arguments)]
+pub fn falign_localhom(
+    fs: &mut FalignState,
+    past: &mut crate::partalign::PartAlignState,
+    imp: &crate::partalign::PartImp,
+    cn: &Constants,
+    group1: &mut [Vec<u8>],
+    group2: &mut [Vec<u8>],
+    eff1: &[f64],
+    eff2: &[f64],
+    outgap: bool,
+    legacygapcost: bool,
+    newgapstr: u8,
+) -> (f64, f64) {
+    let clus1 = group1.len();
+    let clus2 = group2.len();
+    let len1 = group1[0].len();
+    let len2 = group2[0].len();
+
+    // One candidate lag of zero: `zurasu2( 0, ... )` hands both groups over
+    // unshifted, so the C's `lag > 0` and `lag <= 0` branches coincide and
+    // `segment1` and `segment2` are copies of the same segment.
+    let mut count = 0usize;
+    {
+        let s1: Vec<&[u8]> = group1.iter().map(std::vec::Vec::as_slice).collect();
+        let s2: Vec<&[u8]> = group2.iter().map(std::vec::Vec::as_slice).collect();
+        // `alignable_reagion` appends at most one segment per column it scans,
+        // which bounds the growth, as in `falign`.
+        let need = len1.max(len2) + 8;
+        if fs.segment.len() < need {
+            fs.segment.resize(need, Segment::default());
+            fs.segment1.resize(need, Segment::default());
+            fs.segment2.resize(need, Segment::default());
+        }
+        let tmpint = alignable_reagion(
+            &mut fs.alignable,
+            cn,
+            clus1,
+            clus2,
+            &s1,
+            &s2,
+            eff1,
+            eff2,
+            &mut fs.segment[..],
+        );
+        if tmpint > MAXSEG - 3 {
+            eprintln!("TOO MANY SEGMENTS.");
+            std::process::exit(1);
+        }
+        for _ in 0..tmpint {
+            let seg = fs.segment[count];
+            fs.segment1[count] = seg;
+            fs.segment2[count] = seg;
+            count += 1;
+        }
+    }
+
+    // The C sorts and numbers the segments before it splits on
+    // `kobetsubunkatsu`, so the numbering happens here too even though only
+    // the `crossscore` branch -- the one this port refuses -- reads it.
+    let mut sorted1: Vec<usize> = (0..count).collect();
+    let mut sorted2: Vec<usize> = (0..count).collect();
+    {
+        let c1: Vec<i32> = (0..count).map(|i| fs.segment1[i].center).collect();
+        let c2: Vec<i32> = (0..count).map(|i| fs.segment2[i].center).collect();
+        mymergesort(0, count as isize - 1, &mut sorted1, &|i| c1[i]);
+        mymergesort(0, count as isize - 1, &mut sorted2, &|i| c2[i]);
+    }
+    for (i, &s) in sorted1.iter().enumerate() {
+        fs.segment1[s].number = i as i32;
+    }
+    for (i, &s) in sorted2.iter().enumerate() {
+        fs.segment2[s].number = i as i32;
+    }
+
+    for i in 0..count {
+        fs.cut1[i + 1] = fs.segment1[sorted1[i]].center;
+        fs.cut2[i + 1] = fs.segment2[sorted2[i]].center;
+    }
+    fs.cut1[0] = 0;
+    fs.cut2[0] = 0;
+    fs.cut1[count + 1] = len1 as i32;
+    fs.cut2[count + 1] = len2 as i32;
+    count += 2;
+
+    // --- align each block between consecutive cuts ---
+    let mut result1: Vec<Vec<u8>> = vec![Vec::new(); clus1];
+    let mut result2: Vec<Vec<u8>> = vec![Vec::new(); clus2];
+    let mut totalscore = 0.0f64;
+    let mut totalimpmatch = 0.0f64;
+    for i in 0..count - 1 {
+        let sgap1 = if fs.cut1[i] != 0 {
+            getkyokaigap(group1, fs.cut1[i] as usize - 1)
+        } else {
+            vec![b'o'; clus1]
+        };
+        let sgap2 = if fs.cut2[i] != 0 {
+            getkyokaigap(group2, fs.cut2[i] as usize - 1)
+        } else {
+            vec![b'o'; clus2]
+        };
+        let egap1 = if fs.cut1[i + 1] != len1 as i32 {
+            getkyokaigap(group1, fs.cut1[i + 1] as usize)
+        } else {
+            vec![b'o'; clus1]
+        };
+        let egap2 = if fs.cut2[i + 1] != len2 as i32 {
+            getkyokaigap(group2, fs.cut2[i + 1] as usize)
+        } else {
+            vec![b'o'; clus2]
+        };
+
+        // The gap columns above come from the groups as they were on entry;
+        // the blocks below are copies, so compacting them cannot disturb a
+        // later block's boundary. The C relies on the same thing, writing its
+        // result into separate `result1` / `result2` buffers.
+        let mut block1: Vec<Vec<u8>> = group1
+            .iter()
+            .map(|s| s[fs.cut1[i] as usize..fs.cut1[i + 1] as usize].to_vec())
+            .collect();
+        let gapmap1: Vec<i32> = crate::addfunctions::commongappick_record(&mut block1)
+            .into_iter()
+            .map(|p| p as i32)
+            .collect();
+        let mut block2: Vec<Vec<u8>> = group2
+            .iter()
+            .map(|s| s[fs.cut2[i] as usize..fs.cut2[i + 1] as usize].to_vec())
+            .collect();
+        let gapmap2: Vec<i32> = crate::addfunctions::commongappick_record(&mut block2)
+            .into_iter()
+            .map(|p| p as i32)
+            .collect();
+
+        let constraint = crate::partalign::PartConstraint {
+            imp,
+            gapmap1: &gapmap1,
+            gapmap2: &gapmap2,
+            start1: fs.cut1[i] as usize,
+            start2: fs.cut2[i] as usize,
+        };
+        let (sc, impmatch) = past.part_a_align(
+            cn,
+            cn.penalty,
+            cn.penalty_ex,
+            &mut block1,
+            &mut block2,
+            eff1,
+            eff2,
+            outgap,
+            legacygapcost,
+            Some((&sgap1, &sgap2, &egap1, &egap2)),
+            Some(&constraint),
+            newgapstr,
+        );
+        totalscore += sc;
+        totalimpmatch += impmatch;
+
+        for (j, b) in block1.iter().enumerate() {
+            result1[j].extend_from_slice(b);
+        }
+        for (j, b) in block2.iter().enumerate() {
+            result2[j].extend_from_slice(b);
+        }
+    }
+
+    for (j, r) in result1.into_iter().enumerate() {
+        group1[j] = r;
+    }
+    for (j, r) in result2.into_iter().enumerate() {
+        group2[j] = r;
+    }
+
+    (totalscore, totalimpmatch)
+}
+
 /// `seq_vec_3()` with `n20or4or2 == 1`: accumulate one member's contribution to
 /// the indicator vector of alphabet index 0.
 fn seq_vec_3(result: &mut [Cpx], incr: f64, seq: &[u8], cn: &Constants) {
