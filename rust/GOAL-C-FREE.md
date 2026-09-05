@@ -206,6 +206,25 @@ path does not reach `Falign_localhom` even with `-F`; `dvtditr`'s does. Worth
 confirming exactly which size or flag decides that before porting, because it
 bounds what has to work.
 
+**How much of it `falign.rs` gives you, measured.** Diffing the two C
+functions with comments and whitespace stripped:
+
+- `Falign` 928 normalised lines, `Falign_localhom` 653 — the constrained one is
+  *smaller*.
+- **509 lines differ.** So roughly 40% is shared structure with something
+  already ported, and mirroring `falign.rs` is a genuine head start — but this
+  is not a mechanical transform, and treating it as one is how the constraint
+  plumbing gets dropped.
+
+What actually differs:
+
+- the signature gains `constraint`, `totalimpmatch`, `gapmap1`, `gapmap2`;
+- the scratch becomes `static TLS` where `Falign`'s is local, so the Rust needs
+  an owned state struct rather than locals (the pattern `PartAlignState`
+  already uses);
+- every block alignment calls `partA__align` instead of `A__align`, and
+  accumulates `impmatch` across blocks.
+
 The one consolation: `partA__align`, the largest single function
 `Falign_localhom` depends on, is already written (`partalign.rs`).
 
