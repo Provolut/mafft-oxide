@@ -234,9 +234,27 @@ already models". That is wrong, and the correction matters for planning: its
 refinement loop and the remaining work is **larger than the DP**, not a thin
 wrapper over it.
 
-Still absent from the Rust side, as far as the reached set goes:
-`alignableReagion`, `new_OpeningGapCount`'s tail-gap siblings already noted,
-the `tditeration` accept/reject loop, and `dvtditr`'s table reading.
+Still absent from the Rust side, as far as the reached set goes — and this
+list is now checked rather than assumed, having been wrong twice:
+
+- **the `tditeration` accept/reject loop** (`TreeDependentIteration`'s
+  sequential branch)
+- **`dvtditr`'s `main`**: the `hat3` table read, `topol` / `len` / `eff`,
+  subalignments, `_focus_` targets
+- **`commongappick_record`** — small, and the only helper still missing
+
+Everything else the profile named is already ported. Two entries an earlier
+revision of this list called missing are not:
+
+- **`alignableReagion` is ported**, as `falign::alignable_reagion`. It appeared
+  in `dvtditr`'s callgrind profile because `dvtditr` links and calls `Falign`,
+  not because it lives in `tditeration.c` — it is in `fftFunctions.c`. A
+  profile names what *runs*, not what a file contains, and that is what made
+  the earlier reading wrong.
+- **`new_OpeningGapCount` / `new_FinalGapCount`** are in `profile.rs`, as noted
+  above.
+
+So the driver is the whole of what is left, plus one small helper.
 
 ### Read this before writing one line of the DP
 
