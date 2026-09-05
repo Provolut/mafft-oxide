@@ -7,7 +7,7 @@
  *
  * The configuration staged here is the only one `dvtditr` reaches:
  * kobetsubunkatsu=1, alg='A', constraint=2, scoringmatrices=NULL. See
- * `GOAL-C-FREE.md`.
+ * `README.md`.
  *
  * argv: n1 <n1 rows> <n1 effs> <n1 orinums>
  *       n2 <n2 rows> <n2 effs> <n2 orinums>

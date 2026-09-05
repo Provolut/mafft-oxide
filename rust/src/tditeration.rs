@@ -22,7 +22,7 @@
 //!   `--target`, `specificityconsideration`, `alg` other than `'A'`, `-C n`,
 //!   and the BESTFIRST strategy.
 //!
-//! The refusals are not defensive noise: `GOAL-C-FREE.md` records that a
+//! The refusals are not defensive noise: `README.md` records that a
 //! callgrind profile of the real binary found ten functions in this file's
 //! dependency list that no strategy ever enters. Porting them would be writing
 //! code against a reading of the source rather than against the program.

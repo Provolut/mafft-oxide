@@ -21,11 +21,15 @@ same argument vector, same input, same output files:
 The two aligners handle protein and nucleotide input, which the reader tells
 apart the same way the C does.
 
-**Eight of the nine binaries `mafft --auto` can execute are now Rust**; only
-`dvtditr` is still the C's, plus `splittbfast` for the parttree bracket, which
-is out of scope. Both the L-INS-i and FFT-NS-i brackets come out byte-identical
-against an all-C run. See `GOAL-C-FREE.md` for the whole
-target and what is left. The utilities' differential harness is
+**All nine binaries `mafft --auto` can execute are Rust** (`splittbfast`, the
+parttree bracket, is out of scope and never runs under `--auto`), so a
+`mafft --auto` run executes no C process at all: traced, it runs `countlen`,
+`version`, `f2cl`, `tbfast` and `dvtditr` and nothing else. L-INS-i, FFT-NS-i,
+E-INS-i and G-INS-i all come out byte-identical against an all-C run, as do 120
+ProteinGym payloads and provolut-ml's GEMME/ESCOTT matrices. The one strategy
+that still needs the C is `--allowshift`; see "What is *not* ported".
+
+The utilities' differential harness is
 `verify_utils.sh` (needs a built `core/`), and `tests/utils.rs` pins the same
 behaviour against committed fixtures, so the suite still runs on a machine
 with no C toolchain.
@@ -165,13 +169,29 @@ quietly returning a different alignment:
   a "not implemented", not a "cannot be implemented": measured on 39 corpus
   inputs x 3 repeats, the C's own `disttbfast` and `tbfast` give byte-identical
   `pre`, `order`, `hat2` and `hat3` at `-C 4` as at `-C 0`, including on an
-  80-sequence input where four threads are a real 3.3x speedup. The end-to-end
-  `mafft --thread` difference is confined to `--maxiterate > 0`, i.e. to
-  `dvtditr`, which this port does not touch. Run with `-C 0` / `-C 0-0`, which
-  is what the wrapper passes by default.
+  80-sequence input where four threads are a real 3.3x speedup. In `dvtditr`
+  the threaded worker (`athread`) is skipped for the same reason, and a
+  callgrind profile confirms it never runs at `-C 0`. Run with `-C 0` /
+  `-C 0-0`, which is what the wrapper passes by default.
 
-Iterative refinement (`--maxiterate`) is not ported either, but it still works
-end-to-end, because `dvtditr` is a separate binary fed by these ones' output.
+`dvtditr` -- iterative refinement -- **is** ported, for the configuration
+`scripts/mafft` produces: `utree=1 weight=4 score_check=1 nkozo=0 alg='A'
+use_fft=1`, with a `hat3` table or without. It refuses, by name at startup:
+
+- `-s` non-zero, the specificity scoring path (`scoringmatrices`,
+  `classifypairs`, `smalldistmtx`, `partA__align_variousdist`). `--allowshift`
+  is the strategy that reaches it, and the only `mafft` strategy that still
+  needs the C `dvtditr`.
+- `-T` (`kobetsubunkatsu = 0`), which turns the FFT anchoring back on inside
+  `Falign_localhom`. `scripts/mafft` passes it to `disttbfast` and
+  `pairlocalalign`, never to `dvtditr`.
+- `-C n`, `-K n` (`--add`, which needs the `skipthisbranch` computation), a
+  `hat3` carrying `korh == 'k'` structural constraints, `score_check=2`, kozo
+  and RNA weighting, `--target`, and `utree=0` (rebuilding the tree from the
+  current alignment each round -- a second tree builder nothing runs).
+- an unconstrained input over 50000 residues, where the C silently switches to
+  the memsave aligner. That is a *different alignment*, not a cheaper route to
+  the same one, so the port stops rather than quietly disagree.
 
 ## Verification
 
@@ -382,3 +402,177 @@ transcendental the port depends on. Its argument is exact (`PI` scaled by a
 power of two) and Rust's `f64::sin` is the platform libm, so it agrees here;
 `tests/golden/sintbl.txt` pins every bit of the resulting table so a platform
 where it does not agree fails loudly rather than silently realigning.
+
+## Hazards in the C, and why the port looks the way it does
+
+Written while porting `dvtditr`; every one of them was a defect first.
+
+### `partA__align` and `A__align` disagree on two tie comparisons
+
+The single most dangerous detail in this port. Copying `align.rs`'s
+inner loop — the obvious move, since it is the same DP and already ported —
+gives a different alignment on every tie, at identical score. No unit test and
+no score check can see it.
+
+| recurrence | `Salignmm.c` / `align.rs` | `partSalignmm.c` |
+|---|---|---|
+| `*prept + *ogcp2pt * gf1vapre` vs `mi` | **`>=`** | **`>`** (`// 2018/Apr`) |
+| `*prept + ogcp1va * *gf2ptpre` vs `*mjpt` | **`>=`** | **`>`** (`// 2018/Apr`) |
+
+Both files carry both forms, one live and one commented — mirror images.
+Upstream changed `partSalignmm.c` in April 2018 and left `Salignmm.c`. It is
+deliberate; there is nothing to report upstream. The other two comparisons in
+that loop use `>` in both files.
+
+`partalign.rs` already has this right, with the reason at the call site.
+
+### The traceback's "off the front" branch is warp-only
+
+`Atracking` and `Atracking_localhom` both open with a branch on
+`ifi == -warpbase && jfi == -warpbase`. With warp refused, `warpbase` is a
+sentinel no entry can equal, so **the branch is dead and every border cell goes
+down the ordinary path**, whose two gap-run loops handle it and whose tail still
+adds that cell's constraint score. Reading the condition as "both negative" —
+which is what it looks like, and what `partalign.rs` did — makes it live at
+`(0, 0)`, and drops the last `part_imp_match_out_sc` from `*impwmpt`.
+
+That leaves the alignment rows and the DP score **identical** and only
+`impmatch` wrong, so nothing except a differential on the constraint score can
+see it: it survived the unit tests, and a unit test written afterwards pinned
+the wrong value. `verify_flh.sh` caught it on 3 of 98 cases (fixed).
+`align.rs` had it right; the same shape appears in every traceback still to be
+ported, so compare against `-warpbase` rather than against zero.
+
+### `LENGTH OVER` is behaviour, and only one aligner has it
+
+`partA__align` ends by checking `alloclen < resultlen || resultlen > N` and
+calling `ErrorExit`. It is an error path, but a reachable one — the refinement
+loop can grow an alignment past the buffer `dvtditr` sized from the longest
+input (`alloclen = nlenmax * 9`) — and it is a *behavioural* difference of the
+worst kind: where the C stops, a port without the check carries on and produces
+output the C never would. `part_a_align` now carries it, and `alloclen` is
+threaded from `IterParams`.
+
+**`A__align` and `Falign` have the same check and the port still does not.**
+Those predate this stack and are reached through `treebase`, whose callers would
+all have to thread `alloclen` — a change with its own verification, against
+`tbfast-rs` and `disttbfast-rs`. It is left open deliberately: on real input the
+limit is nine times the longest sequence and nothing approaches it, and the
+synthetic cases that did were random noise at 25% gaps. Close it when
+`dvtditr-rs` lands, where `alloclen` is already in hand.
+
+### `pre` is written once, and the flag that says so is easy to miss
+
+`writePre` takes a `force` flag. With `USE_XCED` 0 -- which is how this builds --
+its entire body is `if( force ) { rewind( prep_g ); writeData_pointer( ... ); }`.
+Every call from inside the refinement loop passes **0**, so `dvtditr` writes
+`pre` exactly once, from its own final call.
+
+A port that reads the loop's `writePre( ..., 0 )` as "save progress" and writes
+on every improvement gets away with it only while the final alignment is the
+longest one: the C *rewinds without truncating*, so the tail of a longer
+intermediate would survive. Writing on every improvement and then truncating
+produced a `pre` 324 bytes shorter than the C's on `test/sample` -- same
+alignment, different file. The staged binary differential caught it; nothing
+else would have.
+
+### With two sequences, `dvtditr` does not stop early
+
+The `njob == 2` block that writes the input back and returns is inside the
+`#if 0` half of `dvtditr.c`. The live branch is `weight = 0; niter = 1;` -- so a
+two-sequence run still builds the tree, still writes `infile.tree`, and still
+refines once, with equal weights instead of branch weights. A port that took the
+disabled branch produces the right alignment and the wrong `infile.tree`, which
+is what `mafft --treeout` hands the user.
+
+### A global the harness has to set, or it stages a configuration nobody runs
+
+`Falign` compacts each block before aligning it when `kobetsubunkatsu &&
+fftkeika`. `dvtditr` sets **both** — `fftkeika = 1` is on line 51 of
+`dvtditr.c`, and every other binary leaves it 0 — so the two conditions are one
+condition in practice. A harness that sets `kobetsubunkatsu` and forgets
+`fftkeika` stages a `Falign` no caller has: 52 of 126 refinement runs then
+"failed" against a port that was right, and the fix was one line in the C
+harness, not in the port. When a differential turns red after a change that
+made the port *more* faithful, suspect the staging first.
+
+### An input with no bit-exact answer
+
+`getnumlen_nogap_countn` reads an uninitialised `nN` when a record has an empty
+body — reachable with a four-line input, valgrind-confirmed (upstream issue
+#8). There is no bit-exact answer to reproduce. `countlen-rs` picks the defined
+value, zero, which agrees with the C wherever the C is defined, and
+`verify_utils.sh` scores that input `indeterminate` rather than pass or fail.
+Expect more of these in `dvtditr`; handle them the same way — name the input,
+prove the indeterminacy, choose deliberately, never hide it in a pass count.
+
+### `f2cl`'s stderr is not reproducible
+
+It prints heap pointers (upstream issue #9), different on every run of the C
+against itself. `verify_utils.sh` compares `f2cl` on stdout and exit status
+only.
+
+### The misspelled macro in `partSalignmm.c`
+
+`FASTMACHCALC` (no `T`) guards two functions, is defined nowhere, and the
+`#else` branch it forces differs semantically from the branch it hides —
+`+=` against `=` (upstream issue #11). The port implements the live `#else`.
+Fixing the spelling upstream without also fixing the `=` would change
+alignments.
+
+---
+
+## Rules
+
+- **Ask what a function calls, not how long it is.** `Falign_localhom` looks
+  like 713 lines and is ~300 of Rust; `TreeDependentIteration` looks like 1188
+  and is more. Neither was knowable from the file.
+- **Never reassociate f64 arithmetic.** Loop transposition preserving each
+  accumulator's summation order is fine; changing addition order is not.
+- **Transliterate; do not improve.** The C's quirks are the contract —
+  `version`'s missing trailing newline, `countlen`'s N tally carrying past the
+  sampling cap. Where a quirk is *undefined* rather than odd, see the hazards
+  above.
+- **Add to the harnesses, never subtract.** A wide differential against a live
+  C for extending coverage, committed fixtures so the suite runs with no C.
+- **Every new binary goes in `bench/coverage.sh`'s `--object` list.** Leaving
+  one out reports it at 0.00% while its tests drive it — the same under-report
+  that script's header warns about, pointed the other way.
+- **Keep `#![forbid(unsafe_code)]` and keep the port dependency-free.**
+
+## Method
+
+**`grep` used to lie about eight files, and will again after an upstream
+import.** Upstream ships `constants.c`, `io.c`, `mltaln9.c`, `Lalign11.c`,
+`Lalignmm.c` and `MSalignmm.c` (plus one file each under `MPI/` and
+`extensions/`) as EUC-JP, and GNU grep in a UTF-8 locale treats such a file as
+binary and reports *nothing* for it — not a match, not a count, not a "binary
+file matches" line. A "this function is called nowhere" conclusion drawn over
+those files was therefore worthless, and it cost an hour here: `FFT_WINSIZE_P`
+looked unused, which made `constants()`'s ordinary default assignment look like
+memory corruption until a watchpoint pointed straight at `constants.c`.
+
+They are converted now and `pre-push` refuses a source that is not valid UTF-8,
+so ordinary `grep` is trustworthy again. **After importing a new upstream
+release, run `scripts/check-encoding.sh --fix`** — the release brings the EUC-JP
+files back, and until it is run every "used nowhere" claim over them is
+unfounded.
+
+Wrap, trace, then port. `MAFFT_BINARIES` pointed at logging wrappers gives the
+exact binary set and argument vector a real run uses; replaying that vector
+against a staged working directory benchmarks or diffs one binary in
+isolation. When output diverges, instrument a scratch copy of `core/` and
+bisect on f64 bit patterns — every mismatch in this port was found that way,
+never by reading.
+
+## Upstream defects found while doing this
+
+All in unmodified MAFFT 7.526, all filed with corrected code:
+[#7](https://github.com/exazyme/mafft-provolut/issues/7) Makefile drops
+`$(MYCFLAGS)` (breaks GCC ≥ 14, mixes TLS storage class),
+[#8](https://github.com/exazyme/mafft-provolut/issues/8) uninitialised `nN`,
+[#9](https://github.com/exazyme/mafft-provolut/issues/9) `f2cl` prints heap
+pointers, [#10](https://github.com/exazyme/mafft-provolut/issues/10)
+`restoreu`'s record-count check is unreachable and a mismatch segfaults,
+[#11](https://github.com/exazyme/mafft-provolut/issues/11) misspelled
+`FASTMACHCALC` hiding an `=`/`+=` difference.
