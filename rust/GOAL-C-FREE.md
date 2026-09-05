@@ -206,6 +206,35 @@ path does not reach `Falign_localhom` even with `-F`; `dvtditr`'s does. Worth
 confirming exactly which size or flag decides that before porting, because it
 bounds what has to work.
 
+**In Rust it is far cheaper than 713 lines, and this is the one correction in
+this document that goes *downward*.** `falign.rs` is factored, not one block:
+`get_kouho`, `alignable_reagion`, `mymergesort`, `block_align2`,
+`getkyokaigap`, `seq_vec_3`, `seq_vec_5` are all separate functions — and it
+already carries a **second entry point**, `falign_givenanchors`, which is proof
+those internals are reusable across entry points rather than a hope.
+
+`Falign_localhom`'s pipeline is the same chain as `Falign`'s:
+
+    seq_vec_* -> fft -> calcNaiseki -> inverse fft -> getKouho
+      -> zurasu2 / alignableReagion -> mymergesort -> blockAlign2
+      -> per-block getkyokaigap + partA__align
+
+Every step of that is already ported **except** `partA__align`, which is now
+written. So the new code is a third entry point in `falign.rs` doing the
+orchestration and the constrained block loop:
+
+- `part_a_align` in place of `a_align`, per block;
+- `gapmap1` / `gapmap2` threaded through, and `impmatch` accumulated across
+  blocks into the C's `*totalimpmatch`;
+- `commongappick_record` on each block under `kobetsubunkatsu` (ported).
+
+Put it in `falign.rs` itself — the helpers it needs are module-private, and a
+sibling entry point beside `falign_givenanchors` is where it belongs.
+
+Estimate for the Rust: **~250-350 lines**, not 713. The C-to-C diff of 509
+lines measures how much the two C functions differ, which is not the same
+question as how much Rust has to be written.
+
 **How much of it `falign.rs` gives you, measured.** Diffing the two C
 functions with comments and whitespace stripped:
 
