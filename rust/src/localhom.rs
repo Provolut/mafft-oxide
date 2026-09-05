@@ -259,6 +259,10 @@ pub fn calcimportance_half(nseq: usize, eff: &[f64], seq: &[Vec<u8>], table: &mu
 }
 
 /// Map one ungapped residue range onto the current (gapped) alignment columns.
+///
+/// Kept as the reference [`map_range_at`] is tested against; the aligner itself
+/// no longer scans.
+#[cfg(test)]
 fn map_range(s: &[u8], from: i32, to: i32) -> (usize, usize) {
     let mut tmpint: i32 = -1;
     let mut p = 0usize;
@@ -288,6 +292,66 @@ fn map_range(s: &[u8], from: i32, to: i32) -> (usize, usize) {
     (start, p - 1)
 }
 
+/// Where each non-gap character of a gapped sequence sits.
+///
+/// [`map_range`] answers "which column holds the n-th residue?" by counting
+/// from the start every time it is asked, and `fillimp` asks it twice for every
+/// segment of every constrained pair -- which made it a quarter of `dvtditr`.
+/// The answer does not depend on the question, so it is computed once per
+/// sequence per `fillimp` call instead: `positions[n]` is that column.
+fn nongap_positions(s: &[u8]) -> Vec<usize> {
+    s.iter()
+        .enumerate()
+        .filter(|(_, &c)| c != b'-')
+        .map(|(p, _)| p)
+        .collect()
+}
+
+/// [`map_range`] answered from [`nongap_positions`] rather than by scanning.
+///
+/// Every branch of the scan is reproduced, including the ones no constraint
+/// should reach: `from` past the last residue leaves the first loop at the end
+/// of the string, and a `to` below `from` never matches, both of which the C
+/// resolves as the final column. `tests::map_range_agrees` is the check that
+/// this is faithful -- it runs both against random gapped strings over the
+/// whole `-2..len + 2` range of endpoints, which the corpora cannot reach.
+///
+/// Args:
+///     s: The gapped sequence, as [`map_range`] sees it.
+///     positions: `nongap_positions(s)`.
+///     from: First residue of the block, ungapped numbering.
+///     to: Last residue of the block.
+///
+/// Returns:
+///     The first and last alignment column of the block.
+fn map_range_at(s: &[u8], positions: &[usize], from: i32, to: i32) -> (usize, usize) {
+    debug_assert!(!s.is_empty(), "map_range indexes `p - 1` after the scan");
+    let last = s.len() - 1;
+    // `tmpint` starts at -1 and only ever rises, so a negative `from` can match
+    // just once, before the first character has been counted -- which happens
+    // only if that character is a gap. Otherwise the loop runs off the end.
+    let negative_hit = from == -1 && s[0] == b'-';
+    let exhausted = from < 0 && !negative_hit;
+    let start = if negative_hit {
+        0
+    } else if from >= 0 && (from as usize) < positions.len() {
+        positions[from as usize]
+    } else {
+        last
+    };
+    if from == to {
+        return (start, start);
+    }
+    // The second loop resumes where the first stopped, so it finds `to` only
+    // when the first stopped early and `to` is still ahead of `from`.
+    let end = if !exhausted && to > from && (to as usize) < positions.len() {
+        positions[to as usize]
+    } else {
+        last
+    };
+    (start, end)
+}
+
 /// `movereg()` / `movereg_swap()`.
 ///
 /// A constraint is stored once, indexed by the lower-numbered sequence. When
@@ -295,14 +359,21 @@ fn map_range(s: &[u8], from: i32, to: i32) -> (usize, usize) {
 /// block have to be read the other way round -- that is `movereg_swap`, and
 /// `fillimp` chooses between them per pair. Getting this wrong shifts the
 /// constraint bonus by a few columns and silently changes the alignment.
-fn movereg(seq1: &[u8], seq2: &[u8], e: &LocalHom, swap: bool) -> (usize, usize, usize, usize) {
+fn movereg(
+    seq1: &[u8],
+    pos1: &[usize],
+    seq2: &[u8],
+    pos2: &[usize],
+    e: &LocalHom,
+    swap: bool,
+) -> (usize, usize, usize, usize) {
     if swap {
-        let (start1, end1) = map_range(seq1, e.start2, e.end2);
-        let (start2, end2) = map_range(seq2, e.start1, e.end1);
+        let (start1, end1) = map_range_at(seq1, pos1, e.start2, e.end2);
+        let (start2, end2) = map_range_at(seq2, pos2, e.start1, e.end1);
         (start1, start2, end1, end2)
     } else {
-        let (start1, end1) = map_range(seq1, e.start1, e.end1);
-        let (start2, end2) = map_range(seq2, e.start2, e.end2);
+        let (start1, end1) = map_range_at(seq1, pos1, e.start1, e.end1);
+        let (start2, end2) = map_range_at(seq2, pos2, e.start2, e.end2);
         (start1, start2, end1, end2)
     }
 }
@@ -336,6 +407,9 @@ pub fn fillimp(
         row[..lgth2].fill(0.0);
     }
     let effijx = fastathreshold;
+    // Once per member, not once per segment of every constrained pair.
+    let pos1: Vec<Vec<usize>> = seq1[..clus1].iter().map(|s| nongap_positions(s)).collect();
+    let pos2: Vec<Vec<usize>> = seq2[..clus2].iter().map(|s| nongap_positions(s)).collect();
     for i in 0..clus1 {
         for j in 0..clus2 {
             let effij = eff1[i] * eff2[j] * effijx;
@@ -345,7 +419,8 @@ pub fn fillimp(
             };
             let swap = orinum1[i] > orinum2[j];
             for e in chain.iter() {
-                let (start1, start2, end1, end2) = movereg(seq1[i], seq2[j], e, swap);
+                let (start1, start2, end1, end2) =
+                    movereg(seq1[i], &pos1[i], seq2[j], &pos2[j], e, swap);
                 let mut k1 = start1;
                 let mut k2 = start2;
                 // `korh` is always 'h' here, so the kozo weight (zero without
@@ -395,4 +470,68 @@ pub fn fastshrinklocalhom_half<'a>(
         out.push(row);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A gapped string of `len` characters with roughly `gaps` in ten of them.
+    fn gapped(seed: u64, len: usize, gaps: u32) -> Vec<u8> {
+        let mut x = seed | 1;
+        (0..len)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                if x % 10 < u64::from(gaps) {
+                    b'-'
+                } else {
+                    b'A' + (x % 20) as u8
+                }
+            })
+            .collect()
+    }
+
+    /// The indexed lookup answers exactly what the scan answered, including for
+    /// endpoints no real constraint carries -- negative, reversed, past the end.
+    #[test]
+    fn map_range_agrees() {
+        for seed in 1..40u64 {
+            for &gaps in &[0u32, 3, 7, 9] {
+                let s = gapped(seed * 7919, 1 + (seed as usize % 23), gaps);
+                let positions = nongap_positions(&s);
+                let hi = s.len() as i32 + 2;
+                for from in -2..hi {
+                    for to in -2..hi {
+                        assert_eq!(
+                            map_range(&s, from, to),
+                            map_range_at(&s, &positions, from, to),
+                            "s={:?} from={} to={}",
+                            String::from_utf8_lossy(&s),
+                            from,
+                            to
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// An all-gap sequence has no residues at all, which is the case where the
+    /// scan runs off the end on both loops.
+    #[test]
+    fn map_range_agrees_without_residues() {
+        let s = vec![b'-'; 5];
+        let positions = nongap_positions(&s);
+        assert!(positions.is_empty());
+        for from in -2..7 {
+            for to in -2..7 {
+                assert_eq!(
+                    map_range(&s, from, to),
+                    map_range_at(&s, &positions, from, to)
+                );
+            }
+        }
+    }
 }
