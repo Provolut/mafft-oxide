@@ -33,13 +33,14 @@
 //! What will decide it, in order: `dvtditr-rs` calling this so it runs at all;
 //! then `verify_tbfast.sh` and `verify_e2e.sh` against a built `core/`; then
 //! the ProteinGym corpus through `mafft --auto`, byte-compared; then
-//! provolut-ml's ESCOTT scorer, SHA-256 compared. `GOAL-C-FREE.md` §3 has the
+//! provolut-ml's ESCOTT scorer, SHA-256 compared. `README.md`'s "Verification"
+//! has the
 //! commands.
 //!
 //! **The likeliest place for this to be wrong** is the pair of gap-open tie
 //! comparisons in `part_a_align`, which use `>` where `align.rs`'s `A__align`
 //! uses `>=` — deliberately, because the two C files disagree there. See the
-//! note on that function, and `GOAL-C-FREE.md` §4.
+//! note on that function, and `README.md`'s "Hazards in the C".
 
 use crate::localhom::{fillimp, LocalHom};
 
@@ -526,7 +527,7 @@ pub struct ImpTrack<'a> {
 ///
 /// The two C functions are the same walk; the `localhom` one additionally sums
 /// the constraint score of every cell it passes through. Written once here for
-/// the reason the `match_calc` note in `GOAL-C-FREE.md` gives: two
+/// the reason the `match_calc` note in `README.md` gives: two
 /// transliterations of one walk are free to drift apart, and a traceback that
 /// drifts changes an alignment without changing its score.
 ///
@@ -744,7 +745,7 @@ impl PartAlignState {
     /// `A__align` uses `>=` there and this one does not; upstream flipped them
     /// here in April 2018 and left the other file alone. Copying `align.rs`'s
     /// loop would change the alignment on every tie at identical score. See
-    /// `GOAL-C-FREE.md`.
+    /// `README.md`, "Hazards in the C".
     ///
     /// The `trywarp` and `chudanpt` paths are absent: this port refuses the
     /// former before reaching here, and nothing in this repo sets the latter.

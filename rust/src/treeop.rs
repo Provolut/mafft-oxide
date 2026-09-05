@@ -517,7 +517,7 @@ pub fn weight_from_a_branch(
 ///
 /// The C's `smalldistmtx` output is not produced here: `tditeration` allocates
 /// it only when `specificityconsideration != 0`, and the `mafft` script runs
-/// `dvtditr -s 0.0`. See `GOAL-C-FREE.md` for the other refusals that follow
+/// `dvtditr -s 0.0`. See `README.md` for the other refusals that follow
 /// from that flag.
 ///
 /// Args:
