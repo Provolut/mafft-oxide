@@ -257,6 +257,45 @@ What actually differs:
 The one consolation: `partA__align`, the largest single function
 `Falign_localhom` depends on, is already written (`partalign.rs`).
 
+### `TreeDependentIteration` has ~666 lines of missing *dependencies*
+
+The same reuse question, asked of the driver, and the answer is the opposite of
+`Falign_localhom`'s. Extracting every function it calls and checking each by
+its C name against the port: **16 of 28 are absent**, and they are not
+incidental — most are a tree/branch-weighting family the progressive aligner
+never needed, because `tbfast` builds its tree a different way.
+
+| lines | function | file |
+|---|---|---|
+| 157 | `treeCnv` | `treeOperation.c` |
+| 68 | `SSPscore` | `mltaln9.c` |
+| 65 | `classifypairs` | `tditeration.c` |
+| 59 | `nodeFromABranch` | `tddis.c` |
+| 54 | `OneClusterAndTheOther_fast` | `tddis.c` |
+| 48 | `distFromABranch` | `treeOperation.c` |
+| 45 | `countnode_int` | `mltaln9.c` |
+| 44 | `calcBranchWeight` | `treeOperation.c` |
+| 39 | `weightFromABranch` | `treeOperation.c` |
+| 26 | `msshrinklocalhom_fast_half` | `tddis.c` |
+| 22 | `substitution_hosei` | `mltaln9.c` |
+| 15 | `plainscore` | `mltaln9.c` |
+| 13 | `node_eff` | `tddis.c` |
+| 11 | `score_calc0` | `mltaln9.c` |
+| ? | `conjuctionfortbfast`, `weightimportance4` | not located by the scan |
+
+**666 lines of dependencies**, on top of `TreeDependentIteration`'s own 1188.
+
+Already there and reusable: `counteff_simple`, `fastconjuction_noname`,
+`commongappick`, `commongappick_record`, `intergroup_score`, `Falign`,
+`calcimportance_half`, `naivepairscore11`, `shrinklocalhom`,
+`part_imp_match_*`, and `WriteHat2_pointer`'s equivalent `io::write_hat2`.
+
+The lesson for whoever plans this next: **ask what a function calls, not how
+long it is.** `Falign_localhom` looked like 713 lines and is ~300 of Rust
+because its chain was already ported. `TreeDependentIteration` looks like 1188
+and is more, because its chain is not. Neither number was knowable from the
+file.
+
 ### On these estimates
 
 This is the fourth upward correction in this document, and they have all been
