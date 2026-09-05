@@ -399,6 +399,7 @@ mod tests {
             None,
             None,
             b'-',
+            usize::MAX,
         );
         assert_eq!(imp, 0.0, "unconstrained runs carry no constraint score");
         (group1, group2, score)
@@ -453,7 +454,7 @@ mod tests {
         let mut st = PartAlignState::default();
         let (score, _) = st.part_a_align(
             &cn, cn.penalty, cn.penalty_ex, &mut group1, &mut group2,
-            &[1.0], &[1.0], true, false, None, None, b'-',
+            &[1.0], &[1.0], true, false, None, None, b'-', usize::MAX,
         );
         assert_eq!(score, 0.0);
         assert_eq!(group1[0], b"----".to_vec());
@@ -471,7 +472,7 @@ mod tests {
             let mut g2: Vec<Vec<u8>> = vec![b"MKVITA".to_vec()];
             let (score, _) = st.part_a_align(
                 &cn, cn.penalty, cn.penalty_ex, &mut g1, &mut g2,
-                &[1.0], &[1.0], true, false, None, None, b'-',
+                &[1.0], &[1.0], true, false, None, None, b'-', usize::MAX,
             );
             match first {
                 None => first = Some((score, g1, g2)),
@@ -751,6 +752,9 @@ impl PartAlignState {
     /// Returns:
     ///     The alignment score, and the accumulated constraint score (the C's
     ///     `*impmatch`, 0.0 when unconstrained).
+    ///
+    /// `alloclen` is the caller's row capacity; the C aborts when the result
+    /// outgrows it.
     #[allow(clippy::too_many_arguments)]
     pub fn part_a_align(
         &mut self,
@@ -766,6 +770,7 @@ impl PartAlignState {
         gaps: Option<PartGaps>,
         constraint: Option<&PartConstraint>,
         newgapstr: u8,
+        alloclen: usize,
     ) -> (f64, f64) {
         use crate::profile;
 
@@ -1020,6 +1025,20 @@ impl PartAlignState {
         }
         for row in group2.iter_mut() {
             *row = profile::gapireru(row, &track.gt2, newgapstr);
+        }
+
+        // `alloclen < resultlen || resultlen > N`, at the end of the C's
+        // `partA__align`. It is an error path, but a real one: the refinement
+        // loop can grow an alignment past the buffer `dvtditr` sized from the
+        // longest input (`nlenmax * 9`), and where the C stops with this
+        // message a port without the check would carry on and produce output
+        // the C never would.
+        const N: usize = 5_000_000;
+        let resultlen = group1[0].len();
+        if alloclen < resultlen || resultlen > N {
+            eprintln!("alloclen={alloclen}, resultlen={resultlen}, N={N}");
+            eprintln!("LENGTH OVER!");
+            std::process::exit(1);
         }
 
         (wm, impmatch)

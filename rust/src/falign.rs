@@ -897,6 +897,7 @@ pub fn falign(
 ///     outgap: The C's global of the same name.
 ///     legacygapcost: The C's global of the same name.
 ///     newgapstr: The character a newly opened gap is written as.
+///     alloclen: The caller's row capacity, for the C's `LENGTH OVER` check.
 ///
 /// Returns:
 ///     The summed block scores, and the accumulated constraint score (the C's
@@ -914,6 +915,7 @@ pub fn falign_localhom(
     outgap: bool,
     legacygapcost: bool,
     newgapstr: u8,
+    alloclen: usize,
 ) -> (f64, f64) {
     let clus1 = group1.len();
     let clus2 = group2.len();
@@ -1054,6 +1056,7 @@ pub fn falign_localhom(
             Some((&sgap1, &sgap2, &egap1, &egap2)),
             Some(&constraint),
             newgapstr,
+            alloclen,
         );
         totalscore += sc;
         totalimpmatch += impmatch;
