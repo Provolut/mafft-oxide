@@ -184,6 +184,28 @@ single reordered addition changes an alignment, no test says which line did it,
 and the method that works here is instrumenting a scratch `core/` and bisecting
 on f64 bit patterns. That wants the whole budget for the bisect.
 
+### What `dvtditr` actually costs, measured per function
+
+This estimate has been corrected three times in this document, each time
+upward, because it was made from file sizes and skim-reading. Measured per
+function it is:
+
+| lines | function | needed on the `-C 0` path? |
+|---|---|---|
+| 1188 | `TreeDependentIteration` (`tditeration.c`) | yes — the sequential refinement loop is the bulk of it |
+| 925 | `athread` (`tditeration.c`) | **no** — the threaded worker; `-C 0` takes the sequential branch |
+| 66 | `classifypairs` | probably; check |
+| 81 | `freelocalarrays`, 81 `Writeoptions`, 20 `shuffle`, 13 `makescoringmatrices` | small |
+| ~500 | `dvtditr.c`'s `main` reached path | `hat3` table reading, `topol`/`len`/`eff`, subalignments, `_focus_` targets |
+
+So the driver is roughly **1400 reached lines**, on top of the ~360-line DP
+already written. Earlier notes here said "about 1000 lines" for everything
+remaining; that was wrong, and the difference is not a rounding error.
+
+The saving is real but smaller than it looks: `athread` is skipped only because
+this port is single-threaded, and a future `-C n` would need it or an
+equivalent.
+
 ### Status: the DP is written and **not verified**
 
 `partalign::PartAlignState::part_a_align` exists and compiles, and the suite is
