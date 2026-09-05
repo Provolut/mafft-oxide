@@ -335,6 +335,125 @@ mod tests {
         assert_eq!(at_offset, 33.0 + 22.0);
     }
 
+    /// The progressive stage's parameters, matching `tests_unit::tree_constants`.
+    fn dp_constants() -> crate::constants::Constants {
+        let a = crate::params::Args {
+            nblosum: 62,
+            ppenalty: -1530,
+            ppenalty_ex: 0,
+            poffset: 0,
+            penalty_shift_factor: 100.0,
+            ..Default::default()
+        };
+        crate::constants::Constants::new(&a)
+    }
+
+    /// Run the DP on two groups and return the aligned rows.
+    fn run_dp(g1: &[&str], g2: &[&str]) -> (Vec<Vec<u8>>, Vec<Vec<u8>>, f64) {
+        let cn = dp_constants();
+        let mut group1: Vec<Vec<u8>> = g1.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let mut group2: Vec<Vec<u8>> = g2.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let eff1 = vec![1.0 / group1.len() as f64; group1.len()];
+        let eff2 = vec![1.0 / group2.len() as f64; group2.len()];
+        let mut st = PartAlignState::default();
+        let (score, imp) = st.part_a_align(
+            &cn,
+            cn.penalty,
+            cn.penalty_ex,
+            &mut group1,
+            &mut group2,
+            &eff1,
+            &eff2,
+            true,
+            false,
+            None,
+            None,
+            b'-',
+        );
+        assert_eq!(imp, 0.0, "unconstrained runs carry no constraint score");
+        (group1, group2, score)
+    }
+
+    /// Every row of an alignment is the same width, and dropping its gaps gives
+    /// back the input.
+    fn assert_is_alignment(out: &[Vec<u8>], input: &[&str]) {
+        let w = out[0].len();
+        for (row, orig) in out.iter().zip(input) {
+            assert_eq!(row.len(), w, "ragged alignment");
+            let ungapped: Vec<u8> = row.iter().copied().filter(|&c| c != b'-').collect();
+            assert_eq!(
+                ungapped,
+                orig.as_bytes().to_vec(),
+                "the DP altered residues, not just gaps"
+            );
+        }
+    }
+
+    #[test]
+    fn the_dp_runs_and_returns_a_well_formed_alignment() {
+        // Not a bit-exactness check -- only `verify_tbfast.sh` against a built
+        // `core/` can be that. This is the weaker claim that the DP terminates,
+        // preserves every residue, and emits equal-width rows, which is what
+        // separates "compiles" from "runs at all".
+        let g1 = ["MKVLTA", "MKVITA"];
+        let g2 = ["MKVLTA"];
+        let (a1, a2, _) = run_dp(&g1, &g2);
+        assert_is_alignment(&a1, &g1);
+        assert_is_alignment(&a2, &g2);
+        assert_eq!(a1[0].len(), a2[0].len(), "both groups share one width");
+    }
+
+    #[test]
+    fn the_dp_aligns_sequences_of_different_lengths() {
+        let g1 = ["MKVLTAAG"];
+        let g2 = ["MKVTA"];
+        let (a1, a2, _) = run_dp(&g1, &g2);
+        assert_is_alignment(&a1, &g1);
+        assert_is_alignment(&a2, &g2);
+        assert_eq!(a1[0].len(), a2[0].len());
+        assert!(a1[0].len() >= 8, "the alignment cannot be shorter than its longer input");
+    }
+
+    #[test]
+    fn an_empty_group_becomes_all_gap() {
+        // The C's degenerate branches: one side empty, the other all gap.
+        let cn = dp_constants();
+        let mut group1: Vec<Vec<u8>> = vec![b"".to_vec()];
+        let mut group2: Vec<Vec<u8>> = vec![b"MKVL".to_vec()];
+        let mut st = PartAlignState::default();
+        let (score, _) = st.part_a_align(
+            &cn, cn.penalty, cn.penalty_ex, &mut group1, &mut group2,
+            &[1.0], &[1.0], true, false, None, None, b'-',
+        );
+        assert_eq!(score, 0.0);
+        assert_eq!(group1[0], b"----".to_vec());
+    }
+
+    #[test]
+    fn the_scratch_survives_a_second_call() {
+        // `ensure` keeps its buffers when a later window fits, so a stale value
+        // left in them would show up as a different answer on the second run.
+        let cn = dp_constants();
+        let mut st = PartAlignState::default();
+        let mut first = None;
+        for _ in 0..2 {
+            let mut g1: Vec<Vec<u8>> = vec![b"MKVLTA".to_vec()];
+            let mut g2: Vec<Vec<u8>> = vec![b"MKVITA".to_vec()];
+            let (score, _) = st.part_a_align(
+                &cn, cn.penalty, cn.penalty_ex, &mut g1, &mut g2,
+                &[1.0], &[1.0], true, false, None, None, b'-',
+            );
+            match first {
+                None => first = Some((score, g1, g2)),
+                Some((s0, ref r1, ref r2)) => {
+                    assert_eq!(score, s0, "a reused state changed the score");
+                    assert_eq!(&g1, r1);
+                    assert_eq!(&g2, r2);
+                }
+            }
+        }
+    }
+
     #[test]
     fn the_matrix_grows_only_when_a_window_no_longer_fits() {
         let mut p = PartImp::new();
