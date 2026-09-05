@@ -178,6 +178,31 @@ single reordered addition changes an alignment, no test says which line did it,
 and the method that works here is instrumenting a scratch `core/` and bisecting
 on f64 bit patterns. That wants the whole budget for the bisect.
 
+### Read this before writing one line of the DP
+
+**`partA__align` and `A__align` disagree on two tie comparisons, in opposite
+directions.** Copying `align.rs`'s inner loop — the obvious move, since it is
+the same DP and already ported — gives the wrong alignment on every tie, at
+identical score. No unit test and no score check can see it.
+
+| recurrence | `Salignmm.c` / `align.rs` | `partSalignmm.c` |
+|---|---|---|
+| `*prept + *ogcp2pt * gf1vapre` against `mi` | **`>=`** (the `>` form is commented out) | **`>`** (the `>=` form is commented out, `// 2018/Apr`) |
+| `*prept + ogcp1va * *gf2ptpre` against `*mjpt` | **`>=`** (`>` commented out) | **`>`** (`>=` commented out, `// 2018/Apr`) |
+
+Both files carry both forms, one live and one commented, and they are mirror
+images: upstream changed these two in `partSalignmm.c` in April 2018 and left
+`Salignmm.c` on `>=`. It is deliberate, not a bug, so there is nothing to file
+upstream — it is a porting hazard, and the reason this section exists.
+
+The other two comparisons in the same loop (`mi + *fgcp2pt * gf1va` and
+`*mjpt + fgcp1va * *gf2pt`, both against `wm`) use `>` in **both** files.
+
+So: write the DP from `partSalignmm.c`, and use `align.rs` only for the shape
+of the surrounding Rust — buffer ownership, the `previousw`/`currentw` swap,
+how `match_calc` is called. Diff the four comparisons against the C by eye
+before running anything.
+
 ### `partA__align`'s 696 lines, sliced
 
 Read off its control flow (`core/partSalignmm.c`, line numbers at the time of
