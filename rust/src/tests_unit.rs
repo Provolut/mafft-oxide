@@ -1643,3 +1643,40 @@ fn intergroup_score_charges_a_gap_run_once() {
         "{s1} {s3}"
     );
 }
+
+
+#[test]
+fn commongappick_record_maps_kept_columns_to_their_origins() {
+    // Column 1 is all-gap and must go; the map says where the survivors came
+    // from, and its trailing entry is the C's terminator column.
+    let mut seq = vec![b"A-CD".to_vec(), b"A-CE".to_vec()];
+    let map = crate::addfunctions::commongappick_record(&mut seq);
+    assert_eq!(seq[0], b"ACD".to_vec());
+    assert_eq!(seq[1], b"ACE".to_vec());
+    assert_eq!(map, vec![0, 2, 3, 4]);
+}
+
+#[test]
+fn commongappick_record_agrees_with_commongappick_on_the_rows() {
+    // The two must compact identically; only the map is extra.
+    for rows in [
+        vec![b"A-CD".to_vec(), b"A-CE".to_vec()],
+        vec![b"--AB".to_vec(), b"--AB".to_vec()],
+        vec![b"ABCD".to_vec(), b"ABCD".to_vec()],
+        vec![b"----".to_vec(), b"----".to_vec()],
+    ] {
+        let mut a = rows.clone();
+        let mut b = rows.clone();
+        crate::addfunctions::commongappick(&mut a);
+        let _ = crate::addfunctions::commongappick_record(&mut b);
+        assert_eq!(a, b, "the two disagree on {rows:?}");
+    }
+}
+
+#[test]
+fn commongappick_record_keeps_every_column_when_none_is_all_gap() {
+    let mut seq = vec![b"A-C".to_vec(), b"-BC".to_vec()];
+    let map = crate::addfunctions::commongappick_record(&mut seq);
+    assert_eq!(seq[0], b"A-C".to_vec());
+    assert_eq!(map, vec![0, 1, 2, 3]);
+}
