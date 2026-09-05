@@ -574,14 +574,23 @@ incumbent positive. Adding `-0.0` is the only identity that works for every
 All three builds compiled and timed in one session on one machine, best of
 seven per binary, outputs digested and identical:
 
-| | C `-O3` | C `-march=native` | port |
-|---|---|---|---|
-| `tbfast` | 0.821 s | 0.365 s | **0.219 s** (1.67x vs native) |
-| `dvtditr` | 0.189 s | 0.193 s | **0.168 s** (1.15x vs native) |
+| | C `-O3` | C `-march=native` | port before this | port |
+|---|---|---|---|---|
+| `tbfast` | 0.816 s | 0.363 s | 0.300 s | **0.216 s** |
+| `dvtditr` | 0.187 s | 0.192 s | 0.210 s | **0.166 s** |
+| 12 payloads, `mafft --auto` | 13.07 s | 7.75 s | 7.29 s | **5.63 s** |
 
-End to end, 12 ESCOTT payloads through `mafft --auto --preservecase`: C `-O3`
-13.13 s, C `-march=native` 7.86 s, **port 5.71 s** — 1.38x ahead of a C build
-that will not run on half the machines in the fleet.
+**1.38x ahead of a C build that will not run on half the machines in the fleet**,
+and 1.29x ahead of where the port stood before this round. The "port before
+this" column is the AVX-512 kernel commit built from a worktree in the same
+session, because comparing against a figure from an earlier day would have
+measured the machine as much as the change: the C at `-march=native` alone
+drifted 7.34 s to 7.75 s between the two.
+
+Note the C at `-O3` beat the port's `dvtditr` until this round. That binary
+never had a kernel to gain from -- `-march=native` does nothing for it either
+(0.187 s against 0.192 s) -- so the two algorithmic wins above are the whole of
+its lead.
 
 ## What is left
 

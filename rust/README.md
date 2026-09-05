@@ -328,16 +328,16 @@ machine:
 
 | build | time | vs the C at `-O3` | vs the C at `-march=native` |
 |---|---|---|---|
-| C, `gcc -O3` | 13.13 s | 1.00x | 0.60x |
-| C, `-march=native` (its AVX-512 kernel compiled in) | 7.86 s | 1.67x | 1.00x |
-| **this port** | **5.71 s** | **2.30x** | **1.38x** |
+| C, `gcc -O3` | 13.07 s | 1.00x | 0.59x |
+| C, `-march=native` (its AVX-512 kernel compiled in) | 7.75 s | 1.69x | 1.00x |
+| **this port** | **5.63 s** | **2.32x** | **1.38x** |
 
 Per binary, on one staged payload each and with byte-identical output:
 
 | | C `-O3` | C `-march=native` | port |
 |---|---|---|---|
-| `tbfast` | 0.821 s | 0.365 s | **0.219 s** |
-| `dvtditr` | 0.189 s | 0.193 s | **0.168 s** |
+| `tbfast` | 0.816 s | 0.363 s | **0.216 s** |
+| `dvtditr` | 0.187 s | 0.192 s | **0.166 s** |
 
 Four things got it there, and `bench/OPTIMISATION-LOG.md` has the measurements
 for all of them. Two removed work rather than doing it faster: bounds checks and
@@ -347,8 +347,9 @@ and `fillimp`, 1.27x on that binary between them). The other two are
 `lalign_avx512`: a transliteration of the C's own AVX-512 kernel for
 `L__align11`'s DP row, and — with the row vectorised, the recurrence that feeds
 it turned out to be 43% of the binary on its own — a vectorised prefix scan of
-`mi`, which the C does not have. `tbfast` on a staged payload went 0.770 s →
-0.292 s → 0.219 s.
+`mi`, which the C does not have. `tbfast` on a staged payload went 0.838 s →
+0.300 s → 0.216 s across the three, every figure from the same machine and
+session as the table above.
 
 **The port's kernel dispatches at runtime; the C's is compiled in.** A C build
 carrying it (`-march=native`) crashes on a machine without AVX-512, and a
