@@ -39,15 +39,17 @@
 
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 MODE="${1:?usage: verify_golden.sh record|replay ...}"
 HARNESS="${2:?usage: verify_golden.sh record|replay <harness.sh> ...}"
 case "$HARNESS" in /*) ;; *) HARNESS="$here/$HARNESS" ;; esac
 [ -x "$HARNESS" ] || { echo "verify_golden: no such harness: $HARNESS" 1>&2; exit 2; }
 
-GOLDENC="$here/target/release/examples/goldenc"
+GOLDENC="$rust/target/release/examples/goldenc"
 if [ ! -x "$GOLDENC" ]; then
   echo "verify_golden: building goldenc" 1>&2
-  ( cd "$here" && cargo build --release --example goldenc ) || exit 2
+  ( cd "$rust" && cargo build --release --example goldenc ) || exit 2
 fi
 
 abspath() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$(pwd)" "$1" ;; esac; }
@@ -158,7 +160,7 @@ replay)
 
   # If a `core/` is present, it must be the one this store was recorded from.
   # Absent, replaying is exactly the point and nothing is checked.
-  guess="$here/../core/$(basename "$HARNESS" | sed 's/^verify_//; s/^verify$/disttbfast/; s/\.sh$//')"
+  guess="$repo/core/$(basename "$HARNESS" | sed 's/^verify_//; s/^verify$/disttbfast/; s/\.sh$//')"
   if [ -f "$store/C-IDENTITY" ] && [ -x "$guess" ]; then
     have=$(c_identity "$guess")
     want=$(cat "$store/C-IDENTITY")

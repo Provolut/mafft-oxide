@@ -15,19 +15,21 @@
 # vacuous, so that case is reported rather than counted as a pass.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-MAFFT="${MAFFT:-$here/../scripts/mafft}"
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
+MAFFT="${MAFFT:-$repo/scripts/mafft}"
 [ -x "$MAFFT" ] || { echo "verify_lalign_kernel: cannot find the mafft wrapper" 1>&2; exit 2; }
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 # A libexec of the Rust binaries.
-cp -r "$here/../binaries" "$work/rs"
+cp -r "$repo/binaries" "$work/rs"
 for b in countlen version f2cl tbfast disttbfast dvtditr dndpre replaceu restoreu; do
-  [ -f "$here/target/release/$b-rs" ] && cp "$here/target/release/$b-rs" "$work/rs/$b"
+  [ -f "$rust/target/release/$b-rs" ] && cp "$rust/target/release/$b-rs" "$work/rs/$b"
 done
 
-if ! "$here/target/release/tbfast-rs" --help 2>&1 | head -0; then :; fi
+if ! "$rust/target/release/tbfast-rs" --help 2>&1 | head -0; then :; fi
 # Does this machine even have the kernel? Ask the binary, not /proc.
 if ! grep -qE '^flags.*\bavx512f\b' /proc/cpuinfo || ! grep -qE '^flags.*\bavx512vl\b' /proc/cpuinfo; then
   echo "verify_lalign_kernel: this CPU has no avx512f+avx512vl; both runs would take"
@@ -37,7 +39,7 @@ fi
 
 INPUTS=("$@")
 if [ ${#INPUTS[@]} -eq 0 ]; then
-  INPUTS=("$here/../test/sample" "$here/../test/samplerna")
+  INPUTS=("$repo/test/sample" "$repo/test/samplerna")
   # A wide, deeply conserved input, which is where the kernel's row is longest
   # and its tail shortest.
   python3 - "$work/wide.fa" <<'GENPY'

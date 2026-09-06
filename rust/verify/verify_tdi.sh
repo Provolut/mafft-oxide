@@ -23,6 +23,8 @@ REGEN=0
 if [ "${1:-}" = "--regenerate" ]; then REGEN=1; shift; fi
 COREDIR="${1:?usage: verify_tdi.sh [--regenerate] <core-dir>}"
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 
 # Everything except the objects that carry a `main`.
@@ -33,15 +35,15 @@ if [ -z "$objs" ]; then echo "verify_tdi: no objects in $COREDIR" 1>&2; exit 2; 
 # `TLS` storage class of the shared globals disagrees and the link fails.
 CC=${CC:-/usr/bin/gcc-13}
 $CC -std=c99 -Denablemultithread -Denableatomic -O0 -g -I "$COREDIR" \
-    -o "$work/tdiharness" "$here/gen_tdiharness.c" $objs -lm -lpthread || exit 2
+    -o "$work/tdiharness" "$rust/gen/gen_tdiharness.c" $objs -lm -lpthread || exit 2
 if [ $REGEN -eq 0 ]; then
-  ( cd "$here" && cargo build --release --example tdiref ) || exit 2
+  ( cd "$rust" && cargo build --release --example tdiref ) || exit 2
 fi
-RREF="$here/target/release/examples/tdiref"
+RREF="$rust/target/release/examples/tdiref"
 if [ $REGEN -eq 0 ] && [ ! -x "$RREF" ]; then
   echo "verify_tdi: $RREF is not executable" 1>&2; exit 2
 fi
-golden="$here/tests/golden/tdi"
+golden="$rust/tests/golden/tdi"
 if [ $REGEN -eq 1 ]; then mkdir -p "$golden" && rm -f "$golden"/*.args "$golden"/*.expected; fi
 
 # The committed fixtures hold the small trees only; the live differential runs
@@ -49,9 +51,9 @@ if [ $REGEN -eq 1 ]; then mkdir -p "$golden" && rm -f "$golden"/*.args "$golden"
 # The committed fixtures hold the small runs only; the live differential runs
 # the whole corpus. See gen_tdicases.py.
 if [ $REGEN -eq 1 ]; then
-  python3 "$here/gen_tdicases.py" --small > "$work/cases.txt"
+  python3 "$rust/gen/gen_tdicases.py" --small > "$work/cases.txt"
 else
-  python3 "$here/gen_tdicases.py" > "$work/cases.txt"
+  python3 "$rust/gen/gen_tdicases.py" > "$work/cases.txt"
 fi
 n=$(wc -l < "$work/cases.txt")
 # A harness that compares nothing reports pass=0 fail=0 and looks green; this

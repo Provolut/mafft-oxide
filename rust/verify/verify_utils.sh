@@ -17,6 +17,8 @@
 
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 
 if [ "${1:-}" = "--regenerate" ]; then
   REGEN=1; shift
@@ -26,8 +28,8 @@ fi
 
 CORE="${1:?usage: verify_utils.sh [--regenerate] <core-dir> [corpus-dir]}"
 CORPUS="${2:-}"
-RSDIR="$here/target/release"
-GOLDEN="$here/tests/golden/utils"
+RSDIR="$rust/target/release"
+GOLDEN="$rust/tests/golden/utils"
 
 # Absolute, because the `dndpre` cases below run each side in a scratch
 # directory of its own -- `dndpre` writes `hat2` into the working directory, so

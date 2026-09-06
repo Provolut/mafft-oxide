@@ -33,6 +33,8 @@ for b in "$CBIN" "$RBIN"; do
 done
 
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -83,9 +85,9 @@ ARGSETS=(
 if [ -z "$CORPUS" ]; then
   CORPUS="$work/corpus"
   mkdir -p "$CORPUS"
-  cp "$here/../test/sample" "$CORPUS/sample.fa"
-  cp "$here/../test/samplerna" "$CORPUS/samplerna.fa"
-  python3 "$here/gencorpus.py" "$here/../test/sample" "$CORPUS" small
+  cp "$repo/test/sample" "$CORPUS/sample.fa"
+  cp "$repo/test/samplerna" "$CORPUS/samplerna.fa"
+  python3 "$rust/gen/gencorpus.py" "$repo/test/sample" "$CORPUS" small
 fi
 
 # An empty or missing corpus would make every loop below run zero times and
@@ -150,7 +152,7 @@ for f in "$CORPUS"/*; do
     for extra in "" "-t"; do
       rm -rf "$work/c" "$work/r"
       mkdir -p "$work/c" "$work/r"
-      python3 "$here/gen_treein.py" "$n" "$shape" > "$work/c/_guidetree"
+      python3 "$rust/gen/gen_treein.py" "$n" "$shape" > "$work/c/_guidetree"
       cp "$work/c/_guidetree" "$work/r/_guidetree"
       ( cd "$work/c" && $CBIN _ $P _ -+ 2 $T -U $extra < "$f" > /dev/null 2> err.log )
       cst=$?
@@ -183,7 +185,7 @@ for f in "$CORPUS"/*; do
   for variant in plain perm norescale permfreq; do
     rm -rf "$work/c" "$work/r"
     mkdir -p "$work/c" "$work/r"
-    python3 "$here/gen_aamtx.py" "$variant" > "$work/c/_aamtx" || continue
+    python3 "$rust/gen/gen_aamtx.py" "$variant" > "$work/c/_aamtx" || continue
     cp "$work/c/_aamtx" "$work/r/_aamtx"
     MP="-u 0.0 -l 2.7 -C 0 -b -1 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L"
     MT="-W 0.00001 -V -1.53 -s 0.0 -C 0 -b -1 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O"
@@ -221,7 +223,7 @@ for variant in full sparse nomatrix; do
   for seed in 1 2 3 4 5 6; do
     rm -rf "$work/c" "$work/r"
     mkdir -p "$work/c" "$work/r"
-    python3 "$here/gen_text.py" "$seed" "$variant" "$work/c" || continue
+    python3 "$rust/gen/gen_text.py" "$seed" "$variant" "$work/c" || continue
     cp "$work/c/in.fa" "$work/r/in.fa"
     [ -f "$work/c/_aamtx" ] && cp "$work/c/_aamtx" "$work/r/_aamtx"
     TP="-u 0.0 -l 2.7 -C 0 -b -2 -P -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L"
@@ -265,7 +267,7 @@ for f in "$CORPUS"/*; do
   [ -s "$work/pre/aligned.fa" ] || continue
   for nadd in 1 $((n/2)); do
     for mode in add profile; do
-      python3 "$here/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
+      python3 "$rust/gen/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
       kflag=""
       [ "$mode" = "add" ] && kflag="-K"
       for extra in "" "-Y" "-Y -Z" "-Y -z"; do

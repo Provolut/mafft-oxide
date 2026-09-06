@@ -16,6 +16,8 @@ RBIN="${2:?usage: verify_e2e.sh <libexec-dir> <disttbfast-rs> [inputs...]}"
 shift 2
 
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 
 # The wrapper runs each alignment from a scratch directory of its own, so a
 # relative `MAFFT_BINARIES` resolves to somewhere that does not exist and every
@@ -28,7 +30,7 @@ case "$RBIN" in /*) ;; *) RBIN="$(pwd)/$RBIN" ;; esac
 
 INPUTS=("$@")
 if [ ${#INPUTS[@]} -eq 0 ]; then
-  INPUTS=("$here/../test/sample")
+  INPUTS=("$repo/test/sample")
 fi
 
 # The wrapper itself: $MAFFT if set, else the `mafft` next to the libexec dir,
@@ -150,7 +152,7 @@ for f in "${INPUTS[@]}"; do
   [ -s "$work/aligned.fa" ] || continue
   nadd=$(( n / 2 ))
   for mode in add; do
-    python3 "$here/gen_add.py" "$work/aligned.fa" "$nadd" "$mode" > "$work/both.fa" || continue
+    python3 "$rust/gen/gen_add.py" "$work/aligned.fa" "$nadd" "$mode" > "$work/both.fa" || continue
     # Split it back into "the existing alignment" and "the sequences to add".
     python3 - "$work/both.fa" "$nadd" "$work/exist.fa" "$work/new.fa" <<'PYEOF'
 import sys

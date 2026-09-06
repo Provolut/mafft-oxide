@@ -19,6 +19,8 @@ RBIN="${2:?usage: verify_dvtditr.sh <libexec-dir> <dvtditr-rs> [inputs...]}"
 shift 2
 
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 abspath() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$(pwd)" "$1" ;; esac; }
 LIBEXEC=$(abspath "$LIBEXEC")
 RBIN=$(abspath "$RBIN")
@@ -62,10 +64,10 @@ GENPY
 
 INPUTS=("$@")
 if [ ${#INPUTS[@]} -eq 0 ]; then
-  INPUTS=("$here/../test/sample" "$here/../test/samplerna" "$work/segments.fa" "$work/pair.fa")
+  INPUTS=("$repo/test/sample" "$repo/test/samplerna" "$work/segments.fa" "$work/pair.fa")
 fi
 
-MAFFT="${MAFFT:-$here/../scripts/mafft}"
+MAFFT="${MAFFT:-$repo/scripts/mafft}"
 [ -x "$MAFFT" ] || { echo "verify_dvtditr: cannot find the mafft wrapper" 1>&2; exit 2; }
 
 # A libexec copy whose dvtditr stages what it was called with, then runs the C.

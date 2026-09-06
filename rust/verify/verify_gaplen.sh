@@ -12,15 +12,17 @@
 set -u
 OBJDIR="${1:?usage: verify_gaplen.sh <core-objdir>}"
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 
 objs=$(ls "$OBJDIR"/*.o | grep -v 'disttbfast\.o$')
 if [ -z "$objs" ]; then echo "verify_gaplen: no objects in $OBJDIR" 1>&2; exit 2; fi
-gcc -O0 -g -o "$work/glharness" "$here/gen_glharness.c" $objs -lm -lpthread || exit 2
-( cd "$here" && cargo build --release --example glref ) || exit 2
-RREF="$here/target/release/examples/glref"
+gcc -O0 -g -o "$work/glharness" "$rust/gen/gen_glharness.c" $objs -lm -lpthread || exit 2
+( cd "$rust" && cargo build --release --example glref ) || exit 2
+RREF="$rust/target/release/examples/glref"
 
-python3 "$here/gen_glcases.py" > "$work/cases.txt"
+python3 "$rust/gen/gen_glcases.py" > "$work/cases.txt"
 n=$(wc -l < "$work/cases.txt")
 if [ "$n" -lt 50 ]; then echo "verify_gaplen: only $n cases; refusing" 1>&2; exit 2; fi
 

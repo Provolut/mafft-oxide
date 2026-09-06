@@ -33,6 +33,8 @@ for b in "$CBIN" "$RBIN"; do
 done
 
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -103,9 +105,9 @@ ARGSETS=(
 gen_corpus() {
   local d="$1"
   mkdir -p "$d"
-  cp "$here/../test/sample" "$d/sample.fa"
-  cp "$here/../test/samplerna" "$d/samplerna.fa"
-  python3 "$here/gencorpus.py" "$here/../test/sample" "$d" full
+  cp "$repo/test/sample" "$d/sample.fa"
+  cp "$repo/test/samplerna" "$d/samplerna.fa"
+  python3 "$rust/gen/gencorpus.py" "$repo/test/sample" "$d" full
 }
 
 if [ -z "$CORPUS" ]; then
@@ -180,7 +182,7 @@ for f in "$CORPUS"/*; do
     for extra in "" "-t"; do
       rm -rf "$work/c" "$work/r"
       mkdir -p "$work/c" "$work/r"
-      python3 "$here/gen_treein.py" "$n" "$shape" > "$work/c/_guidetree"
+      python3 "$rust/gen/gen_treein.py" "$n" "$shape" > "$work/c/_guidetree"
       cp "$work/c/_guidetree" "$work/r/_guidetree"
       ( cd "$work/c" && $CBIN $UARGS $extra < "$f" > out.fa 2> err.log )
       cst=$?
@@ -256,7 +258,7 @@ for f in "$CORPUS"/*; do
   for variant in plain perm freq norescale permfreq nocomment; do
     rm -rf "$work/c" "$work/r"
     mkdir -p "$work/c" "$work/r"
-    python3 "$here/gen_aamtx.py" "$variant" > "$work/c/_aamtx" || continue
+    python3 "$rust/gen/gen_aamtx.py" "$variant" > "$work/c/_aamtx" || continue
     cp "$work/c/_aamtx" "$work/r/_aamtx"
     ( cd "$work/c" && $CBIN $MARGS < "$f" > out.fa 2> err.log )
     cst=$?
@@ -356,7 +358,7 @@ for variant in full sparse nomatrix unscored minusone; do
     for extra in "" "-a" "-F"; do
       rm -rf "$work/c" "$work/r"
       mkdir -p "$work/c" "$work/r"
-      python3 "$here/gen_text.py" "$seed" "$variant" "$work/c" || continue
+      python3 "$rust/gen/gen_text.py" "$seed" "$variant" "$work/c" || continue
       cp "$work/c/in.fa" "$work/r/in.fa"
       [ -f "$work/c/_aamtx" ] && cp "$work/c/_aamtx" "$work/r/_aamtx"
       TARGS="-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -2 -P -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100 $extra"
@@ -398,7 +400,7 @@ for f in "$CORPUS"/*; do
   ( cd "$work/pre" && $CBIN $HARGS < "$f" > aligned.fa 2> /dev/null ) || continue
   [ -s "$work/pre/aligned.fa" ] || continue
   for spec in "2" "3" "2 interleave" "3 interleave" "4 interleave" "2 interleave preservegaps"; do
-    python3 "$here/gen_merge.py" "$work/pre/aligned.fa" $spec > "$work/pre/st.txt" || continue
+    python3 "$rust/gen/gen_merge.py" "$work/pre/aligned.fa" $spec > "$work/pre/st.txt" || continue
     [ -s "$work/pre/st.txt" ] || continue
     rm -rf "$work/c" "$work/r"
     mkdir -p "$work/c" "$work/r"
@@ -441,7 +443,7 @@ for f in "$CORPUS"/*; do
   for nadd in 1 $((n/2)); do
     [ "$nadd" -ge 1 ] || continue
     for mode in add profile; do
-      python3 "$here/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
+      python3 "$rust/gen/gen_add.py" "$work/pre/aligned.fa" "$nadd" "$mode" > "$work/pre/in.fa" || continue
       kflag=""
       [ "$mode" = "add" ] && kflag="-K"
       # -Y (--keeplength) rides on --add: it cuts the columns the alignment
@@ -505,7 +507,7 @@ for f in "$CORPUS"/*; do
     for i in "${!LARGSETS[@]}"; do
       rm -rf "$work/c" "$work/r"
       mkdir -p "$work/c" "$work/r"
-      python3 "$here/gen_anchors.py" "$f" $spec > "$work/c/_externalanchors" || continue
+      python3 "$rust/gen/gen_anchors.py" "$f" $spec > "$work/c/_externalanchors" || continue
       [ -s "$work/c/_externalanchors" ] || continue
       cp "$work/c/_externalanchors" "$work/r/_externalanchors"
       ( cd "$work/c" && $CBIN ${LARGSETS[$i]} < "$f" > out.fa 2> err.log )

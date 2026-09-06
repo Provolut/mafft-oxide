@@ -18,6 +18,8 @@ REGEN=0
 if [ "${1:-}" = "--regenerate" ]; then REGEN=1; shift; fi
 COREDIR="${1:?usage: verify_flh.sh [--regenerate] <core-dir>}"
 here=$(cd "$(dirname "$0")" && pwd)
+rust=$(cd "$here/.." && pwd)
+repo=$(cd "$rust/.." && pwd)
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 
 # Everything except the objects that carry a `main`.
@@ -28,18 +30,18 @@ if [ -z "$objs" ]; then echo "verify_flh: no objects in $COREDIR" 1>&2; exit 2; 
 # `TLS` storage class of the shared globals disagrees and the link fails.
 CC=${CC:-/usr/bin/gcc-13}
 $CC -std=c99 -Denablemultithread -Denableatomic -O0 -g -I "$COREDIR" \
-    -o "$work/flhharness" "$here/gen_flhharness.c" $objs -lm -lpthread || exit 2
+    -o "$work/flhharness" "$rust/gen/gen_flhharness.c" $objs -lm -lpthread || exit 2
 if [ $REGEN -eq 0 ]; then
-  ( cd "$here" && cargo build --release --example flhref ) || exit 2
+  ( cd "$rust" && cargo build --release --example flhref ) || exit 2
 fi
-RREF="$here/target/release/examples/flhref"
+RREF="$rust/target/release/examples/flhref"
 if [ $REGEN -eq 0 ] && [ ! -x "$RREF" ]; then
   echo "verify_flh: $RREF is not executable" 1>&2; exit 2
 fi
-golden="$here/tests/golden/flh"
+golden="$rust/tests/golden/flh"
 if [ $REGEN -eq 1 ]; then mkdir -p "$golden" && rm -f "$golden"/*.args "$golden"/*.expected; fi
 
-python3 "$here/gen_flhcases.py" > "$work/cases.txt"
+python3 "$rust/gen/gen_flhcases.py" > "$work/cases.txt"
 n=$(wc -l < "$work/cases.txt")
 # A harness that compares nothing reports pass=0 fail=0 and looks green; this
 # floor is why it cannot.
@@ -72,7 +74,7 @@ done < "$work/cases.txt"
 # run makes hundreds of calls in one process. This stage replays a coherent run
 # -- constant njob and width, as tditeration keeps them -- through one process
 # on the C side and one state object on the port's.
-python3 "$here/gen_flhcases.py" --sequence > "$work/seq.txt"
+python3 "$rust/gen/gen_flhcases.py" --sequence > "$work/seq.txt"
 seqn=$(wc -l < "$work/seq.txt")
 if [ "$seqn" -lt 20 ]; then echo "verify_flh: sequence has only $seqn calls; refusing" 1>&2; exit 2; fi
 "$work/flhharness" --sequence < "$work/seq.txt" > "$work/seq_c.txt" 2>/dev/null || {
