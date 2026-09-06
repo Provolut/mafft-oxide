@@ -5,8 +5,9 @@
 # Install once:
 #     git config core.hooksPath .githooks
 #
-# Takes about 40 seconds: the encoding check is instant, the test suite is 4 s,
-# the coverage run is the rest.
+# Takes about 25 seconds on an idle machine: the encoding check is instant, the
+# release test suite about 1.5 s warm, the coverage run 16 s, the sampling
+# profile the rest.
 # That is deliberate -- a hook slow enough to be worth skipping gets skipped,
 # and then it is not a gate. `--no-verify` bypasses it when you genuinely need
 # to push a work-in-progress branch.
@@ -14,9 +15,9 @@
 # Two things this does NOT do, on purpose:
 #
 #  * It does not run `verify.sh` or `verify_tbfast.sh`. Those need a compiled
-#    `core/` on the machine and take an hour. `tests/matrix.rs` carries the C's
-#    answers as fixtures and covers the same ground in seconds; the full
-#    harnesses belong in a nightly job.
+#    `core/` on the machine and take 8m 36s and 3m 41s. `tests/matrix.rs`
+#    carries the C's answers as fixtures and covers the same ground in seconds;
+#    the full harnesses belong in a nightly job.
 #  * It does not gate on performance. The profiling database is measured with
 #    callgrind, which costs ~50x, and wall-clock numbers taken on a machine
 #    busy with a push are not comparable to anything. `bench/sample.sh`

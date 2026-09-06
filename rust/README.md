@@ -299,21 +299,37 @@ cases a corpus misses:
   a gap, non-alphabetic characters dropped, sequence-type detection;
 - unsupported configurations are refused.
 
-Current status, on this source tree:
+Current status, on this source tree. The times are wall clock on one idle
+12-core workstation, so read them as orders of magnitude rather than as a
+benchmark -- they are here because "run the harnesses" means something quite
+different for the two at the top than for the rest:
 
-| check | result |
-|---|---|
-| `verify.sh`, generated corpus (88 inputs × 36 argument sets, plus `--treein`) | 3520/3520 identical |
-| `verify_tbfast.sh`, generated corpus (40 inputs × 19, plus `--treein`) | 920/920 identical |
-| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) |
-| `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical |
-| `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
-| `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical |
-| `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical |
-| `verify_lalign_kernel.sh`, the AVX-512 kernel against the scalar path | 15/15 identical |
-| 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical |
-| upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong |
-| `cargo test` | 221/221 |
+| check | result | time |
+|---|---|---|
+| `verify.sh`, generated `disttbfast` corpus | 12018/12018 identical | 8m 36s |
+| `verify_tbfast.sh`, generated `tbfast` corpus | 1690/1690 identical | 3m 41s |
+| `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) | 28s |
+| 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical | 27s (10 workers) |
+| `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical | 12s |
+| `verify_lalign_kernel.sh`, the AVX-512 kernel against the scalar path | 15/15 identical | 8s |
+| `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical | 3s |
+| `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical | 3s |
+| `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical | 2s |
+| `verify_gaplen.sh`, the `Gaplen` half of `-@` | 203/203 identical | 2s |
+| `verify_utils.sh`, the four utility binaries | 119/119 identical, 1 indeterminate | under 1s |
+| upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong | — |
+| `cargo test --release` | 227/227, 0 ignored | 1.4s warm |
+| `bench/coverage.sh` | 88.93% region, 88.37% line | 16s |
+
+Two things that table is easy to misread. **The coverage figure is `cargo test`
+and nothing else** -- `coverage.sh` re-runs that same suite under
+`-C instrument-coverage`, with the binaries passed to `llvm-cov` as `--object`
+so the golden tests' subprocesses count. None of the `verify_*.sh` harnesses
+contribute to it; they drive released binaries, not instrumented ones. And
+`verify_gaplen.sh` needs an object directory built specially -- a `core/` whose
+`Dalignmm.c` has `static` removed from four functions, built as
+`make disttbfast` so that exactly one `main` exists to link against -- so
+pointing it at the ordinary `core/` fails to link rather than failing a case.
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
 RNA folding programs and fail identically with the stock C binaries.)
