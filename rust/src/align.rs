@@ -200,9 +200,28 @@ pub(crate) fn match_calc(
     // row, which is ~128 thousand times on a 36-sequence refinement, and the
     // alphabet is 26 (0x100 under `--text`), so the array is sized for the
     // larger case and only `nalphabets` of it is ever touched.
+    //
+    // The `c == 0.0` skip is where most of this function's time went. `cpmx1`
+    // is a profile column -- how much of each residue type appears at position
+    // `i1` -- so it is nearly empty: measured over a staged ESCOTT `dvtditr`
+    // payload, 104125 of 2000024 entries are non-zero, 1.35 of 26 per column.
+    // The C runs all 26 rows regardless, and the row it skips here contributes
+    // `scarr[l] += n_dynamicmtx[j][l] * 0.0` to every `l`.
+    //
+    // That is exactly nothing, in the bit-pattern sense and not merely
+    // numerically. `x * (+-0.0)` is `+-0.0` (no infinity or NaN reaches this
+    // matrix), and `x + (+-0.0)` is `x` for every `x` except `x == -0.0` with a
+    // `+0.0` addend, which gives `+0.0`. `scarr` cannot hold `-0.0`: it starts
+    // at `+0.0`, and a sum is `-0.0` only when both addends are, so the first
+    // real addition already leaves that state and can never return to it (an
+    // exact cancellation rounds to `+0.0` under round-to-nearest). The skipped
+    // term therefore could not have changed a single bit.
     let mut scarr = [0.0f64; 0x100];
     for j in 0..nalphabets {
         let c = cpmx1[j][i1];
+        if c == 0.0 {
+            continue;
+        }
         let row = &n_dynamicmtx[j];
         for (l, sc) in scarr[..nalphabets].iter_mut().enumerate() {
             *sc += row[l] * c;
