@@ -11,7 +11,11 @@
 //! -- so the transliteration is faithful in arithmetic without inheriting the
 //! memory model. That is what lets the port stop at upstream's out-of-bounds
 //! writes (issue #4) instead of reproducing them.
-#![forbid(unsafe_code)]
+// `deny`, not `forbid`, for exactly one module: `lalign_avx512` allows itself,
+// and nothing else in the crate can. `forbid` cannot be lifted locally, which
+// is the point of the two lints -- so this is the whole of the licence the
+// kernel gets, and it is visible here rather than buried.
+#![deny(unsafe_code)]
 
 pub mod addfunctions;
 pub mod align;
@@ -30,6 +34,7 @@ pub mod io;
 pub mod jtt;
 pub mod keeplength;
 pub mod lalign;
+pub mod lalign_avx512;
 pub mod localhom;
 pub mod msalign;
 pub mod naivescore;
