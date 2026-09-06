@@ -306,8 +306,8 @@ different for the two at the top than for the rest:
 
 | check | result | time |
 |---|---|---|
-| `verify.sh`, generated `disttbfast` corpus | 12018/12018 identical | 8m 36s, or **1m 34s** under `verify_parallel.sh` |
-| `verify_tbfast.sh`, generated `tbfast` corpus | 1690/1690 identical | 3m 41s, or **1m 17s** under `verify_parallel.sh` |
+| `verify.sh`, generated `disttbfast` corpus | 12018/12018 identical | 8m 36s; **1m 34s** parallel, **54s** replayed |
+| `verify_tbfast.sh`, generated `tbfast` corpus | 1690/1690 identical | 3m 41s; **1m 17s** parallel, **27s** replayed |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) | 28s |
 | 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical | 27s (10 workers) |
 | `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical | 12s |
@@ -342,6 +342,53 @@ reading the corpus, and those ran once per worker until they were gated, which
 inflated the first parallel run to 1744. Worker count is capped at
 corpus-files/10 because that is the floor a harness refuses to run below; the
 guard against a vacuous run is exactly what slicing could otherwise manufacture.
+
+**`verify_golden.sh` runs the same harnesses with no C at all.** The harnesses
+take the C binary as an argument and otherwise care nothing about it, so
+`goldenc` -- which records what the C did once and reproduces its bytes
+thereafter -- takes its place. Neither harness is modified and neither knows:
+they make the same comparisons and report the same tallies.
+
+```
+./verify_golden.sh record verify.sh ../core/disttbfast \
+    target/release/disttbfast-rs tests/golden/disttbfast.tar.gz   # once, needs core/
+./verify_golden.sh replay verify.sh tests/golden/disttbfast.tar.gz \
+    target/release/disttbfast-rs                                  # thereafter, does not
+```
+
+| | `verify.sh` | `verify_tbfast.sh` | both |
+|---|---|---|---|
+| serial, against `core/` | 8m 36s | 3m 41s | 12m 17s |
+| `verify_parallel.sh`, against `core/` | 1m 34s | 1m 17s | 2m 51s |
+| `verify_golden.sh replay`, no C present | **54s** | **27s** | **1m 21s** |
+
+Recording is itself a full differential run, C and port side by side, so a store
+can only be written by a run that passed -- there is no mode that records
+without checking. It then runs the harness a second time against the real C and
+requires the same tally, which is not ceremony: `verify_tbfast.sh` looks for
+`disttbfast` beside the C binary, and the first version of this script put the
+stand-in alone in a temp directory, so a 592-case section quietly skipped itself
+and recorded 1098 cases while reporting a clean pass. The tally check is what
+catches that shape of mistake.
+
+**The stores are not tracked**, and `.gitignore` says why: 29 MB and 15 MB
+gzipped, rewritten whenever `core/` is rebuilt, and git would keep every version
+forever. Record once against a real `core/` and replay for as long as that
+`core/` stands; copy the tarball to a machine that has no C and it works there.
+
+Three things are refused rather than tolerated, each checked by running it:
+
+- a store whose recorded C identity does not match the local `core/` (exit 2 --
+  otherwise a green run would be checking the port against a previous
+  upstream's answers);
+- a case with no recording, which is a hard error and never a skip: deleting 40
+  cases from a store gives `fail=40`, not a smaller green run;
+- the port itself changing: replayed against a stub that always exits 1, the
+  result is `fail=1690`, the full case count.
+
+`verify.sh` against a real `core/` remains the authority. Re-record after any
+change to the C, to `gencorpus.py`, or to a harness's argument vectors -- all
+three change what the cases are.
 
 Two things that table is easy to misread. **The coverage figure is `cargo test`
 and nothing else** -- `coverage.sh` re-runs that same suite under

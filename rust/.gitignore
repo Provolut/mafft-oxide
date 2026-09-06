@@ -5,3 +5,14 @@ target/
 # it is the tracked evidence for GOAL.md section 3 and a diff in it is
 # reviewable -- but this file would put a diff of noise on every push.
 bench/sample-profile.txt
+
+# Recorded C answers for `verify_golden.sh`, made locally by its `record` mode.
+#
+# Deliberately not tracked. One harness's store is 15 MB gzipped and the other
+# is larger still, they are rewritten whenever `core/` is rebuilt, and git would
+# keep every version forever -- so committing them would cost more each time the
+# C changes, which is exactly when they must change. They are a build artifact:
+# record once against a real `core/`, then replay for as long as that `core/`
+# stands. The store carries the C's identity and refuses to replay against a
+# different one, so a stale store cannot quietly become the reference.
+tests/golden/*.tar.gz
