@@ -222,6 +222,9 @@ impl LalignState {
         lastverticalw[0] = w1[lgth2 - 1];
 
         let localstop = (lgth1 + lgth2 + 1) as i32;
+        // Asked once per alignment rather than per row; the detection itself
+        // caches, but this keeps it out of the loop entirely.
+        let kernel = crate::lalign_avx512::available();
         let mut maxwm = -999999999.9f64;
         let mut endali = 0usize;
         let mut endalj = 0usize;
@@ -299,18 +302,52 @@ impl LalignState {
                 // instead of per access. Traversal order, comparisons and
                 // arithmetic are untouched; this is the same loop, addressed
                 // differently.
-                let cells = previousw[..lastj - 1]
+                // The vectorised part of the row, when the CPU has AVX-512.
+                // It leaves `jj` wherever it stopped and the zipped scalar loop
+                // below finishes the row from there -- the same split the C
+                // makes between its kernel and its scalar tail.
+                let mut jj_start = 1usize;
+                if kernel {
+                    if let Some(best) = crate::lalign_avx512::row_checked(
+                        1,
+                        lastj,
+                        previousw,
+                        &miv,
+                        &mpiv,
+                        &mut m,
+                        &mut mp,
+                        ijprow,
+                        currentw,
+                        i as i32,
+                        fpenalty,
+                        fpenalty_ex,
+                        localthr,
+                        localthr2,
+                        localstop,
+                    ) {
+                        // `jj > 1` in the C: only fold in a maximum the kernel
+                        // actually computed.
+                        if best.jj > 1 && maxwm < best.value {
+                            maxwm = best.value;
+                            endali = i;
+                            endalj = best.j as usize;
+                        }
+                        jj_start = best.jj;
+                    }
+                }
+
+                let cells = previousw[jj_start - 1..lastj - 1]
                     .iter()
-                    .zip(&miv[1..lastj])
-                    .zip(&mpiv[1..lastj])
-                    .zip(m[1..lastj].iter_mut())
-                    .zip(mp[1..lastj].iter_mut())
-                    .zip(ijprow[1..lastj].iter_mut())
-                    .zip(currentw[1..lastj].iter_mut());
+                    .zip(&miv[jj_start..lastj])
+                    .zip(&mpiv[jj_start..lastj])
+                    .zip(m[jj_start..lastj].iter_mut())
+                    .zip(mp[jj_start..lastj].iter_mut())
+                    .zip(ijprow[jj_start..lastj].iter_mut())
+                    .zip(currentw[jj_start..lastj].iter_mut());
                 for (idx, ((((((diag, miv_j), mpv_j), mm_j), mpp_j), ijr_j), cw_j)) in
                     cells.enumerate()
                 {
-                    let jj = idx + 1;
+                    let jj = idx + jj_start;
                     let diag = *diag;
                     let gi = *miv_j + fpenalty;
                     let gj = *mm_j + fpenalty;

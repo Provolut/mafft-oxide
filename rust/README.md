@@ -214,6 +214,7 @@ rust/verify_flh.sh     core                # Falign_localhom, function level
 rust/verify_td.sh      core                # branch weighting, function level
 rust/verify_tdi.sh     core                # the refinement loop, whole driver
 rust/verify_dvtditr.sh binaries rust/target/release/dvtditr-rs   # the binary
+rust/verify_lalign_kernel.sh                       # AVX-512 kernel vs scalar
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
   rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
@@ -309,12 +310,41 @@ Current status, on this source tree:
 | `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical |
 | `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical |
 | `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical |
+| `verify_lalign_kernel.sh`, the AVX-512 kernel against the scalar path | 15/15 identical |
 | 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical |
 | upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong |
 | `cargo test` | 221/221 |
 
 (`test/script`'s other two cases, `mafft-qinsi` and `mafft-xinsi`, need external
 RNA folding programs and fail identically with the stock C binaries.)
+
+## Speed
+
+The port was written for bit-exactness rather than speed, and for most of its
+life it ran at roughly the C's pace. It is now the fastest of the three builds
+on the workload that matters here — ESCOTT's `mafft --auto --preservecase`, 12
+ProteinGym payloads:
+
+| build | time | vs the C at `-O3` |
+|---|---|---|
+| C, `gcc -O3` | 12.60 s | 1.00x |
+| C, `-march=native` (its AVX-512 kernel compiled in) | 7.34 s | 1.72x |
+| **this port** | **6.86 s** | **1.84x** |
+
+Two things got it there, and `bench/OPTIMISATION-LOG.md` has the measurements
+for both. The smaller one removed bounds checks and a sentinel test from
+`dvtditr`'s hot loops (18% off that binary). The larger one is
+`lalign_avx512` — a transliteration of the C's own AVX-512 kernel for
+`L__align11`, which is ~69% of the aligner's cost. On one staged input it takes
+`tbfast` from 0.770 s to 0.292 s, 2.6x, and lands 17% ahead of the C's
+`-march=native` build of the same function.
+
+**The port's kernel dispatches at runtime; the C's is compiled in.** A C build
+carrying it (`-march=native`) crashes on a machine without AVX-512, and a
+portable C build never gets it — which is why the conda-forge 7.526 that
+production runs is the slowest build in the table. One `tbfast-rs` is fast where
+the hardware allows and correct everywhere else, and
+`MAFFT_RS_NO_AVX512=1` forces the scalar path for bisecting.
 
 ## Notes for anyone extending this
 
@@ -545,7 +575,19 @@ alignments.
 - **Every new binary goes in `bench/coverage.sh`'s `--object` list.** Leaving
   one out reports it at 0.00% while its tests drive it — the same under-report
   that script's header warns about, pointed the other way.
-- **Keep `#![forbid(unsafe_code)]` and keep the port dependency-free.**
+- **The crate is `#![deny(unsafe_code)]`, and exactly one module lifts it.**
+  `lalign_avx512` carries `#![allow(unsafe_code)]` because explicit
+  vectorisation on stable Rust means `core::arch` intrinsics, which are unsafe
+  by definition (calling one on a CPU without the feature is UB); portable SIMD
+  is still nightly-only. `deny` rather than `forbid` is what makes that single
+  exemption expressible — and it is the only one. The module's single entry
+  point, `row_checked`, is a safe function and therefore *behaves* like one: it
+  asks the CPU for the feature and asserts the buffer lengths the kernel will
+  read, rather than documenting them as the caller's problem. A safe function
+  that ordinary arguments can drive into undefined behaviour would leave the
+  crate's `deny` meaning nothing. Anything else that reaches for `unsafe`
+  should be measured first: the rest of this port is as fast as the C without
+  it. **Keep the port dependency-free.**
 
 ## Method
 
