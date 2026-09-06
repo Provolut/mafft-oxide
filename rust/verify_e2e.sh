@@ -16,6 +16,16 @@ RBIN="${2:?usage: verify_e2e.sh <libexec-dir> <disttbfast-rs> [inputs...]}"
 shift 2
 
 here=$(cd "$(dirname "$0")" && pwd)
+
+# The wrapper runs each alignment from a scratch directory of its own, so a
+# relative `MAFFT_BINARIES` resolves to somewhere that does not exist and every
+# reference run fails -- which this harness reports as 22 failures rather than
+# as its own misuse. Absolute from here on.
+case "$LIBEXEC" in /*) ;; *) LIBEXEC="$(pwd)/$LIBEXEC" ;; esac
+case "$RBIN" in /*) ;; *) RBIN="$(pwd)/$RBIN" ;; esac
+[ -d "$LIBEXEC" ] || { echo "verify_e2e.sh: no such libexec dir: $LIBEXEC" 1>&2; exit 2; }
+[ -x "$RBIN" ] || { echo "verify_e2e.sh: not executable: $RBIN" 1>&2; exit 2; }
+
 INPUTS=("$@")
 if [ ${#INPUTS[@]} -eq 0 ]; then
   INPUTS=("$here/../test/sample")
@@ -33,6 +43,7 @@ if [ ! -x "$MAFFT" ]; then
   echo "verify_e2e.sh: cannot find the mafft wrapper; set MAFFT=<path>" 1>&2
   exit 2
 fi
+case "$MAFFT" in /*) ;; *) MAFFT="$(pwd)/$MAFFT" ;; esac
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

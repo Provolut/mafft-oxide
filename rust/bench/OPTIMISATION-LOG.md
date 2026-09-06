@@ -467,3 +467,147 @@ the licence, and it is visible in `lib.rs` rather than buried. Portable SIMD
 (`std::simd`) would have avoided it, but it is still nightly-only with no
 stabilisation date.
 
+
+---
+
+# The prefix scan, and two things dvtditr need not compute, 2026-09-06
+
+With `L__align11`'s DP row vectorised, the profile changed shape enough that the
+previous section's conclusions no longer held. Re-profiling found three items,
+two of them algorithmic rather than instruction-level.
+
+**Callgrind cannot see this work.** Valgrind masks AVX-512 out of `CPUID`, so
+`lalign_avx512::available()` answers false under it and every profile shows the
+scalar path — 85% in `l_align11`, which is the profile of a binary nobody runs.
+Everything below is `perf record -F 4000` on the release build instead. If a
+number here disagrees with `hotspots.sh`, `hotspots.sh` is profiling the
+fallback.
+
+## Where the time was
+
+One staged `tbfast` payload (0.296 s) and one staged `dvtditr` payload (0.212 s),
+an ESCOTT realign each:
+
+| tbfast | | dvtditr | |
+|---|---|---|---|
+| `l_align11`, outside the kernel | 71% | `match_calc` | 27% |
+| `lalign_avx512::row` | 13% | `init_strict` (via `fillimp`) | 24% |
+| `a_align` | 7% | `part_a_align` | 19% |
+
+## match_calc: 95% of a profile column is zeroes
+
+`match_calc` built `scarr` by walking all 26 rows of `cpmx1`. A profile column is
+how much of each residue type appears at one position, so it is nearly empty:
+instrumented over the staged payload, **104125 of 2000024 entries are non-zero**,
+1.35 of 26. A zero row contributes `scarr[l] += mtx[j][l] * 0.0` to every `l`.
+
+Skipping it is exact, not approximately exact. `x + (±0.0)` is `x` for every `x`
+except `-0.0` with a `+0.0` addend, and `scarr` cannot be `-0.0`: it starts at
+`+0.0`, a sum is `-0.0` only when both addends are, and an exact cancellation
+rounds to `+0.0` under round-to-nearest. So the skipped term could not have
+changed a bit.
+
+0.212 s → 0.191 s.
+
+## fillimp: an answer that does not depend on the question
+
+`map_range` answered "which column holds the n-th residue?" by counting from the
+start of the sequence, and `fillimp` asked it twice per segment of every
+constrained pair. The sequence does not change while it is being asked, so the
+positions are computed once per member per call now.
+
+The edges are the interesting part: a start past the last residue, a reversed
+range, a negative start. None should arise from a real constraint, all are
+reachable in the C, and each resolves as the final column for its own reason.
+`tests::map_range_agrees` runs the old scan and the new lookup against random
+gapped strings over the whole `-2..len + 2` range of endpoints — the check no
+corpus can make, since the corpus only ever produces the ordinary case.
+
+0.191 s → 0.167 s. Together: **dvtditr 1.27x.**
+
+## The mi recurrence was 43% of tbfast
+
+`l_align11` runs a serial recurrence down each row before the row itself:
+
+```
+miv[j] = m;  mpiv[j] = mp;
+if( pw[j-1] > m ) { m = pw[j-1]; mp = j-1; }
+m += fpenalty_ex;
+```
+
+Every step waits for the one before it — a compare plus an add of latency, about
+eight cycles, for almost no work. That did not matter while the DP row cost more;
+with the row vectorised it became the largest single item in the binary.
+Measured directly by breaking the chain (`m = pw[idx] + e`, wrong answers, right
+timing): **0.294 s → 0.167 s**. Replacing the triple `zip` with equal-length
+slices changed nothing (0.296 → 0.294), which is what a latency-bound loop looks
+like.
+
+It is a max-plus scan, and those parallelise. Writing `d_s = p_s + (8-s)e` puts
+every candidate on a common footing; a prefix maximum over `d` then answers eight
+positions at once and only the carry between blocks stays serial.
+
+**Two rewrites, one free and one conditional.** `max(a,b) + e == max(a+e, b+e)`
+holds for every IEEE `a`, `b`, `e`, because rounding is monotone — so pushing the
+`+ e` inside the maximum cannot move a value. Reaching a position with one
+multiply, `m + t*e`, where the loop added `e` to itself `t` times, does not: they
+agree only if nothing rounded. Whole numbers with sums under 2^53 give that, and
+MAFFT's matrices and penalties are integers — but that is the input's property,
+not the code's, so `l_align11` establishes it from the matrix and the penalties
+and passes the answer down. When it fails, the serial loop runs.
+
+The same condition settles the indices, which is the subtler half. Ties go to the
+earliest position, and the two forms compare the same pair of candidates at
+different points along the decay: if rounding could make two unequal values equal
+later, they would disagree about which came first. Exact arithmetic keeps a
+difference a difference.
+
+One edge needed care. Position 0 must reproduce the incumbent untouched, and
+`m + 0*e` does not: with a zero `e` the product is `+0.0`, which turns a `-0.0`
+incumbent positive. Adding `-0.0` is the only identity that works for every
+`f64`, and the unit test found this rather than the review.
+
+**tbfast 0.296 s → 0.216 s.**
+
+## Result
+
+All three builds compiled and timed in one session on one machine, best of
+seven per binary, outputs digested and identical:
+
+| | C `-O3` | C `-march=native` | port before this | port |
+|---|---|---|---|---|
+| `tbfast` | 0.816 s | 0.363 s | 0.300 s | **0.216 s** |
+| `dvtditr` | 0.187 s | 0.192 s | 0.210 s | **0.166 s** |
+| 12 payloads, `mafft --auto` | 13.07 s | 7.75 s | 7.29 s | **5.63 s** |
+
+**1.38x ahead of a C build that will not run on half the machines in the fleet**,
+and 1.29x ahead of where the port stood before this round. The "port before
+this" column is the AVX-512 kernel commit built from a worktree in the same
+session, because comparing against a figure from an earlier day would have
+measured the machine as much as the change: the C at `-march=native` alone
+drifted 7.34 s to 7.75 s between the two.
+
+Note the C at `-O3` beat the port's `dvtditr` until this round. That binary
+never had a kernel to gain from -- `-march=native` does nothing for it either
+(0.187 s against 0.192 s) -- so the two algorithmic wins above are the whole of
+its lead.
+
+## What is left
+
+Measured, not guessed, and in the order they are worth doing:
+
+1. **Fuse the scan into the row kernel** (tbfast). They walk `previousw` one
+   after the other and the scan's output is consumed immediately by the row, so
+   `miv`/`mpiv` need not be written to memory at all. Worth perhaps 15%; it is a
+   real refactor, and the `trywarp` variant reads those arrays too.
+2. **`part_a_align`** is 25% of `dvtditr` and has the same shape as
+   `L__align11` — a serial `mi` with `+= fpenalty_ex`, then an element-wise row.
+   The C has no kernel for it either. Hoisting the recurrence into a scan is the
+   same transformation as above, with position-dependent `ogcp2[j]` coefficients
+   in the candidate.
+3. **`intergroup_score` (12%) and `alignable_reagion` (10%)** in `dvtditr` are
+   unexamined; the two wins above were both algorithmic, so look for waste
+   before reaching for intrinsics.
+4. **Packing value and index into one `f64` key** in the scan would drop the
+   `__m256i` half of the permutes, about 6 of 28 uops per block. It needs a
+   second precondition (index under 2^21, values under 2^32) for a few percent.

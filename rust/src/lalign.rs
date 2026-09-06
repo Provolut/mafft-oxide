@@ -123,12 +123,25 @@ impl LalignState {
 }
 
 /// Fill a 256x256 character-indexed matrix from the alphabet-indexed one.
-fn fill_amino_dynamicmtx(cn: &Constants, dst: &mut [Vec<f64>], src: &[Vec<f64>]) {
+/// Scatter the alphabet-indexed score matrix into a code-indexed one.
+///
+/// Returns:
+///     Whether every score is a whole number, and the largest in absolute
+///     value. Both feed [`LalignState::l_align11`]'s decision about the
+///     vectorised prefix scan; the walk is here because it is free -- these are
+///     the entries this function already visits.
+fn fill_amino_dynamicmtx(cn: &Constants, dst: &mut [Vec<f64>], src: &[Vec<f64>]) -> (bool, f64) {
+    let mut integral = true;
+    let mut maxabs = 0.0f64;
     for i in 0..cn.nalphabets {
         for j in 0..cn.nalphabets {
-            dst[cn.amino[i] as usize][cn.amino[j] as usize] = src[i][j];
+            let v = src[i][j];
+            integral &= v.fract() == 0.0;
+            maxabs = maxabs.max(v.abs());
+            dst[cn.amino[i] as usize][cn.amino[j] as usize] = v;
         }
     }
+    (integral, maxabs)
 }
 
 /// The local alignment of one pair.
@@ -184,11 +197,31 @@ impl LalignState {
             self.orlgth1 = ll1 - 100;
             self.orlgth2 = ll2 - 100;
         }
-        {
+        let (mtx_integral, mtx_maxabs) = {
             let mut mtx = std::mem::take(&mut self.amino_dynamicmtx);
-            fill_amino_dynamicmtx(cn, &mut mtx, n_dynamicmtx);
+            let seen = fill_amino_dynamicmtx(cn, &mut mtx, n_dynamicmtx);
             self.amino_dynamicmtx = mtx;
-        }
+            seen
+        };
+        // May the `mi` recurrence run vectorised? The kernel reaches a position
+        // with one multiply where the loop adds `fpenalty_ex` to itself, which
+        // agree only if nothing rounds along the way. Everything the DP adds is
+        // a score or a penalty, so whole numbers whose running sums stay below
+        // 2^53 settle it -- and MAFFT's matrices and penalties are integers, so
+        // this is the ordinary case rather than a lucky one. A path through the
+        // DP is at most `lgth1 + lgth2` steps and each adds one score and at
+        // most one penalty, which bounds the sum.
+        let biggest_step = mtx_maxabs
+            + fpenalty.abs()
+            + fpenalty_ex.abs()
+            + fpenalty_shift.abs()
+            + localthr2.abs();
+        let scan_exact = mtx_integral
+            && fpenalty.fract() == 0.0
+            && fpenalty_ex.fract() == 0.0
+            && fpenalty_shift.fract() == 0.0
+            && localthr2.fract() == 0.0
+            && (lgth1 + lgth2 + 2) as f64 * biggest_step < 9_007_199_254_740_992.0;
         self.ensure_ijp(self.orlgth1, self.orlgth2);
 
         let mtx = std::mem::take(&mut self.amino_dynamicmtx);
@@ -261,16 +294,37 @@ impl LalignState {
             {
                 let mut miscan = previousw[0];
                 let mut mpiscan = 0i32;
+                // The vectorised form when the arithmetic allows it; the loop
+                // below then finishes whatever is left of the row. This
+                // recurrence is serial and does almost nothing per step, which
+                // made it 43% of `tbfast` once the DP row itself was
+                // vectorised.
+                let mut scanned = 0usize;
+                if let Some((done, m, mp)) = crate::lalign_avx512::prefix_scan_checked(
+                    scan_exact,
+                    &previousw[..lastj - 1],
+                    lastj - 1,
+                    miscan,
+                    mpiscan,
+                    fpenalty_ex,
+                    &mut miv,
+                    &mut mpiv,
+                ) {
+                    scanned = done;
+                    miscan = m;
+                    mpiscan = mp;
+                }
                 // Zipped, not indexed, for the reason given at the DP row below:
                 // three indexed buffers per position, each carrying a bounds
                 // check. The recurrence is serial either way -- `miscan` feeds
                 // the next position -- so only the checks go, not the order.
-                for (idx, ((mv_j, mpv_j), &pw_prev)) in miv[1..lastj]
+                for (idx, ((mv_j, mpv_j), &pw_prev)) in miv[1 + scanned..lastj]
                     .iter_mut()
-                    .zip(mpiv[1..lastj].iter_mut())
-                    .zip(&previousw[..lastj - 1])
+                    .zip(mpiv[1 + scanned..lastj].iter_mut())
+                    .zip(&previousw[scanned..lastj - 1])
                     .enumerate()
                 {
+                    let idx = idx + scanned;
                     *mv_j = miscan;
                     *mpv_j = mpiscan;
                     if pw_prev > miscan {
