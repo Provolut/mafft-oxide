@@ -166,16 +166,24 @@ pub(crate) fn match_calc(
     // 0x100 under `--text`.
     let nalphabets = n_dynamicmtx.len();
     if initialize {
+        // The C marks the end of each column's non-zero entries with a `-1`
+        // and re-tests for it on every step of the innermost loop below. Here
+        // the length carries that instead: `clear` keeps the capacity `ensure`
+        // allocated, so the pushes never reallocate, and the hot loop walks a
+        // slice whose end is known rather than checking a sentinel per element.
+        // Same entries, same order, one branch per element less.
         for j in 0..lgth2 {
-            let mut count = 0usize;
+            let vals = &mut doublework[j];
+            let codes = &mut intwork[j];
+            vals.clear();
+            codes.clear();
             for l in 0..nalphabets {
-                if cpmx2[l][j] != 0.0 {
-                    doublework[j][count] = cpmx2[l][j];
-                    intwork[j][count] = l as i32;
-                    count += 1;
+                let v = cpmx2[l][j];
+                if v != 0.0 {
+                    vals.push(v);
+                    codes.push(l as i32);
                 }
             }
-            intwork[j][count] = -1;
         }
     }
 
@@ -188,11 +196,15 @@ pub(crate) fn match_calc(
     // the one thing that must not move. What changes is the addressing:
     // `n_dynamicmtx[j]` is walked along its row rather than down a column, and
     // `cpmx1[j][i1]` is loaded once per j instead of once per (l, j).
-    let mut scarr = vec![0.0f64; nalphabets];
+    // On the stack rather than a fresh `vec!` per call: this runs once per DP
+    // row, which is ~128 thousand times on a 36-sequence refinement, and the
+    // alphabet is 26 (0x100 under `--text`), so the array is sized for the
+    // larger case and only `nalphabets` of it is ever touched.
+    let mut scarr = [0.0f64; 0x100];
     for j in 0..nalphabets {
         let c = cpmx1[j][i1];
         let row = &n_dynamicmtx[j];
-        for (l, sc) in scarr.iter_mut().enumerate() {
+        for (l, sc) in scarr[..nalphabets].iter_mut().enumerate() {
             *sc += row[l] * c;
         }
     }
@@ -208,10 +220,12 @@ pub(crate) fn match_calc(
         let vals = &doublework[j];
         let mut acc = 0.0f64;
         for (&code, &val) in codes.iter().zip(vals.iter()) {
-            if code < 0 {
-                break;
-            }
-            acc += scarr[code as usize] * val;
+            // `& 0xff` costs one instruction and lets the compiler drop the
+            // bounds check on an array of exactly 0x100: a code is an alphabet
+            // index, always below `nalphabets`, so the mask never changes a
+            // value. Without it this innermost line carries a branch that can
+            // never be taken.
+            acc += scarr[(code as usize) & 0xff] * val;
         }
         *o = acc;
     }

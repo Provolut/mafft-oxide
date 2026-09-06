@@ -952,37 +952,56 @@ impl PartAlignState {
             let gf1vapre = self.gapfreq1[i - 1];
             let ijprow = &mut self.ijp[i];
 
-            for j in 1..lastj {
-                let mut w = previousw[j - 1];
-                ijprow[j] = 0;
+            // Every row below is `&self.<field>[..lastj]` before the loop, not
+            // `self.<field>[j]` inside it. The values and their order are
+            // untouched; what changes is what the compiler can prove. Indexing
+            // a `Vec` field while the same loop writes through `&mut self`
+            // leaves the length a memory read the optimiser must reload, so
+            // each of the ten accesses per cell keeps its bounds check. Bound
+            // to local slices first, the lengths are loop-invariant SSA values,
+            // every index is provably in range, and the checks fold away.
+            // Measured on the L-INS-i replay: this is the single largest
+            // instruction saving in the port.
+            let prevw = &previousw[..lastj];
+            let fgcp2 = &self.fgcp2[..lastj];
+            let ogcp2 = &self.ogcp2[..lastj];
+            let gapfreq2 = &self.gapfreq2[..lastj];
+            let mrow = &mut self.m[..lastj];
+            let mprow = &mut self.mp[..lastj];
+            let ijpr = &mut ijprow[..lastj];
+            let curw = &mut currentw[..lastj];
 
-                let g = mi + self.fgcp2[j - 1] * gf1va;
+            for j in 1..lastj {
+                let mut w = prevw[j - 1];
+                ijpr[j] = 0;
+
+                let g = mi + fgcp2[j - 1] * gf1va;
                 if g > w {
                     w = g;
-                    ijprow[j] = -(j as i32 - mpi);
+                    ijpr[j] = -(j as i32 - mpi);
                 }
                 // `>`, not `>=`: see the note on this function.
-                let g = previousw[j - 1] + self.ogcp2[j] * gf1vapre;
+                let g = prevw[j - 1] + ogcp2[j] * gf1vapre;
                 if g > mi {
                     mi = g;
                     mpi = j as i32 - 1;
                 }
                 mi += fpenalty_ex;
 
-                let g = self.m[j] + fgcp1va * self.gapfreq2[j];
+                let g = mrow[j] + fgcp1va * gapfreq2[j];
                 if g > w {
                     w = g;
-                    ijprow[j] = i as i32 - self.mp[j];
+                    ijpr[j] = i as i32 - mprow[j];
                 }
                 // `>`, not `>=`: see the note on this function.
-                let g = previousw[j - 1] + ogcp1va * self.gapfreq2[j - 1];
-                if g > self.m[j] {
-                    self.m[j] = g;
-                    self.mp[j] = i as i32 - 1;
+                let g = prevw[j - 1] + ogcp1va * gapfreq2[j - 1];
+                if g > mrow[j] {
+                    mrow[j] = g;
+                    mprow[j] = i as i32 - 1;
                 }
-                self.m[j] += fpenalty_ex;
+                mrow[j] += fpenalty_ex;
 
-                currentw[j] += w;
+                curw[j] += w;
                 wm = w;
             }
             self.lastverticalw[i] = currentw[lgth2 - 1];

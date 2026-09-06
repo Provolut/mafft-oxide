@@ -270,3 +270,135 @@ unchanged port, so before-and-after on one machine is comparable throughout.
 harnesses, run against the compiled `core/`: `verify.sh` pass=12018 fail=0,
 `verify_tbfast.sh` pass=1690 fail=0, `verify_e2e.sh` pass=29 fail=0.
 `bench/coverage.sh`: 89.88% regions, 89.37% lines.
+
+---
+
+# Optimisation attempts, 2026-09-05 — `dvtditr-rs` on the ESCOTT path
+
+The port had just gained `dvtditr`, and it was the one binary measurably slower
+than the C: 0.459 s against 0.354 s on a staged L-INS-i replay, which showed up
+end-to-end as ESCOTT's `mafft --auto --preservecase` running 7.3% slower than
+the all-C build. This is that pass.
+
+Constraints, all three from the caller: bit-identical output, no memory blow-up,
+and no `unsafe` (the port keeps `#![forbid(unsafe_code)]`).
+
+## Result
+
+| metric | before | after | C |
+|---|---|---|---|
+| instructions, L-INS-i replay | 12.71 G | **9.86 G** (-22.4%) | 8.35 G |
+| wall clock, same replay (mean of 5) | 0.459 s | **0.374 s** (-18.5%) | 0.355 s |
+| peak RSS | 18.9 MB | **18.9 MB** | 19.2 MB |
+| 12 ESCOTT payloads, end to end | +7.3% vs C | **+3.9% vs C** | — |
+
+Memory did not move, and the port still peaks *below* the C.
+
+## What worked
+
+**1. The DP inner loop's bounds checks — `-15.9%` (12.50 G -> 10.51 G).** By far
+the largest. `part_a_align`'s innermost loop indexed ten `Vec` fields of `self`
+per cell while writing through `&mut self`, so the optimiser had to treat every
+length as a memory read that the loop's own stores might change, and kept all
+ten checks. Binding each to a local slice (`&self.fgcp2[..lastj]`, …) before the
+loop makes the lengths loop-invariant SSA values; the checks fold away.
+`part_a_align` went 4.03 G -> 2.05 G, which is where nearly all of it came from.
+
+**2. The sentinel in `match_calc`'s sparse walk — `-6.3%` (10.51 G -> 9.86 G).**
+The C terminates each column's non-zero list with `-1` and re-tests for it on
+every step of the innermost loop in the port's hottest function. Filling the
+per-column buffers with `clear` + `push` instead makes the length carry that
+information, and the walk becomes a plain zip over two slices. `clear` keeps the
+capacity `ensure` allocated, so nothing reallocates.
+
+**3. `scarr` on the stack, and its index masked — part of `-1.6%`.** A `vec!`
+per call (~128 thousand calls) became a `[f64; 0x100]`, and `scarr[code & 0xff]`
+lets the compiler drop a bounds check whose branch can never be taken.
+
+**4. `fillimp`'s matrix zeroing via `fill` — the rest of that `-1.6%`.** The
+element-by-element loop did not lower to a memset; `row[..lgth2].fill(0.0)`
+does.
+
+## What did not work
+
+**Hoisting the row slices and the invariant product in `fillimp`: +0.07%.**
+`seq1[i]`/`seq2[j]` re-indexed per residue and `e.importance * effij`
+recomputed per matched cell both *look* like free wins. LLVM had already done
+both, and spelling them out cost 6.5 M instructions. Reverted — a comment
+claiming a win the measurement denies is worse than the original code.
+
+## Where the remaining 1.5 G lives
+
+```
+match_calc        3.02 G (30.7%)
+init_strict       2.06 G (20.9%)   C's fillimp + movereg + movereg_swap: 1.39 G
+part_a_align      2.05 G (20.8%)
+memset            1.21 G (12.3%)   C: 1.26 G -- parity, not a gap
+intergroup_score  0.57 G ( 5.8%)
+```
+
+Two stones left unturned, both plausible and neither tried:
+
+- **Flatten `doublework` / `intwork`.** They are `Vec<Vec<_>>`, so the hot loop
+  chases a pointer and checks a bound once per *column* — 92 million column
+  visits on this replay — before it reads any element. One flat buffer plus an
+  offset table would remove that and improve locality; the per-column summation
+  order, which is what must not move, is unaffected.
+- **`init_strict` is 0.67 G over the C's equivalent.** Not yet localised beyond
+  the function; `movereg` and the `impmtx[k1][k2]` double index are the
+  candidates.
+
+## Output did not change at any point
+
+Every step was checked against the C before the next one started: the staged
+L-INS-i replay byte-for-byte, then at the end `cargo test` 221, `verify_flh.sh`
+98/98 plus its 60-call sequence, `verify_td.sh` 96/96, `verify_tdi.sh` 126/126,
+`verify_dvtditr.sh` 32/32, `verify.sh`, `verify_tbfast.sh`, the 120-payload
+ProteinGym corpus, and provolut-ml's GEMME/ESCOTT matrix test. `match_calc` is
+shared with `tbfast` and `disttbfast`, so those two full differentials are not
+optional here.
+
+## Where ESCOTT's time actually is, and why `l_align11` resisted
+
+Timing each binary of one `mafft --auto --preservecase` payload (51 sequences,
+393 aa -- what the GEMME/ESCOTT trace hands MAFFT):
+
+```
+tbfast     820 ms
+dvtditr    202 ms
+version / f2cl / countlen   1 ms each
+```
+
+`tbfast` is 80% of the run, and **86% of `tbfast` is `l_align11`** -- so that
+one function is roughly 69% of ESCOTT's whole aligner cost. Which makes the
+`dvtditr` work above worth 3.9% end to end, and puts any further big saving in
+`l_align11`.
+
+It is already close to the wall. On the same input the C's scalar
+`L__align11` retires 8.28 G instructions and the port's `l_align11` 8.97 G --
+**8.4% apart**, with the port's loop already zipped (bounds checks gone),
+branchless, and prefix-scanned.
+
+**Tried: splitting the running maximum out of the elementwise body.**
+`maxwm`/`endali`/`endalj` is a max *with an index*, which no vectoriser can
+express, and it sat in the middle of an otherwise elementwise loop. Recording
+each cell's score to a scratch row and reducing in a second pass removed it.
+Result: instructions fell 4.6% (10.44 G -> 9.96 G on `tbfast`) and **wall clock
+rose 1.3%** (0.782 s -> 0.791 s, best of 5, same input). The disassembly
+explains the rest: still **zero packed arithmetic ops** -- LLVM did not
+vectorise even with the reduction gone, so the change bought nothing but the
+extra row's memory traffic. Reverted.
+
+The lesson worth keeping: this loop is **memory/latency-bound, not
+instruction-bound**. Instruction counts are the wrong metric here, which is why
+the reverted change looked like a 4.6% win and was not one.
+
+**So the remaining big saving in ESCOTT is vectorising `l_align11`, and only
+explicitly.** That is what the C does -- `Lalign11.c`'s AVX-512 kernel behind
+`#if defined(__AVX512F__) && defined(__AVX512VL__)`, which is the entire reason
+`-march=native` runs 1.73x faster end to end (7.29 s vs 12.57 s over 12
+payloads) while `-C target-cpu=native` buys the port 1.7%. The kernel's
+operations are element-wise (`loadu_pd`, `cmp_pd_mask`, `mask_blend_pd`,
+`add_pd`, `storeu_pd`) with no horizontal reduction, so a port of it would be
+bit-exact by construction rather than by luck.
+
