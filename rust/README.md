@@ -306,8 +306,8 @@ different for the two at the top than for the rest:
 
 | check | result | time |
 |---|---|---|
-| `verify.sh`, generated `disttbfast` corpus | 12018/12018 identical | 8m 36s |
-| `verify_tbfast.sh`, generated `tbfast` corpus | 1690/1690 identical | 3m 41s |
+| `verify.sh`, generated `disttbfast` corpus | 12018/12018 identical | 8m 36s, or **1m 34s** under `verify_parallel.sh` |
+| `verify_tbfast.sh`, generated `tbfast` corpus | 1690/1690 identical | 3m 41s, or **1m 17s** under `verify_parallel.sh` |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) | 28s |
 | 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical | 27s (10 workers) |
 | `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical | 12s |
@@ -320,6 +320,28 @@ different for the two at the top than for the rest:
 | upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong | — |
 | `cargo test --release` | 227/227, 0 ignored | 1.4s warm |
 | `bench/coverage.sh` | 88.93% region, 88.37% line | 16s |
+
+**`verify_parallel.sh` runs either of the two big ones across every core**, and
+it is the same run rather than a cheaper one:
+
+```
+rust/verify_parallel.sh verify.sh ../core/disttbfast rust/target/release/disttbfast-rs
+```
+
+Every case in both harnesses sits inside a `for f in "$CORPUS"/*` loop and no
+case reads more than one corpus file, so the corpus can be dealt out among
+several copies of the harness and the tallies added up. The corpus comes from
+the harness itself (`VERIFY_EMIT_CORPUS`) rather than being generated a second
+time in the driver, which would drift the moment either changed and would look
+like a passing run when it did.
+
+The check that this is the same run is arithmetic: the parallel tallies are
+12018 and 1690, exactly the serial ones. Getting there took one fix -- each
+harness has a block of `gen_text.py` cases that build their own input instead of
+reading the corpus, and those ran once per worker until they were gated, which
+inflated the first parallel run to 1744. Worker count is capped at
+corpus-files/10 because that is the floor a harness refuses to run below; the
+guard against a vacuous run is exactly what slicing could otherwise manufacture.
 
 Two things that table is easy to misread. **The coverage figure is `cargo test`
 and nothing else** -- `coverage.sh` re-runs that same suite under
