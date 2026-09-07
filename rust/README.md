@@ -200,6 +200,38 @@ use_fft=1`, with a `hat3` table or without. It refuses, by name at startup:
   the memsave aligner. That is a *different alignment*, not a cheaper route to
   the same one, so the port stops rather than quietly disagree.
 
+## Layout
+
+`rust/` holds six files and five directories; everything else lives under one of
+them.
+
+| | |
+|---|---|
+| `src/`, `examples/`, `tests/` | the port, its harness support programs, its tests |
+| `verify/` | the twelve differential harnesses |
+| `gen/` | the seventeen case and corpus generators they call |
+| `bench/` | profiling and the optimisation log |
+
+`verify/` and `gen/` used to be thirty-six loose files in `rust/`. Each harness
+resolves `rust=` and `repo=` from its own location, so it can be run from
+anywhere:
+
+```
+rust/verify/verify.sh core/disttbfast rust/target/release/disttbfast-rs
+```
+
+**The golden fixtures are packed.** `tests/golden/<suite>.pack` is tracked and
+`build.rs` expands it into `tests/golden/<suite>/`, which is not. They were 1914
+loose files -- 95% of everything this repository tracked -- for 2 MB of text, so
+the file count was the whole cost. `gen/pack_golden.py pack tests/golden/<suite>`
+repacks after regenerating fixtures, and its round trip is byte-exact.
+
+The container is text, not an archive, on purpose: a fixture that changes is the
+port changing its answer, and a reviewer has to be able to see it. A tarball
+diff is one unreadable blob; this diffs line by line. Records are
+length-prefixed rather than delimited, because these files hold arbitrary
+alignment output and any sentinel line would eventually turn up inside one.
+
 ## Verification
 
 Bit-exactness is measured, not argued. Three differential harnesses plus a
@@ -208,15 +240,15 @@ suite of unit tests.
 ```
 cd core && make                       # build the C reference
 
-rust/verify.sh         core/disttbfast rust/target/release/disttbfast-rs
-rust/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
-rust/verify_flh.sh     core                # Falign_localhom, function level
-rust/verify_td.sh      core                # branch weighting, function level
-rust/verify_tdi.sh     core                # the refinement loop, whole driver
-rust/verify_dvtditr.sh binaries rust/target/release/dvtditr-rs   # the binary
-rust/verify_lalign_kernel.sh                       # AVX-512 kernel vs scalar
+rust/verify/verify.sh         core/disttbfast rust/target/release/disttbfast-rs
+rust/verify/verify_tbfast.sh  core/tbfast     rust/target/release/tbfast-rs
+rust/verify/verify_flh.sh     core                # Falign_localhom, function level
+rust/verify/verify_td.sh      core                # branch weighting, function level
+rust/verify/verify_tdi.sh     core                # the refinement loop, whole driver
+rust/verify/verify_dvtditr.sh binaries rust/target/release/dvtditr-rs   # the binary
+rust/verify/verify_lalign_kernel.sh                       # AVX-512 kernel vs scalar
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
-  rust/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
+  rust/verify/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
 cargo test --manifest-path rust/Cargo.toml
 ```
@@ -325,7 +357,7 @@ different for the two at the top than for the rest:
 it is the same run rather than a cheaper one:
 
 ```
-rust/verify_parallel.sh verify.sh ../core/disttbfast rust/target/release/disttbfast-rs
+rust/verify/verify_parallel.sh verify.sh ../core/disttbfast rust/target/release/disttbfast-rs
 ```
 
 Every case in both harnesses sits inside a `for f in "$CORPUS"/*` loop and no

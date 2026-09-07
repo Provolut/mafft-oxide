@@ -68,9 +68,9 @@ for. That is the whole of FFT-NS-1/2 and NW-NS-1/2; the `-i` variants come out
 identical too, since `dvtditr` consumes this binary's output unchanged.
 
 The same rule as the rest of this directory applies: output must not change,
-and it is verified, never argued. `rust/verify.sh` diffs it against the C
+and it is verified, never argued. `rust/verify/verify.sh` diffs it against the C
 binary over a generated corpus of 74 inputs x 15 argument sets, all
-byte-identical; `rust/verify_e2e.sh` does the same through the real `mafft`
+byte-identical; `rust/verify/verify_e2e.sh` does the same through the real `mafft`
 wrapper; and upstream's own `test/script` passes 9/9 with the Rust binary
 installed. Configurations outside the ported path are refused rather than
 approximated. See `rust/README.md`.
