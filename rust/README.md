@@ -422,6 +422,17 @@ Three things are refused rather than tolerated, each checked by running it:
 change to the C, to `gencorpus.py`, or to a harness's argument vectors -- all
 three change what the cases are.
 
+**Build `core/` with `make CC=/usr/bin/gcc-13`.** The identity check above is on
+the binary, not on the source, so rebuilding the same unchanged C with a
+different compiler is enough to make every store refuse to replay -- and the
+message it prints then says "re-record", which is the wrong repair: nothing
+about the C's answers changed, only the bytes of the program that gives them.
+A plain `make` picks up whatever `gcc` is first on `PATH`, and inside the
+project's conda environments that is not the system compiler. `gcc-13` is what
+`verify_flh.sh`, `verify_td.sh` and `verify_tdi.sh` already default to, and what
+the committed stores were recorded from; `cksum core/tbfast` reads `1121490261
+837152` when it is right.
+
 Two things that table is easy to misread. **The coverage figure is `cargo test`
 and nothing else** -- `coverage.sh` re-runs that same suite under
 `-C instrument-coverage`, with the binaries passed to `llvm-cov` as `--object`
