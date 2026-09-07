@@ -246,7 +246,7 @@ rust/verify/verify_flh.sh     core                # Falign_localhom, function le
 rust/verify/verify_td.sh      core                # branch weighting, function level
 rust/verify/verify_tdi.sh     core                # the refinement loop, whole driver
 rust/verify/verify_dvtditr.sh binaries rust/target/release/dvtditr-rs   # the binary
-rust/verify/verify_lalign_kernel.sh                       # AVX-512 kernel vs scalar
+rust/verify/verify_lalign_kernel.sh                       # both AVX-512 kernels vs scalar
 TBFAST_RS=rust/target/release/tbfast-rs MAFFT=/path/to/bin/mafft \
   rust/verify/verify_e2e.sh /path/to/libexec/mafft rust/target/release/disttbfast-rs \
   test/sample test/samplerna
@@ -343,7 +343,7 @@ different for the two at the top than for the rest:
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) | 28s |
 | 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical | 27s (10 workers) |
 | `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical | 12s |
-| `verify_lalign_kernel.sh`, the AVX-512 kernel against the scalar path | 15/15 identical | 8s |
+| `verify_lalign_kernel.sh`, both AVX-512 kernels against the scalar paths | 15/15 identical | 8s |
 | `verify_flh.sh`, 98 staged `Falign_localhom` calls + a 60-call sequence | 98/98 identical, sequence identical | 3s |
 | `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical | 3s |
 | `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical | 2s |
@@ -421,6 +421,17 @@ Three things are refused rather than tolerated, each checked by running it:
 `verify.sh` against a real `core/` remains the authority. Re-record after any
 change to the C, to `gencorpus.py`, or to a harness's argument vectors -- all
 three change what the cases are.
+
+**Build `core/` with `make CC=/usr/bin/gcc-13`.** The identity check above is on
+the binary, not on the source, so rebuilding the same unchanged C with a
+different compiler is enough to make every store refuse to replay -- and the
+message it prints then says "re-record", which is the wrong repair: nothing
+about the C's answers changed, only the bytes of the program that gives them.
+A plain `make` picks up whatever `gcc` is first on `PATH`, and inside the
+project's conda environments that is not the system compiler. `gcc-13` is what
+`verify_flh.sh`, `verify_td.sh` and `verify_tdi.sh` already default to, and what
+the committed stores were recorded from; `cksum core/tbfast` reads `1121490261
+837152` when it is right.
 
 Two things that table is easy to misread. **The coverage figure is `cargo test`
 and nothing else** -- `coverage.sh` re-runs that same suite under

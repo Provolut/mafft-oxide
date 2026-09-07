@@ -611,3 +611,232 @@ Measured, not guessed, and in the order they are worth doing:
 4. **Packing value and index into one `f64` key** in the scan would drop the
    `__m256i` half of the permutes, about 6 of 28 uops per block. It needs a
    second precondition (index under 2^21, values under 2^32) for a few percent.
+
+---
+
+# Fusing the scan into the row kernel does not pay, 2026-09-07
+
+The previous section ranked this first, at "perhaps 15%". It was an estimate,
+and measuring it refutes it: both variants are slower than the two separate
+loops. Nothing shipped.
+
+## Where ESCOTT's time actually is, measured through the caller
+
+Earlier sections timed staged payloads. This one instruments the caller —
+`pml.bioseq.gemme.pipeline`, whose `_run_aligner` is the single MAFFT
+chokepoint — over a cold P53_HUMAN trace, 100 realign calls, Rust build, one
+worker, no cache:
+
+```
+tbfast                       20.8 s   45%
+dvtditr                      19.1 s   41%
+mafft script + 5 binaries     3.5 s    8%
+python trace + predict        2.6 s    6%
+```
+
+MAFFT is 96% of a cold GEMME/ESCOTT run and `tbfast` + `dvtditr` are 86% of
+it. **`dvtditr` is 41% here, not the 35% the staged 12-payload figures imply**,
+so the `part_a_align` item below was already worth more than this one's
+ceiling.
+
+## What was tried
+
+One staged `tbfast` payload — 51 sequences of 393 aa, a real ESCOTT realign —
+best of seven, each run in its own fresh directory, `pre` digested every time
+and identical throughout.
+
+| | wall | instructions | cycles | IPC |
+|---|---|---|---|---|
+| two loops (unfused) | **0.2089 s** | 3.610 G | 1.1247 G | 3.21 |
+| fused, scan in step with the row | 0.2207 s (+5.7%) | 3.453 G (-4.4%) | 1.1876 G (+5.6%) | 2.91 |
+| fused, scan one block ahead | 0.2136 s (+2.3%) | 3.620 G | 1.1511 G | 3.14 |
+
+The block indices do line up exactly — with `jj = done + 1` the two loops read
+the same eight values of `previousw`, the scan writes the `miv` slots the row
+reads, and `done + 8 <= lastj - 1` is `jj + 8 <= lastj` — so the fusion is
+sound, and its output is byte-identical on every check: kernel on/off 15/0,
+`verify_tbfast` golden replay 1690/0, and the staged payload's digest.
+
+It is simply not faster.
+
+## Why
+
+The first variant did what it was supposed to: 4.4% fewer instructions, from
+`miv`/`mpiv` never being stored or reloaded and `previousw` being loaded once
+instead of twice. Cycles went **up** anyway. Those arrays are about 3 KB at
+this row length, so they were L1-resident and their traffic was already free in
+a loop running at IPC 3.21 with spare load/store slots.
+
+What the fusion costs is the reorder buffer. The scan's prefix tree is three
+dependent permute-and-blend stages, and in the unfused arrangement that latency
+was covered by the window holding many iterations of a very small loop at once.
+A fused iteration is roughly twice the size, so half as many fit, and the chain
+becomes visible — IPC 3.21 to 2.91.
+
+The second variant confirms the diagnosis rather than fixing it. Issuing the
+next block's scan before the current block's row gives the chain 28 uops of
+independent work to hide behind, and it recovers most of the loss: IPC back to
+3.14. But the staging costs the instructions the fusion saved (3.620 G against
+3.610 G unfused), so the result is still slower than doing nothing.
+
+This is the same lesson as the reverted running-maximum split two sections
+above, and it is worth stating once more in the form that keeps being true
+here: **this loop is latency- and throughput-bound, and instruction counts
+predict the wrong sign.** Both fused variants would have looked like wins on
+`Ir` alone.
+
+## What is left
+
+Replaces the ranking in the previous section; item 1 there is struck.
+
+1. **`part_a_align`** in `dvtditr`, which is 41% of the aligner's cost rather
+   than 35%. `perf record` on the staged ESCOTT payload puts the function at
+   **20.4%** of that binary, not the 25% the previous ranking claimed, next to
+   `match_calc` 25.2%, `intergroup_score` 13.0%, `init_strict` 11.4% and
+   `alignable_reagion` 9.2%.
+
+   Note it is **already fused**: the `mi` recurrence runs inline with the row,
+   in one loop. So the work is to *split* it and vectorise both halves — which
+   is the arrangement `l_align11` was already in when its kernel paid off, and
+   the opposite of what the section above tried and rejected.
+
+   Its `mi` recurrence is the same shape as `L__align11`'s with
+   candidates `previousw[j - 1] + ogcp2[j] * gapfreq1[i - 1]` instead of
+   `previousw[j - 1]` — and `partSalignmm.c` sets `USE_PENALTY_EX 0`, so there
+   is no decay: it is a **pure prefix maximum**, exact for every `f64` with no
+   integer precondition and no serial fallback. The row after it is elementwise
+   in `j` once `miv`/`mpiv` exist, and carries no cross-lane reduction at all.
+   Both halves are easier than the `l_align11` versions were.
+2. **`intergroup_score` (12%) and `alignable_reagion` (10%)** in `dvtditr`,
+   still unexamined.
+3. **Packing value and index into one `f64` key** in the scan. Unchanged, and
+   still low value.
+
+---
+
+# `part_a_align`, split and vectorised, 2026-09-07
+
+The item the section above ranked first. It is the same two pieces as
+`l_align11` — a scan and an element-wise row — with one difference that makes
+it easier rather than harder, and one that makes it a split rather than a
+fusion.
+
+## What made it easier
+
+`partSalignmm.c` opens with `#define USE_PENALTY_EX 0`, so the C never executes
+the `mi += fpenalty_ex` that `Lalign11.c` does. The recurrence there is a plain
+running maximum with no decay.
+
+That matters because the scan's one conditional rewrite is reaching a position
+with `m + t*e` where the loop added `e` to itself `t` times, which agree only
+when nothing rounds. `l_align11` establishes that from its matrix and
+penalties. Here `e` is zero — the `mafft` script never passes `-g` to
+`dvtditr`, and the defaults are `DEFAULTGEP_B/N/J == 0` — so `t*e` is exactly
+zero and the rewrite is exact for every `f64`, with no property of the
+candidates required. The kernel is asked for only when `fpenalty_ex == 0.0`;
+anything else runs the serial loop for the whole row.
+
+The candidates differ from `l_align11`'s — `previousw[j-1] + ogcp2[j] *
+gapfreq1[i-1]` rather than `previousw[j-1]` — but they enter the maximum and
+nothing else, so writing them out as a row lets
+`lalign_avx512::prefix_scan` serve this recurrence unchanged. The port does not
+grow a second scan.
+
+## What made it a split
+
+`partA__align` runs its recurrence *inline* with the row, in one loop. So the
+work is the opposite of the section above: separating them, not fusing them.
+The separation is what makes the row element-wise in `j`, and an element-wise
+row is the shape a kernel can take eight cells of at a time.
+
+Separating costs something on its own — `miv`/`mpiv` become real memory and the
+row is walked twice. Measured alone, before either kernel: **+6.2%**. That is
+the price of admission, and it is why the previous section's result is not a
+contradiction of this one: there, an already-separated pair was fused and lost;
+here, an already-fused pair is separated and wins, because only one of the two
+arrangements can be vectorised.
+
+## The row kernel
+
+`src/partalign_avx512.rs`, the port's second kernel and the second place it
+contains `unsafe`. It is simpler than `lalign_avx512::row`: three comparisons
+and four stores per block, and — because this row carries no running maximum —
+**no cross-lane operation at all**. Every lane runs the scalar computation on
+its own cell, so bit-exactness needs no tie-rule argument, only the absence of
+reassociation.
+
+The C has no kernel here either, so this is not catching up with it.
+
+## Result
+
+Staged ESCOTT `dvtditr` payload, best of seven, fresh directory per run, `pre`
+digested every time:
+
+| | dvtditr |
+|---|---|
+| before | 0.2081 s |
+| split alone, no kernel | 0.2211 s |
+| **split + both kernels** | **0.1911 s** (0.918x) |
+
+`perf record` on the same payload, before and after:
+
+```
+                     before    after
+match_calc            25.2%    27.4%
+part_a_align          20.4%     8.7%   + 3.4% now in prefix_scan
+intergroup_score      13.0%    14.2%
+init_strict           11.4%    12.5%
+alignable_reagion      9.2%    10.1%
+```
+
+End to end, the whole point: a cold GEMME/ESCOTT trace of P53_HUMAN, 100
+realign calls, one worker, no cache, four repetitions each --
+
+```
+before   45.48  45.47  45.50  45.49 s
+after    43.78  43.77  43.80  43.81 s
+```
+
+**3.7% off a cold run**, with the predicted matrices bit-identical (same digest
+on all eight runs). `dvtditr` is 41% of the aligner and `part_a_align` was 20%
+of it, so this is close to the whole of what the item was worth.
+
+## Gates
+
+`cargo test --release` 227 passed. Against the compiled `core/`: `verify_dvtditr`
+32/32, `verify.sh` (disttbfast) 12018/0, `verify_tbfast.sh` 1690/0,
+`verify_lalign_kernel.sh` 15/0. The staged payload's every output file
+byte-identical to the previous build, and the end-to-end matrices digest-equal.
+
+Of those, `pre-push` runs `cargo test`, the coverage floor and the two golden
+replays; `verify_dvtditr` and `verify_lalign_kernel` were run by hand, the
+first because it needs a compiled `core/` and the second because it is the only
+one that can tell the port's two paths apart.
+
+Note `verify_golden.sh` refuses to replay against a `core/` it did not record
+against, so a rebuilt C needs the binary moved aside or the store re-recorded.
+That guard fired here and is working as intended.
+
+## One thing found on the way, not fixed here
+
+The port applies `mi += fpenalty_ex` and `m[j] += fpenalty_ex` unconditionally
+where the C has both inside `#if USE_PENALTY_EX`, which this file sets to 0 —
+so the C never applies them. With `fpenalty_ex` zero the two agree (`x += 0.0`
+differs from `x` only in the sign of a zero, which every comparison here treats
+as equal), and zero is what every call through the `mafft` script passes. A
+direct `dvtditr -g ...` would diverge.
+
+Left alone deliberately: the differential corpus cannot reach the case, so the
+fix could not be verified by the means this repository trusts, and an unverified
+change to an untested path is worse than a recorded one.
+
+## What is left
+
+1. **`match_calc`, 27.4%** and the biggest single item in `dvtditr`. Already
+   optimised twice; shared with `tbfast` and `disttbfast`, so a win there is
+   worth more than its share here suggests.
+2. **`intergroup_score` (14.2%) and `alignable_reagion` (10.1%)**, still
+   unexamined. Look for algorithmic waste before intrinsics — every large win
+   in this log has been algorithmic.
+3. **`init_strict`, 12.5%**, still 0.67 G over the C's equivalent and still not
+   localised beyond the function.

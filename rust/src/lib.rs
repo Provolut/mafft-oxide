@@ -11,7 +11,8 @@
 //! -- so the transliteration is faithful in arithmetic without inheriting the
 //! memory model. That is what lets the port stop at upstream's out-of-bounds
 //! writes (issue #4) instead of reproducing them.
-// `deny`, not `forbid`, for exactly one module: `lalign_avx512` allows itself,
+// `deny`, not `forbid`, for exactly two modules: `lalign_avx512` and
+// `partalign_avx512` allow themselves,
 // and nothing else in the crate can. `forbid` cannot be lifted locally, which
 // is the point of the two lints -- so this is the whole of the licence the
 // kernel gets, and it is visible here rather than buried.
@@ -40,6 +41,7 @@ pub mod msalign;
 pub mod naivescore;
 pub mod pairalign;
 pub mod partalign;
+pub mod partalign_avx512;
 pub mod params;
 pub mod profile;
 pub mod saalign;
