@@ -709,6 +709,14 @@ pub struct PartAlignState {
     lastverticalw: Vec<f64>,
     m: Vec<f64>,
     mp: Vec<i32>,
+    /// The `mi`/`mpi` recurrence, computed as a prefix scan ahead of the row
+    /// that consumes it. The C runs it inline; see the note in
+    /// [`PartAlignState::part_a_align`].
+    miv: Vec<f64>,
+    mpiv: Vec<i32>,
+    /// The scan's candidates, written as a row so `l_align11`'s scan kernel
+    /// can consume them unchanged.
+    cand: Vec<f64>,
     ogcp1: Vec<f64>,
     ogcp2: Vec<f64>,
     fgcp1: Vec<f64>,
@@ -968,25 +976,111 @@ impl PartAlignState {
             let gapfreq2 = &self.gapfreq2[..lastj];
             let mrow = &mut self.m[..lastj];
             let mprow = &mut self.mp[..lastj];
+            let miv = &mut self.miv[..lastj];
+            let mpiv = &mut self.mpiv[..lastj];
+            let cand = &mut self.cand[..lastj];
             let ijpr = &mut ijprow[..lastj];
             let curw = &mut currentw[..lastj];
 
-            for j in 1..lastj {
-                let mut w = prevw[j - 1];
-                ijpr[j] = 0;
+            // The `mi` recurrence, lifted out of the row it used to run
+            // inline with. The C keeps them in one loop, and every value and
+            // comparison here is the C's -- what moves is only when they are
+            // computed. `mi` at step `j` depends on nothing the row writes
+            // (it reads `previousw` and `ogcp2` alone), and the row reads it
+            // before the step that updates it, so the two are separable.
+            //
+            // Separating them is what makes the row element-wise in `j`, and
+            // an element-wise row is the shape a kernel can take eight cells
+            // of at a time.
+            // The candidates the scan chooses between, written as a row.
+            // `l_align11`'s scan takes its candidates that way, so spelling
+            // them out lets that kernel serve this recurrence unchanged
+            // instead of the port growing a second copy of it.
+            for (c, (&pw, &og)) in cand[..lastj - 1]
+                .iter_mut()
+                .zip(prevw[..lastj - 1].iter().zip(&ogcp2[1..lastj]))
+            {
+                *c = pw + og * gf1vapre;
+            }
 
-                let g = mi + fgcp2[j - 1] * gf1va;
-                if g > w {
-                    w = g;
-                    ijpr[j] = -(j as i32 - mpi);
-                }
+            // The recurrence is `mi = max(mi, cand[j - 1]) + fpenalty_ex`,
+            // which is the max-plus scan `l_align11` runs. Its vector form
+            // reaches a position with one multiply where the loop adds
+            // `fpenalty_ex` to itself repeatedly, and the two agree only when
+            // nothing rounds -- so the kernel is asked for only when the
+            // penalty is zero, where the multiply is exact for every `f64` and
+            // no property of the candidates is needed. `partSalignmm.c`
+            // compiles the extension penalty out entirely (`USE_PENALTY_EX 0`)
+            // and the `mafft` script never passes `-g` to `dvtditr`, so that
+            // is every call this repository makes; anything else runs the
+            // serial loop below for the whole row.
+            let mut scanned = 0usize;
+            if let Some((done, carry_m, carry_mp)) = crate::lalign_avx512::prefix_scan_checked(
+                fpenalty_ex == 0.0,
+                &cand[..lastj - 1],
+                lastj - 1,
+                mi,
+                mpi,
+                fpenalty_ex,
+                miv,
+                mpiv,
+            ) {
+                scanned = done;
+                mi = carry_m;
+                mpi = carry_mp;
+            }
+            for j in 1 + scanned..lastj {
+                miv[j] = mi;
+                mpiv[j] = mpi;
                 // `>`, not `>=`: see the note on this function.
-                let g = prevw[j - 1] + ogcp2[j] * gf1vapre;
-                if g > mi {
-                    mi = g;
+                if cand[j - 1] > mi {
+                    mi = cand[j - 1];
                     mpi = j as i32 - 1;
                 }
                 mi += fpenalty_ex;
+            }
+
+            // The vectorised part of the row. It leaves `jj` wherever it
+            // stopped and the scalar loop below finishes from there -- and
+            // returns the last cell's `w`, because a row whose length divides
+            // by eight leaves that loop nothing to run and `wm` is the score
+            // this function returns.
+            let miv = &*miv;
+            let mpiv = &*mpiv;
+            let mut jj_start = 1usize;
+            if let Some((jj, last_w)) = crate::partalign_avx512::row_checked(
+                1,
+                lastj,
+                prevw,
+                miv,
+                mpiv,
+                fgcp2,
+                gapfreq2,
+                mrow,
+                mprow,
+                ijpr,
+                curw,
+                i as i32,
+                gf1va,
+                fgcp1va,
+                ogcp1va,
+                fpenalty_ex,
+            ) {
+                if jj > 1 {
+                    wm = last_w;
+                }
+                jj_start = jj;
+            }
+
+            for j in jj_start..lastj {
+                let mut w = prevw[j - 1];
+                ijpr[j] = 0;
+
+                let g = miv[j] + fgcp2[j - 1] * gf1va;
+                if g > w {
+                    w = g;
+                    ijpr[j] = -(j as i32 - mpiv[j]);
+                }
 
                 let g = mrow[j] + fgcp1va * gapfreq2[j];
                 if g > w {
@@ -1077,6 +1171,9 @@ impl PartAlignState {
         self.lastverticalw = vec![0.0; ll1 + 2];
         self.m = vec![0.0; ll2 + 2];
         self.mp = vec![0; ll2 + 2];
+        self.miv = vec![0.0; ll2 + 2];
+        self.mpiv = vec![0; ll2 + 2];
+        self.cand = vec![0.0; ll2 + 2];
         self.ogcp1 = vec![0.0; ll1 + 2];
         self.ogcp2 = vec![0.0; ll2 + 2];
         self.fgcp1 = vec![0.0; ll1 + 2];

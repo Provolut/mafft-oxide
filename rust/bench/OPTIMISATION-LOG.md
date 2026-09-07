@@ -711,3 +711,127 @@ Replaces the ranking in the previous section; item 1 there is struck.
    still unexamined.
 3. **Packing value and index into one `f64` key** in the scan. Unchanged, and
    still low value.
+
+---
+
+# `part_a_align`, split and vectorised, 2026-09-07
+
+The item the section above ranked first. It is the same two pieces as
+`l_align11` — a scan and an element-wise row — with one difference that makes
+it easier rather than harder, and one that makes it a split rather than a
+fusion.
+
+## What made it easier
+
+`partSalignmm.c` opens with `#define USE_PENALTY_EX 0`, so the C never executes
+the `mi += fpenalty_ex` that `Lalign11.c` does. The recurrence there is a plain
+running maximum with no decay.
+
+That matters because the scan's one conditional rewrite is reaching a position
+with `m + t*e` where the loop added `e` to itself `t` times, which agree only
+when nothing rounds. `l_align11` establishes that from its matrix and
+penalties. Here `e` is zero — the `mafft` script never passes `-g` to
+`dvtditr`, and the defaults are `DEFAULTGEP_B/N/J == 0` — so `t*e` is exactly
+zero and the rewrite is exact for every `f64`, with no property of the
+candidates required. The kernel is asked for only when `fpenalty_ex == 0.0`;
+anything else runs the serial loop for the whole row.
+
+The candidates differ from `l_align11`'s — `previousw[j-1] + ogcp2[j] *
+gapfreq1[i-1]` rather than `previousw[j-1]` — but they enter the maximum and
+nothing else, so writing them out as a row lets
+`lalign_avx512::prefix_scan` serve this recurrence unchanged. The port does not
+grow a second scan.
+
+## What made it a split
+
+`partA__align` runs its recurrence *inline* with the row, in one loop. So the
+work is the opposite of the section above: separating them, not fusing them.
+The separation is what makes the row element-wise in `j`, and an element-wise
+row is the shape a kernel can take eight cells of at a time.
+
+Separating costs something on its own — `miv`/`mpiv` become real memory and the
+row is walked twice. Measured alone, before either kernel: **+6.2%**. That is
+the price of admission, and it is why the previous section's result is not a
+contradiction of this one: there, an already-separated pair was fused and lost;
+here, an already-fused pair is separated and wins, because only one of the two
+arrangements can be vectorised.
+
+## The row kernel
+
+`src/partalign_avx512.rs`, the port's second kernel and the second place it
+contains `unsafe`. It is simpler than `lalign_avx512::row`: three comparisons
+and four stores per block, and — because this row carries no running maximum —
+**no cross-lane operation at all**. Every lane runs the scalar computation on
+its own cell, so bit-exactness needs no tie-rule argument, only the absence of
+reassociation.
+
+The C has no kernel here either, so this is not catching up with it.
+
+## Result
+
+Staged ESCOTT `dvtditr` payload, best of seven, fresh directory per run, `pre`
+digested every time:
+
+| | dvtditr |
+|---|---|
+| before | 0.2081 s |
+| split alone, no kernel | 0.2211 s |
+| **split + both kernels** | **0.1911 s** (0.918x) |
+
+`perf record` on the same payload, before and after:
+
+```
+                     before    after
+match_calc            25.2%    27.4%
+part_a_align          20.4%     8.7%   + 3.4% now in prefix_scan
+intergroup_score      13.0%    14.2%
+init_strict           11.4%    12.5%
+alignable_reagion      9.2%    10.1%
+```
+
+End to end, the whole point: a cold GEMME/ESCOTT trace of P53_HUMAN, 100
+realign calls, one worker, no cache, four repetitions each --
+
+```
+before   45.48  45.47  45.50  45.49 s
+after    43.78  43.77  43.80  43.81 s
+```
+
+**3.7% off a cold run**, with the predicted matrices bit-identical (same digest
+on all eight runs). `dvtditr` is 41% of the aligner and `part_a_align` was 20%
+of it, so this is close to the whole of what the item was worth.
+
+## Gates
+
+`cargo test --release` 227 passed. Against the compiled `core/`: `verify_dvtditr`
+32/32, `verify.sh` (disttbfast) 12018/0, `verify_tbfast.sh` 1690/0,
+`verify_lalign_kernel.sh` 15/0. The staged payload's every output file
+byte-identical to the previous build, and the end-to-end matrices digest-equal.
+
+Note `verify_golden.sh` refuses to replay against a `core/` it did not record
+against, so a rebuilt C needs the binary moved aside or the store re-recorded.
+That guard fired here and is working as intended.
+
+## One thing found on the way, not fixed here
+
+The port applies `mi += fpenalty_ex` and `m[j] += fpenalty_ex` unconditionally
+where the C has both inside `#if USE_PENALTY_EX`, which this file sets to 0 —
+so the C never applies them. With `fpenalty_ex` zero the two agree (`x += 0.0`
+differs from `x` only in the sign of a zero, which every comparison here treats
+as equal), and zero is what every call through the `mafft` script passes. A
+direct `dvtditr -g ...` would diverge.
+
+Left alone deliberately: the differential corpus cannot reach the case, so the
+fix could not be verified by the means this repository trusts, and an unverified
+change to an untested path is worse than a recorded one.
+
+## What is left
+
+1. **`match_calc`, 27.4%** and the biggest single item in `dvtditr`. Already
+   optimised twice; shared with `tbfast` and `disttbfast`, so a win there is
+   worth more than its share here suggests.
+2. **`intergroup_score` (14.2%) and `alignable_reagion` (10.1%)**, still
+   unexamined. Look for algorithmic waste before intrinsics — every large win
+   in this log has been algorithmic.
+3. **`init_strict`, 12.5%**, still 0.67 G over the C's equivalent and still not
+   localised beyond the function.
