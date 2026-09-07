@@ -1,15 +1,22 @@
 #!/bin/bash
-# Differential test: the AVX-512 kernel against the scalar path it replaces.
+# Differential test: the AVX-512 kernels against the scalar paths they replace.
 #
 #   verify_lalign_kernel.sh [inputs...]
 #
-# `l_align11` has two implementations now, and the vector one is the reason the
-# port carries any `unsafe` at all. This runs the same alignments twice through
-# the same binary -- once with `MAFFT_RS_NO_AVX512=1`, which makes
-# `lalign_avx512::available()` answer false -- and requires byte-identical
-# output. It is the check the other harnesses cannot make: they compare the port
-# against the C, so they would pass if *both* of the port's paths were wrong in
-# the same way.
+# `l_align11` and `partA__align` each have two implementations now, and the
+# vector ones are the reason the port carries any `unsafe` at all. This runs the
+# same alignments twice through the same binary -- once with
+# `MAFFT_RS_NO_AVX512=1`, which makes `lalign_avx512::available()` answer false
+# and so switches off both kernels -- and requires byte-identical output. It is
+# the check the other harnesses cannot make: they compare the port against the
+# C, so they would pass if *both* of the port's paths were wrong in the same
+# way.
+#
+# Both kernels are covered by the strategy list below. The `--localpair
+# --maxiterate` runs and `--auto` reach the iterative refinement stage, which is
+# where `dvtditr` and `partalign_avx512` run; the pairwise stage of every
+# strategy reaches `l_align11`. The script keeps its name because that is what
+# `pre-push` and the log call it.
 #
 # On a CPU without AVX-512 the two runs take the same path and the comparison is
 # vacuous, so that case is reported rather than counted as a pass.
@@ -60,7 +67,8 @@ GENPY
   INPUTS+=("$work/wide.fa")
 fi
 
-# Strategies whose pairwise stage runs L__align11.
+# Strategies whose pairwise stage runs L__align11, and -- for those that
+# iterate -- whose refinement stage runs partA__align.
 STRATS=(
   "--auto"
   "--localpair --maxiterate 0"
@@ -89,5 +97,5 @@ for f in "${INPUTS[@]}"; do
   done
 done
 
-echo "lalign kernel vs scalar: pass=$pass fail=$fail"
+echo "avx512 kernels vs scalar: pass=$pass fail=$fail"
 if [ $fail -ne 0 ]; then printf 'FAILED:%b\n' "$failed" | head -20; exit 1; fi
