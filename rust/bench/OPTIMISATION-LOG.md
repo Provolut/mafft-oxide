@@ -808,6 +808,11 @@ of it, so this is close to the whole of what the item was worth.
 `verify_lalign_kernel.sh` 15/0. The staged payload's every output file
 byte-identical to the previous build, and the end-to-end matrices digest-equal.
 
+Of those, `pre-push` runs `cargo test`, the coverage floor and the two golden
+replays; `verify_dvtditr` and `verify_lalign_kernel` were run by hand, the
+first because it needs a compiled `core/` and the second because it is the only
+one that can tell the port's two paths apart.
+
 Note `verify_golden.sh` refuses to replay against a `core/` it did not record
 against, so a rebuilt C needs the binary moved aside or the store re-recorded.
 That guard fired here and is working as intended.

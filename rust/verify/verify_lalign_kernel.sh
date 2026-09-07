@@ -15,8 +15,12 @@
 # Both kernels are covered by the strategy list below. The `--localpair
 # --maxiterate` runs and `--auto` reach the iterative refinement stage, which is
 # where `dvtditr` and `partalign_avx512` run; the pairwise stage of every
-# strategy reaches `l_align11`. The script keeps its name because that is what
-# `pre-push` and the log call it.
+# strategy reaches `l_align11`. The script keeps its name because `README.md`
+# and `bench/OPTIMISATION-LOG.md` refer to it by that name.
+#
+# `pre-push` does NOT run this -- it runs the two golden replays, which compare
+# against the C and so cannot tell the port's two paths apart. Run it by hand
+# when either kernel changes.
 #
 # On a CPU without AVX-512 the two runs take the same path and the comparison is
 # vacuous, so that case is reported rather than counted as a pass.
