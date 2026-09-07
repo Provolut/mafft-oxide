@@ -16,3 +16,18 @@ bench/sample-profile.txt
 # stands. The store carries the C's identity and refuses to replay against a
 # different one, so a stale store cannot quietly become the reference.
 tests/golden/*.tar.gz
+
+# Unpacked golden fixtures. `tests/golden/<suite>.pack` is tracked and
+# `build.rs` expands it here before anything reads it.
+#
+# They were 1914 loose files -- 95% of everything this repository tracks -- for
+# 2 MB of text, so the file count was the whole cost and none of the value: git
+# pays for each one on every checkout and every `status`. Packed as text rather
+# than as an archive, because a fixture that changes is the port changing its
+# answer and a reviewer has to be able to see it; a tarball diff is one
+# unreadable blob, a text container diffs line by line.
+tests/golden/flh/
+tests/golden/matrix/
+tests/golden/td/
+tests/golden/tdi/
+tests/golden/utils/

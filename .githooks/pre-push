@@ -5,19 +5,18 @@
 # Install once:
 #     git config core.hooksPath .githooks
 #
-# Takes about 25 seconds on an idle machine: the encoding check is instant, the
-# release test suite about 1.5 s warm, the coverage run 16 s, the sampling
-# profile the rest.
+# About 25 seconds without a recorded golden store, and about 1m50s with one:
+# the encoding check is instant, the release test suite ~1.5 s warm, coverage
+# 16 s, the sampling profile a few more, and the replayed differentials 1m21s.
 # That is deliberate -- a hook slow enough to be worth skipping gets skipped,
 # and then it is not a gate. `--no-verify` bypasses it when you genuinely need
 # to push a work-in-progress branch.
 #
 # Two things this does NOT do, on purpose:
 #
-#  * It does not run `verify.sh` or `verify_tbfast.sh`. Those need a compiled
-#    `core/` on the machine and take 8m 36s and 3m 41s. `tests/matrix.rs`
-#    carries the C's answers as fixtures and covers the same ground in seconds;
-#    the full harnesses belong in a nightly job.
+#  * It does not gate on a full differential against a compiled `core/`. It
+#    does run one when a recorded store is present -- see below -- but it will
+#    not sit for the 2m51s that running the C itself costs.
 #  * It does not gate on performance. The profiling database is measured with
 #    callgrind, which costs ~50x, and wall-clock numbers taken on a machine
 #    busy with a push are not comparable to anything. `bench/sample.sh`
@@ -72,5 +71,64 @@ if ! ./bench/sample.sh 8 > /tmp/pre-push-sample.$$ 2>&1; then
 fi
 grep -E '^== ' /tmp/pre-push-sample.$$ 2>/dev/null | sed 's/^/  /'
 rm -f /tmp/pre-push-sample.$$
+
+# The differentials, and why they are here at all.
+#
+# This hook once passed a push that moved every harness into `verify/` and left
+# their paths resolving one directory too high -- every one of them broken, and
+# nothing noticed, because `cargo test` does not run shell scripts. The harness
+# tallies quoted in that commit message were true of the working tree and not of
+# the commit. So the harnesses run here now.
+#
+# Two things happen, and the cheap one always happens. Asking a harness to emit
+# its corpus makes it resolve `gencorpus.py`, `test/sample` and the binaries --
+# every path the move broke -- for about a second and with no C on the machine.
+# That is the regression guard.
+#
+# The full differential then runs only if a recorded store is there to replay
+# (`verify_golden.sh`, 1m21s for both, still no C). Without one this says so
+# rather than quietly reducing to the smoke test, and rather than spending 2m51s
+# running the C -- a hook that surprises you with three minutes is a hook people
+# stop using, and then it is not a gate.
+echo "pre-push: harness paths"
+for h in verify.sh verify_tbfast.sh; do
+  case "$h" in
+    verify.sh) rs="target/release/disttbfast-rs"; store="tests/golden/disttbfast.tar.gz" ;;
+    *)         rs="target/release/tbfast-rs";     store="tests/golden/tbfast.tar.gz" ;;
+  esac
+  d=$(mktemp -d)
+  # Both binaries are the port's own: this is not a comparison, it is a check
+  # that the harness can find what it needs.
+  if ! VERIFY_EMIT_CORPUS="$d/c" "./verify/$h" "$rs" "$rs" > "$d/log" 2>&1; then
+    sed 's/^/  /' "$d/log" 1>&2
+    rm -rf "$d"
+    fail "$h cannot resolve its own inputs"
+  fi
+  n=$(find "$d/c" -maxdepth 1 -type f 2>/dev/null | wc -l)
+  rm -rf "$d"
+  [ "$n" -ge 10 ] || fail "$h produced a corpus of $n files"
+  echo "  == $h: resolves, corpus of $n files"
+done
+
+ran=0
+for h in verify.sh verify_tbfast.sh; do
+  case "$h" in
+    verify.sh) rs="target/release/disttbfast-rs"; store="tests/golden/disttbfast.tar.gz" ;;
+    *)         rs="target/release/tbfast-rs";     store="tests/golden/tbfast.tar.gz" ;;
+  esac
+  [ -f "$store" ] || continue
+  ran=1
+  echo "pre-push: $h replayed against $store"
+  out=$(./verify/verify_golden.sh replay "$h" "$store" "$rs" 2>&1) || {
+    printf '%s\n' "$out" | tail -20 1>&2
+    fail "$h differs from the recorded C"
+  }
+  printf '%s\n' "$out" | grep -E '^pass=' | sed 's/^/  == /'
+done
+if [ "$ran" = 0 ]; then
+  echo "  == no recorded store; the full differential did not run. To add one:"
+  echo "     rust/verify/verify_golden.sh record verify.sh core/disttbfast \\"
+  echo "         rust/target/release/disttbfast-rs rust/tests/golden/disttbfast.tar.gz"
+fi
 
 echo "pre-push: ok"

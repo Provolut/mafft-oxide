@@ -102,7 +102,7 @@ are added is not, whatever the compiler flags allow.
 
 - `rust/tests/matrix.rs` — 553 cases whose expected bytes came from the real C.
   Runs in `cargo test`, needs no `core/` build. This is the fast gate.
-- `rust/verify.sh`, `verify_tbfast.sh`, `verify_dvtditr.sh`, `verify_e2e.sh`,
+- `rust/verify/verify.sh`, `verify_tbfast.sh`, `verify_dvtditr.sh`, `verify_e2e.sh`,
   `verify_gaplen.sh`, `verify_flh.sh`, `verify_td.sh`, `verify_tdi.sh` —
   differential harnesses against a compiled `core/`. Tens of thousands of
   comparisons, about an hour. These are the thorough gate; run them before

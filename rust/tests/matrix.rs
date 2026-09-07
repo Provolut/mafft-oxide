@@ -12,7 +12,7 @@
 //! tiny on purpose -- the whole matrix replays in a couple of seconds, so it
 //! belongs in `cargo test` rather than in a nightly job.
 //!
-//! Regenerate with `./gen_golden.py ../core` when a feature lands. A fixture
+//! Regenerate with `./gen/gen_golden.py ../core` when a feature lands. A fixture
 //! that changes is the port changing its answer, which is the thing this
 //! repository exists to prevent.
 
@@ -41,7 +41,7 @@ struct Case {
 
 fn manifest() -> Vec<Case> {
     let text = std::fs::read_to_string(Path::new(MATRIX).join("MANIFEST"))
-        .expect("tests/golden/matrix/MANIFEST -- regenerate with ./gen_golden.py ../core");
+        .expect("tests/golden/matrix/MANIFEST -- regenerate with ./gen/gen_golden.py ../core");
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
@@ -262,7 +262,7 @@ fn the_matrix_covers_the_features_it_claims_to() {
     ] {
         assert!(
             keys.iter().any(|k| k.ends_with(feature)),
-            "no matrix case exercises `{}` -- regenerate with ./gen_golden.py",
+            "no matrix case exercises `{}` -- regenerate with ./gen/gen_golden.py",
             feature
         );
     }
