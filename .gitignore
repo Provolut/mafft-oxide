@@ -1,6 +1,79 @@
 *.o
-core/mafft
-core/tbfast
-core/dvtditr
-core/disttbfast
 prefix*/
+
+# Compiled programs. `cd core && make` builds them and copies them into
+# `binaries/` (core/Makefile), and the deployment path builds from source, so
+# nothing needs them committed -- while committing them cost something every
+# day: 61 executables, 15 MB, every one of them permanently showing as modified
+# after any build, so `git status` was noise and every `gh` command warned about
+# 55 uncommitted changes. Worse, nothing checked that the committed copies were
+# built from the committed source, and they were not.
+#
+# Listed rather than globbed: `binaries/` also holds two Perl scripts and
+# `core/` holds two Ruby ones, and those are source.
+binaries/addsingle
+binaries/contrafoldwrap
+binaries/countlen
+binaries/disttbfast
+binaries/dndblast
+binaries/dndfast7
+binaries/dndpre
+binaries/dvtditr
+binaries/f2cl
+binaries/filter
+binaries/getlag
+binaries/hex2maffttext
+binaries/mafft-distance
+binaries/mafft-profile
+binaries/maffttext2hex
+binaries/makedirectionlist
+binaries/mccaskillwrap
+binaries/multi2hat3s
+binaries/nodepair
+binaries/pairash
+binaries/pairlocalalign
+binaries/regtable2seq
+binaries/replaceu
+binaries/restoreu
+binaries/score
+binaries/seq2regtable
+binaries/setcore
+binaries/setdirection
+binaries/sextet5
+binaries/splittbfast
+binaries/tbfast
+binaries/version
+
+core/addsingle
+core/contrafoldwrap
+core/countlen
+core/disttbfast
+core/dndblast
+core/dndfast7
+core/dndpre
+core/dvtditr
+core/f2cl
+core/filter
+core/getlag
+core/hex2maffttext
+core/mafft
+core/mafft-distance
+core/mafft-profile
+core/maffttext2hex
+core/makedirectionlist
+core/mccaskillwrap
+core/multi2hat3s
+core/nodepair
+core/pairash
+core/pairlocalalign
+core/regtable2seq
+core/replaceu
+core/restoreu
+core/score
+core/seq2regtable
+core/setcore
+core/setdirection
+core/sextet5
+core/splittbfast
+core/tbfast
+core/version

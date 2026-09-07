@@ -9,6 +9,12 @@ https://mafft.cbrc.jp/alignment/software/
      % make
      % cd ..
 
+**This fork does not ship the compiled programs** -- `make` above is not
+optional, it is how `binaries/` gets populated. They were committed once, and
+the cost was daily: 61 executables and 15 MB, every one showing as modified
+after any build so `git status` was noise, and nothing checked that the
+committed copies had been built from the committed source. They had not.
+
 If you have the `./extensions` directory, which is for RNA alignments,
 
      % cd extensions
