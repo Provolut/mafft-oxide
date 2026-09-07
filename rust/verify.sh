@@ -122,6 +122,16 @@ if [ "$n_corpus" -lt 10 ]; then
   exit 2
 fi
 
+# A slice of this corpus is what `verify_parallel.sh` hands back to each of its
+# workers, and it builds the slices from the corpus this harness would have
+# generated for itself -- so the generation stays here, where it belongs, and
+# the driver never grows a second opinion about what the corpus is.
+if [ -n "${VERIFY_EMIT_CORPUS:-}" ]; then
+  mkdir -p "$VERIFY_EMIT_CORPUS"
+  cp "$CORPUS"/* "$VERIFY_EMIT_CORPUS"/
+  exit 0
+fi
+
 pass=0
 fail=0
 failed=""
@@ -335,6 +345,12 @@ done
 # ordinary reader would refuse, plus the `_aamtx` that scores them.
 # `minusone` sets a letter's diagonal to -1, which is how `constants()` spells
 # "no score given", and the C then refuses the run; both binaries must agree.
+# The only cases here that do not come from a corpus file: `gen_text.py`
+# makes its own input. `verify_parallel.sh` deals the corpus out among
+# several copies of this harness, and these would then run once per copy --
+# inflating the pass count by a multiple of itself while checking nothing
+# new. It sets this on every worker but one.
+if [ -z "${VERIFY_SKIP_STANDALONE:-}" ]; then
 for variant in full sparse nomatrix unscored minusone; do
   for seed in 1 2 3 4 5 6 7 8; do
     for extra in "" "-a" "-F"; do
@@ -367,6 +383,7 @@ for variant in full sparse nomatrix unscored minusone; do
     done
   done
 done
+fi
 
 # --merge (-H): sub-alignments that must come out monophyletic. The groups
 # have to be aligned already, so the C is run once to produce an alignment and
