@@ -63,7 +63,7 @@ fi
 
 cd "$here/rust" || exit 0   # nothing to check if the port is not present
 
-FLOOR=85
+FLOOR=89
 fail() { echo; echo "pre-push: $*" 1>&2; echo "pre-push: push refused. Use --no-verify to override." 1>&2; exit 1; }
 
 echo "pre-push: cargo test"

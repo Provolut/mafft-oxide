@@ -11,8 +11,13 @@ unmodified upstream build, never *argued* to be equivalent.
 ## Two gates you may not lower
 
 `.githooks/pre-push` refuses a push whose tests fail or whose region coverage
-is under 85%. Both numbers are floors. **An agent may not lift, weaken, or
+is under 89%. Both numbers are floors. **An agent may not lift, weaken, or
 route around either one.**
+
+The coverage floor sits close to the measured figure on purpose, so it catches
+code added ahead of its tests rather than only a collapse. The consequence is
+that adding a module and its tests in separate commits will have the first of
+them refused — write both before pushing, which is the intent.
 
 Concretely, all of the following are forbidden, whether or not they would make
 a red run go green:
