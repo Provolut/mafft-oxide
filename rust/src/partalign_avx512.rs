@@ -394,7 +394,7 @@ mod tests {
         /// survives the random rows above and fails here.
         fn tied(len: usize, seed: u64) -> Self {
             let mut r = Lcg(seed);
-            let mut small = |r: &mut Lcg, n: i32| f64::from(r.next_i32() % n);
+            let small = |r: &mut Lcg, n: i32| f64::from(r.next_i32() % n);
             Self {
                 prevw: (0..len).map(|_| small(&mut r, 3)).collect(),
                 miv: (0..len).map(|_| small(&mut r, 3)).collect(),

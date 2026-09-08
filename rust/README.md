@@ -352,8 +352,8 @@ different for the two at the top than for the rest:
 | `verify_gaplen.sh`, the `Gaplen` half of `-@` | 203/203 identical | 2s |
 | `verify_utils.sh`, the four utility binaries | 119/119 identical, 1 indeterminate | under 1s |
 | upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong | — |
-| `cargo test --release` | 233/233, 0 ignored | 1.4s warm |
-| `bench/coverage.sh` | 89.13% region, 88.58% line | 16s |
+| `cargo test --release` | 236/236, 0 ignored | 1.4s warm |
+| `bench/coverage.sh` | 91.20% region, 90.64% line | 16s |
 
 **`verify_parallel.sh` runs either of the two big ones across every core**, and
 it is the same run rather than a cheaper one:

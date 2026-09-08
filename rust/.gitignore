@@ -26,6 +26,7 @@ tests/golden/*.tar.gz
 # than as an archive, because a fixture that changes is the port changing its
 # answer and a reviewer has to be able to see it; a tarball diff is one
 # unreadable blob, a text container diffs line by line.
+tests/golden/dvtditr/
 tests/golden/flh/
 tests/golden/matrix/
 tests/golden/td/
