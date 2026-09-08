@@ -11,13 +11,15 @@ unmodified upstream build, never *argued* to be equivalent.
 ## Two gates you may not lower
 
 `.githooks/pre-push` refuses a push whose tests fail or whose region coverage
-is under 89%. Both numbers are floors. **An agent may not lift, weaken, or
+is under 90%. Both numbers are floors. **An agent may not lift, weaken, or
 route around either one.**
 
-The coverage floor sits close to the measured figure on purpose, so it catches
-code added ahead of its tests rather than only a collapse. The consequence is
-that adding a module and its tests in separate commits will have the first of
-them refused — write both before pushing, which is the intent.
+The coverage floor tracks the suite's measured coverage a point or so below it,
+rather than sitting far enough back to be unreachable. That is deliberate: it
+catches code added ahead of its tests instead of only a collapse, so a module
+and its tests belong in the same commit. `rust/README.md`'s harness table
+carries what the suite currently measures; this file carries only the floor,
+so the two cannot drift into disagreeing about the same number.
 
 Concretely, all of the following are forbidden, whether or not they would make
 a red run go green:
