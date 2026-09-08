@@ -176,10 +176,12 @@ quietly returning a different alignment:
   to. A callgrind profile confirms `athread` never runs at `-C 0`. Run with
   `-C 0` / `-C 0-0`, which is what the wrapper passes by default.
 
-The six configurations that still need the C, and what porting each would take,
-are in [`WHAT-STILL-NEEDS-THE-C.md`](WHAT-STILL-NEEDS-THE-C.md). One of them —
+The configurations that still need the C are tracked as issues, one per gap,
+indexed by the repository's "what is still not done" issue — each carries what
+porting it would take and what verifying it would need. One of them —
 `--thread n` — is not a porting task at all: the C's own threaded `dvtditr` is
-nondeterministic, so there is no fixed answer to match.
+nondeterministic, so there is no fixed answer to match, and the target has to be
+this port's own `-C 0` rather than the C's threaded output.
 
 `dvtditr` -- iterative refinement -- **is** ported, for the configuration
 `scripts/mafft` produces: `utree=1 weight=4 score_check=1 nkozo=0 alg='A'
@@ -762,6 +764,25 @@ against a staged working directory benchmarks or diffs one binary in
 isolation. When output diverges, instrument a scratch copy of `core/` and
 bisect on f64 bit patterns — every mismatch in this port was found that way,
 never by reading.
+
+The same three commands re-derive which configurations still reach the C, which
+is how that list was established rather than guessed. Run them when a strategy
+is added or a refusal is removed; a configuration that stops appearing has left
+the reachable surface, and one that appears with no issue tracking it is a gap
+in the tracking.
+
+```
+# which binaries a strategy actually executes
+cp -r binaries logbin && for f in logbin/*; do ... exec wrapper ... done
+EXEC_LOG=/tmp/exec.log MAFFT_BINARIES=$PWD/logbin scripts/mafft --auto test/sample
+
+# what dvtditr was really called with
+wrap binaries/dvtditr in a script that records "$@" and stdin, then execs the real one
+
+# which C functions a run enters
+valgrind --tool=callgrind --callgrind-out-file=cg.out binaries/dvtditr <argv> < stdin
+grep -aE '^(fn|cfn)=' cg.out | sed -E 's/^c?fn=//; s/^\([0-9]+\)[[:space:]]*//' | sort -u
+```
 
 ## Upstream defects found while doing this
 
