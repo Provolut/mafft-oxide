@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: pre-push gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned to the toolchain the committed measurements were made with, so a
+      # new stable release cannot move the coverage number or the timings under
+      # the gate without a commit saying so.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.0"
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      # The same script as the local hook, not a copy of its steps: the tests,
+      # the coverage floor and the encoding check live in one place and cannot
+      # drift apart. With stdin empty it checks the checkout rather than a list
+      # of pushed refs. The golden replays need a store recorded against a
+      # built core/, which is not tracked, so here they report that they did
+      # not run; the differential harnesses stay a local, hour-long gate.
+      - name: .githooks/pre-push
+        run: .githooks/pre-push < /dev/null
+
+      - name: cargo publish --dry-run
+        working-directory: rust
+        run: cargo publish --dry-run

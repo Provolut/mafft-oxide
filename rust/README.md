@@ -1,5 +1,8 @@
 # mafft-oxide: MAFFT's alignment algorithms, in Rust
 
+[![CI](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml/badge.svg)](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/exazyme/mafft-provolut/blob/main/rust/LICENSE)
+
 An independent port of [MAFFT](https://mafft.cbrc.jp/alignment/software/) by
 Kazutaka Katoh, not affiliated with or endorsed by the MAFFT authors. BSD
 3-Clause, carrying MAFFT's own notice as well; see "License, credits and

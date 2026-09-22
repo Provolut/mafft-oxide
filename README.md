@@ -1,5 +1,8 @@
 # MAFFT 7.526, Provolut fork
 
+[![CI](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml/badge.svg)](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+
 This repository is **MAFFT 7.526** by Kazutaka Katoh
 (https://mafft.cbrc.jp/alignment/software/), imported unmodified in commit
 `9660455`, plus work by Provolut GmbH to make it faster without changing a
