@@ -1,7 +1,7 @@
 //! Mirror of `/tmp/glharness.c`: run `gaplencount` and the `calcpfac` family
 //! on two groups given on the command line and print the same lines the C
 //! harness does, so the two can be diffed.
-use mafft_rs::dalign::*;
+use mafft_oxide::dalign::*;
 
 fn main() {
     let a: Vec<String> = std::env::args().skip(1).collect();

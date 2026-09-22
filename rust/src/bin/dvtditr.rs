@@ -17,14 +17,14 @@
 
 use std::io::Read;
 
-use mafft_rs::cargs::{self, Opt};
-use mafft_rs::constants::Constants;
-use mafft_rs::io;
-use mafft_rs::localhom::new_table;
-use mafft_rs::params::{Args, NOTSPECIFIED};
-use mafft_rs::tditeration::{tree_dependent_iteration, IterParams};
-use mafft_rs::tree::upgma_treeout;
-use mafft_rs::treeop::{expand_topol, search_anchors};
+use mafft_oxide::cargs::{self, Opt};
+use mafft_oxide::constants::Constants;
+use mafft_oxide::io;
+use mafft_oxide::localhom::new_table;
+use mafft_oxide::params::{Args, NOTSPECIFIED};
+use mafft_oxide::tditeration::{tree_dependent_iteration, IterParams};
+use mafft_oxide::tree::upgma_treeout;
+use mafft_oxide::treeop::{expand_topol, search_anchors};
 
 /// What `dvtditr`'s option loop leaves behind.
 struct DvtArgs {

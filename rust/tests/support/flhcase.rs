@@ -4,11 +4,11 @@
 //!
 //! The argument vector is `gen_flhcases.py`'s, and the printed lines are
 //! `gen_flhharness.c`'s, byte for byte.
-use mafft_rs::constants::Constants;
-use mafft_rs::falign::{falign_localhom, FalignState};
-use mafft_rs::localhom::LocalHom;
-use mafft_rs::params::Args;
-use mafft_rs::partalign::{PartAlignState, PartImp};
+use mafft_oxide::constants::Constants;
+use mafft_oxide::falign::{falign_localhom, FalignState};
+use mafft_oxide::localhom::LocalHom;
+use mafft_oxide::params::Args;
+use mafft_oxide::partalign::{PartAlignState, PartImp};
 
 /// The state a run of calls shares, as the C shares its `static TLS` buffers.
 ///

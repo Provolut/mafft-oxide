@@ -443,7 +443,7 @@ mod aamtx_tests {
         // Serialise: the working directory is process-wide.
         let _g = crate::cwd_lock();
         let dir =
-            std::env::temp_dir().join(format!("mafft-rs-aamtx-{}-{}", name, std::process::id()));
+            std::env::temp_dir().join(format!("mafft-oxide-aamtx-{}-{}", name, std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let mut fh = std::fs::File::create(dir.join("_aamtx")).unwrap();
         fh.write_all(contents.as_bytes()).unwrap();
@@ -674,7 +674,7 @@ mod text_tests {
 
     fn in_dir<T>(tag: &str, aamtx: Option<&str>, f: impl FnOnce() -> T) -> T {
         let _g = crate::cwd_lock();
-        let d = std::env::temp_dir().join(format!("mafft-rs-text-{}-{}", tag, std::process::id()));
+        let d = std::env::temp_dir().join(format!("mafft-oxide-text-{}-{}", tag, std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::create_dir_all(&d);
         if let Some(c) = aamtx {

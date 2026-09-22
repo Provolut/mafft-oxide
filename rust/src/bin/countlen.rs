@@ -8,8 +8,8 @@
 
 use std::io::Read;
 
-use mafft_rs::cargs::{self, Opt};
-use mafft_rs::io;
+use mafft_oxide::cargs::{self, Opt};
+use mafft_oxide::io;
 
 /// Format a double the way glibc's `%f` does.
 ///

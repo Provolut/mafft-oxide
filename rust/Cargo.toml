@@ -1,12 +1,21 @@
 [package]
-name = "mafft-rs"
+name = "mafft-oxide"
 version = "0.2.0"
 edition = "2021"
 description = "Bit-exact Rust port of MAFFT's multiple-sequence-alignment algorithms"
 license = "BSD-3-Clause"
+authors = ["Provolut GmbH"]
+repository = "https://github.com/exazyme/mafft-provolut"
+readme = "README.md"
+keywords = ["bioinformatics", "alignment", "msa", "mafft", "sequence"]
+categories = ["science", "command-line-utilities"]
+# The golden fixtures and the harnesses stay in the repository: build.rs unpacks
+# the fixtures into the source tree, which `cargo publish` refuses, and none
+# of it is needed to build the binaries.
+exclude = ["tests/", "gen/", "verify/", "bench/", "examples/", "GOAL.md"]
 
 [lib]
-name = "mafft_rs"
+name = "mafft_oxide"
 path = "src/lib.rs"
 
 [[bin]]

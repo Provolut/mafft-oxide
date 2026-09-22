@@ -16,8 +16,8 @@
 
 use std::io::{Read, Write};
 
-use mafft_rs::cargs::{self, Opt};
-use mafft_rs::io;
+use mafft_oxide::cargs::{self, Opt};
+use mafft_oxide::io;
 
 /// Protein characters `replace_unusual` leaves alone, upper-cased.
 const USUAL_PROTEIN: &[u8] = b"ARNDCQEGHILKMFPSTWYVarndcqeghilkmfpstwyv-.";

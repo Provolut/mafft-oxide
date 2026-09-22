@@ -13,11 +13,11 @@
 
 use std::io::Read;
 
-use mafft_rs::cargs::{self, Opt};
-use mafft_rs::constants::Constants;
-use mafft_rs::naivescore::{make_skiptable, naive_pairscore11, naive_pairscore_fast};
-use mafft_rs::params::{Args, NOTSPECIFIED};
-use mafft_rs::io;
+use mafft_oxide::cargs::{self, Opt};
+use mafft_oxide::constants::Constants;
+use mafft_oxide::naivescore::{make_skiptable, naive_pairscore11, naive_pairscore_fast};
+use mafft_oxide::params::{Args, NOTSPECIFIED};
+use mafft_oxide::io;
 
 /// What the option loop leaves behind.
 struct DndArgs {

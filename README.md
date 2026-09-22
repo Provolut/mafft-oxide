@@ -1,3 +1,24 @@
+# MAFFT 7.526, Provolut fork
+
+[![CI](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml/badge.svg)](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+
+This repository is **MAFFT 7.526** by Kazutaka Katoh
+(https://mafft.cbrc.jp/alignment/software/), imported unmodified in commit
+`9660455`, plus work by Provolut GmbH to make it faster without changing a
+single byte of its output:
+
+- **faster C**: performance changes to `core/`, measured and verified
+  byte-identical against the unmodified build; see `provolut/README.md`.
+- **mafft-oxide**: a Rust port of the aligner binaries, verified
+  byte-identical against the C; see `rust/README.md`.
+
+This is an independent fork. It is not affiliated with or endorsed by the
+MAFFT authors, and all credit for the alignment method is theirs. If you use
+it in published work, cite MAFFT (see "CITING" below), not this fork.
+
+The rest of this file is upstream's README, with notes where the fork differs.
+
 # MAFFT version 7.526
 Multiple sequence alignment program
 <br>
@@ -123,5 +144,48 @@ See also https://mafft.cbrc.jp/alignment/software/
      # rm /usr/local/share/man/man1/mafft*
 
 
+## CITING
+The MAFFT homepage lists these as the papers describing it; for version 7:
+
+- Katoh, Standley 2013. MAFFT multiple sequence alignment software version 7:
+  improvements in performance and usability. *Molecular Biology and Evolution*
+  30:772-780.
+
+and, for the strategies used:
+
+- Katoh, Misawa, Kuma, Miyata 2002. MAFFT: a novel method for rapid multiple
+  sequence alignment based on fast Fourier transform. *Nucleic Acids Res.*
+  30:3059-3066. (FFT-NS-1, FFT-NS-2, FFT-NS-i)
+- Katoh, Kuma, Toh, Miyata 2005. MAFFT version 5: improvement in accuracy of
+  multiple sequence alignment. *Nucleic Acids Res.* 33:511-518. (G-INS-i,
+  L-INS-i, E-INS-i)
+
+The homepage lists further papers for the other strategies.
+
+
 ## LICENSE
-See `./license` and `./license.extensions`.
+`./LICENSE` is the BSD 3-Clause license, with two copyright holders:
+
+- **Kazutaka Katoh**, for MAFFT itself: everything imported in `9660455`.
+  That includes the wrapper scripts in `scripts/` and `core/` (`mafft*`,
+  `*.rb`, `*_premafft.pl`), which are built from upstream's `.tmpl` files.
+- **Provolut GmbH**, for this fork's own work: `rust/` (mafft-oxide),
+  `provolut/`, `.githooks/`, `scripts/check-encoding.sh`, and the changes to
+  `core/` made after `9660455`. A changed upstream file is under both.
+
+`./LICENSE` uses the standard BSD 3-Clause wording so that tools, GitHub
+included, recognise it. MAFFT's own notice, whose wording differs slightly but
+whose three conditions and disclaimer are the same, is kept verbatim in
+`./licenses/MAFFT` (upstream's `license` file), and it is what applies to
+Katoh's code.
+
+**Exception: `./extensions` is not BSD.** The RNA extensions (Vienna RNA
+package, MXSCARNA, ProbConsRNA) each have their own terms, in
+`./licenses/MAFFT-extensions` (upstream's `license.extensions` file). In
+particular, the Vienna RNA package may not be redistributed for a fee, and
+asks commercial users to contact its authors. Neither the Rust port nor the
+fork's C changes use any of it.
+
+`rust/LICENSE` is the Rust port's own copy of both notices, Provolut's and
+MAFFT's verbatim, so the crate carries them when it is distributed apart from
+this repository.

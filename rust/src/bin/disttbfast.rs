@@ -9,12 +9,12 @@
 
 use std::io::{Read, Write};
 
-use mafft_rs::align::AlignState;
-use mafft_rs::constants::Constants;
-use mafft_rs::lalign::LalignState;
-use mafft_rs::params::Args;
-use mafft_rs::treebase::TreebaseOpts;
-use mafft_rs::{addfunctions, dist, falign, io, keeplength, score, tree, treebase};
+use mafft_oxide::align::AlignState;
+use mafft_oxide::constants::Constants;
+use mafft_oxide::lalign::LalignState;
+use mafft_oxide::params::Args;
+use mafft_oxide::treebase::TreebaseOpts;
+use mafft_oxide::{addfunctions, dist, falign, io, keeplength, score, tree, treebase};
 
 /// `pickup()`: keep the longest sequence on each side of the last few tree
 /// nodes and write the rest to `notused`.
@@ -121,9 +121,9 @@ fn varpairscore(
     let nlenmax = seq.iter().map(|s| s.len()).max().unwrap_or(0);
     eprintln!("nseq = {}, nlenmax={}, seed={}", nseq, nlenmax, seed);
 
-    let mut rng = mafft_rs::cerand::CRand::new(seed);
+    let mut rng = mafft_oxide::cerand::CRand::new(seed);
     let mut slist: Vec<i32> = (0..nseq as i32).collect();
-    mafft_rs::cerand::stringshuffle(&mut slist, &mut rng);
+    mafft_oxide::cerand::stringshuffle(&mut slist, &mut rng);
 
     // The C indexes `slist` up to `npick` whatever `nseq` is; a larger npick
     // reads off the end of its array, so refuse rather than invent a result.
@@ -245,14 +245,14 @@ fn main() {
 
     // `-l` (`--anchors`): user anchors, read before `constants()` because the
     // C does, and indexed by the ungapped lengths of the input.
-    let mut extanch: Option<Vec<mafft_rs::anchors::ExtAnch>> = None;
+    let mut extanch: Option<Vec<mafft_oxide::anchors::ExtAnch>> = None;
     let mut anchindex: Vec<Vec<i32>> = Vec::new();
     if args.useexternalanchors {
         let nogaplen: Vec<usize> = input.seq.iter().map(|s| io::gappick0(s).len()).collect();
         eprintln!("reading anchors");
-        let mut a = mafft_rs::anchors::read_external_anchors(njob, &nogaplen);
+        let mut a = mafft_oxide::anchors::read_external_anchors(njob, &nogaplen);
         eprintln!("sorting anchors");
-        anchindex = mafft_rs::anchors::index_anchors(&mut a, njob);
+        anchindex = mafft_oxide::anchors::index_anchors(&mut a, njob);
         extanch = Some(a);
     }
 
@@ -454,13 +454,13 @@ fn main() {
     // k-mer tables (first pass) or the MSA (second) kept around, not just the
     // nearest-neighbour summary the other keywords build from.
     let mut compact_kmer_selfscore: Vec<i32> = Vec::new();
-    let mut compact_tuples: Option<mafft_rs::dist::Tuples> = None;
+    let mut compact_tuples: Option<mafft_oxide::dist::Tuples> = None;
     let mut compact_msa: Option<(Vec<Vec<u8>>, Vec<Vec<i32>>, Vec<i32>)> = None;
     let (mut mtx, nogaplen): (Vec<Vec<f64>>, Vec<usize>) = if treein {
         (Vec::new(), input.seq.iter().map(|s| s.len()).collect())
     } else if compacttree != 0 {
         eprintln!("\n\nMaking a distance matrix ..");
-        let (md, mdf, ngl, _partmtx, kss) = mafft_rs::compacttree::compact_distances(
+        let (md, mdf, ngl, _partmtx, kss) = mafft_oxide::compacttree::compact_distances(
             &cn,
             &input.seq,
             njob,
@@ -471,7 +471,7 @@ fn main() {
         compact_mindist = md;
         compact_mindistfrom = mdf;
         compact_kmer_selfscore = kss;
-        compact_tuples = Some(mafft_rs::dist::build_tuples(
+        compact_tuples = Some(mafft_oxide::dist::build_tuples(
             &cn,
             &input.seq,
             njob,
@@ -554,14 +554,14 @@ fn main() {
                 // having freed `pointt` after the first pass and `bseq` after
                 // the second.
                 let src = match compact_msa.as_ref() {
-                    Some((seq, skiptable, _)) => mafft_rs::compacttree::CompactDist::Msa {
+                    Some((seq, skiptable, _)) => mafft_oxide::compacttree::CompactDist::Msa {
                         cn: &cn,
                         seq,
                         skiptable,
                     },
                     None => {
                         let t = compact_tuples.as_ref().unwrap();
-                        mafft_rs::compacttree::CompactDist::Kmer {
+                        mafft_oxide::compacttree::CompactDist::Kmer {
                             pointt: &t.pointt,
                             nlen: &t.nogaplen,
                             tsize: t.tsize,
@@ -576,7 +576,7 @@ fn main() {
                     Some((_, _, ss)) => ss,
                     None => &compact_kmer_selfscore,
                 };
-                return_tree_ct = Some(mafft_rs::compacttree::compacttree_memsaveselectable(
+                return_tree_ct = Some(mafft_oxide::compacttree::compacttree_memsaveselectable(
                     njob,
                     &mut compact_mindistfrom,
                     &mut compact_mindist,
@@ -594,7 +594,7 @@ fn main() {
             }
             match return_tree_ct.take() {
                 Some(t) => t,
-                None => mafft_rs::compacttree::compacttreegivendist(
+                None => mafft_oxide::compacttree::compacttreegivendist(
                     njob,
                     &compact_mindist,
                     &compact_mindistfrom,
@@ -917,7 +917,7 @@ fn main() {
         lasttree = Some(tr);
 
         if calcpairdists && compacttree != 0 {
-            let (md, mdf) = mafft_rs::compacttree::msa_compact_distances(
+            let (md, mdf) = mafft_oxide::compacttree::msa_compact_distances(
                 &cn,
                 &bseq,
                 &selfscore,

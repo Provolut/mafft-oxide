@@ -15,15 +15,15 @@
 
 use std::io::Read;
 
-use mafft_rs::align::AlignState;
-use mafft_rs::constants::Constants;
-use mafft_rs::falign::FalignState;
-use mafft_rs::lalign::LalignState;
-use mafft_rs::localhom;
-use mafft_rs::pairalign::{self, PairAlg};
-use mafft_rs::params::{atof, atoi, NOTSPECIFIED};
-use mafft_rs::treebase::TreebaseOpts;
-use mafft_rs::{addfunctions, io, keeplength, tree, treebase};
+use mafft_oxide::align::AlignState;
+use mafft_oxide::constants::Constants;
+use mafft_oxide::falign::FalignState;
+use mafft_oxide::lalign::LalignState;
+use mafft_oxide::localhom;
+use mafft_oxide::pairalign::{self, PairAlg};
+use mafft_oxide::params::{atof, atoi, NOTSPECIFIED};
+use mafft_oxide::treebase::TreebaseOpts;
+use mafft_oxide::{addfunctions, io, keeplength, tree, treebase};
 
 /// The subset of `tbfast`'s options this port implements. Anything else is
 /// refused rather than ignored.
@@ -130,7 +130,7 @@ impl Default for TbArgs {
             pair_nblosum: 62,
             pair_scoremtx: 1,
             pair_pam_n: NOTSPECIFIED,
-            pair_tm_or_jtt: mafft_rs::params::JTT,
+            pair_tm_or_jtt: mafft_oxide::params::JTT,
             pair_nthread: 1,
             pair_unalignlevel: 0.0,
             pair_fastathreshold: 2.7,
@@ -143,7 +143,7 @@ impl Default for TbArgs {
             nblosum: 62,
             scoremtx: 1,
             pam_n: NOTSPECIFIED,
-            tm_or_jtt: mafft_rs::params::JTT,
+            tm_or_jtt: mafft_oxide::params::JTT,
             nthread: 1,
             nthreadtb: 1,
             outgap: true,
@@ -241,12 +241,12 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'j' => {
                 a.pair_pam_n = atoi(&take().ok_or("-j needs a value")?);
                 a.pair_scoremtx = 0;
-                a.pair_tm_or_jtt = mafft_rs::params::JTT;
+                a.pair_tm_or_jtt = mafft_oxide::params::JTT;
             }
             'm' => {
                 a.pair_pam_n = atoi(&take().ok_or("-m needs a value")?);
                 a.pair_scoremtx = 0;
-                a.pair_tm_or_jtt = mafft_rs::params::TM;
+                a.pair_tm_or_jtt = mafft_oxide::params::TM;
             }
             'g' => a.pair_ppenalty_ex = (atof(&take().ok_or("-g")?) * 1000.0 - 0.5) as i32,
             'f' => a.pair_ppenalty = (atof(&take().ok_or("-f")?) * 1000.0 - 0.5) as i32,
@@ -290,12 +290,12 @@ fn parse(argv: &[String]) -> Result<TbArgs, String> {
             'j' => {
                 a.pam_n = atoi(&take().ok_or("-j")?);
                 a.scoremtx = 0;
-                a.tm_or_jtt = mafft_rs::params::JTT;
+                a.tm_or_jtt = mafft_oxide::params::JTT;
             }
             'm' => {
                 a.pam_n = atoi(&take().ok_or("-m")?);
                 a.scoremtx = 0;
-                a.tm_or_jtt = mafft_rs::params::TM;
+                a.tm_or_jtt = mafft_oxide::params::TM;
             }
             'f' => a.ppenalty = (atof(&take().ok_or("-f")?) * 1000.0 - 0.5) as i32,
             'g' => a.ppenalty_ex = (atof(&take().ok_or("-g")?) * 1000.0 - 0.5) as i32,
@@ -409,7 +409,7 @@ fn constants_for(
     tm_or_jtt: i32,
     nwildcard: bool,
 ) -> Constants {
-    let mut ca = mafft_rs::params::Args {
+    let mut ca = mafft_oxide::params::Args {
         nblosum,
         ppenalty,
         ppenalty_ex,
@@ -557,7 +557,7 @@ fn main() {
     let mut table = localhom::new_table(njob);
     let mut lst = LalignState::new();
     let mut ast = AlignState::new();
-    let mut gst = mafft_rs::genalign::GenalignState::new();
+    let mut gst = mafft_oxide::genalign::GenalignState::new();
 
     eprintln!("Pairwise alignment ... ");
     pairalign::pairalign(
@@ -623,7 +623,7 @@ fn main() {
         a.ppenalty_ex,
         a.ppenalty_dist,
         a.poffset,
-        mafft_rs::params::NOTSPECIFIED,
+        mafft_oxide::params::NOTSPECIFIED,
         a.shift_factor,
         a.unalignlevel,
         a.fmodel,

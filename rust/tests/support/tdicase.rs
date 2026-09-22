@@ -3,11 +3,11 @@
 //!
 //! The argument vector is `gen_tdicases.py`'s, and the printed lines are
 //! `gen_tdiharness.c`'s, byte for byte.
-use mafft_rs::constants::Constants;
-use mafft_rs::localhom::{new_table, LocalHom, LocalHomTable};
-use mafft_rs::params::Args;
-use mafft_rs::tditeration::{tree_dependent_iteration, IterParams};
-use mafft_rs::treeop::Topol;
+use mafft_oxide::constants::Constants;
+use mafft_oxide::localhom::{new_table, LocalHom, LocalHomTable};
+use mafft_oxide::params::Args;
+use mafft_oxide::tditeration::{tree_dependent_iteration, IterParams};
+use mafft_oxide::treeop::Topol;
 
 fn members(s: &str) -> Vec<i32> {
     let mut v: Vec<i32> = s.split(',').map(|x| x.parse().unwrap()).collect();

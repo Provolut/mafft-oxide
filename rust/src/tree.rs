@@ -951,7 +951,7 @@ mod constrained_tests {
     /// directory. The working directory is process-wide, hence the lock.
     fn in_dir<T>(tag: &str, f: impl FnOnce() -> T) -> T {
         let _g = crate::cwd_lock();
-        let d = std::env::temp_dir().join(format!("mafft-rs-tree-{}-{}", tag, std::process::id()));
+        let d = std::env::temp_dir().join(format!("mafft-oxide-tree-{}-{}", tag, std::process::id()));
         let _ = std::fs::create_dir_all(&d);
         let old = std::env::current_dir().unwrap();
         std::env::set_current_dir(&d).unwrap();
