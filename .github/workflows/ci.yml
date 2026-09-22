@@ -33,6 +33,25 @@ jobs:
         with:
           workspaces: rust
 
+      # The hosted runners have no AVX-512, so without this the kernels in
+      # lalign_avx512.rs and partalign_avx512.rs never execute here: they are
+      # neither checked for identical output nor counted by the coverage floor,
+      # which then reads 87.64% instead of the ~91% it measures on AVX-512
+      # hardware. Intel SDE emulates a Skylake-X CPU (AVX-512F and VL, what the
+      # kernels need) for every test binary cargo runs and for the programs
+      # those tests launch. Downloaded from Intel, not a mirror, and pinned by
+      # hash.
+      - name: Intel SDE (emulated AVX-512)
+        env:
+          SDE_URL: https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz
+          SDE_SHA256: 94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/sde.tar.xz" "$SDE_URL"
+          echo "$SDE_SHA256  $RUNNER_TEMP/sde.tar.xz" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/sde"
+          tar xJf "$RUNNER_TEMP/sde.tar.xz" -C "$RUNNER_TEMP/sde" --strip-components=1
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=$RUNNER_TEMP/sde/sde64 -skx --" >> "$GITHUB_ENV"
+
       # The same script as the local hook, not a copy of its steps: the tests,
       # the coverage floor and the encoding check live in one place and cannot
       # drift apart. With stdin empty it checks the checkout rather than a list
