@@ -16,8 +16,8 @@
 
 use std::io::{Read, Write};
 
-use mafft_rs::cargs::{self, Opt};
-use mafft_rs::io;
+use mafft_oxide::cargs::{self, Opt};
+use mafft_oxide::io;
 
 /// What the option loop leaves behind.
 struct Args {

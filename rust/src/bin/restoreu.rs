@@ -13,8 +13,8 @@
 
 use std::io::Write;
 
-use mafft_rs::cargs::{self, Opt};
-use mafft_rs::io;
+use mafft_oxide::cargs::{self, Opt};
+use mafft_oxide::io;
 
 /// What the option loop leaves behind.
 struct Args {
@@ -170,7 +170,7 @@ fn restore(args: &Args, orig_bytes: Vec<u8>) {
 
     // The C runs its record-count check *after* several loops that index the
     // original's arrays with the alignment's count, so a larger alignment
-    // reads out of bounds before it ever reaches the check (upstream issue
+    // reads out of bounds before it ever reaches the check (this repo's issue
     // #10). Checked first here: same message, same exit status, without the
     // out-of-bounds read in between.
     if njoba != njobs {

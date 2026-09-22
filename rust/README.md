@@ -1,4 +1,9 @@
-# MAFFT's alignment algorithms, in Rust
+# mafft-oxide: MAFFT's alignment algorithms, in Rust
+
+An independent port of [MAFFT](https://mafft.cbrc.jp/alignment/software/) by
+Kazutaka Katoh, not affiliated with or endorsed by the MAFFT authors. BSD
+3-Clause, carrying MAFFT's own notice as well; see "License, credits and
+citing" at the end.
 
 A transliteration of MAFFT 7.526's multiple-sequence-alignment algorithms from
 C into Rust, written to produce **bit-identical output**, not to be fast. Where
@@ -34,7 +39,9 @@ The utilities' differential harness is
 behaviour against committed fixtures, so the suite still runs on a machine
 with no C toolchain.
 
-Three defects in the C were found by building these and are filed upstream:
+Three defects in the C were found by building these. Each is written up, with
+corrected code, in this repository's issue tracker; none has been reported to
+the MAFFT authors yet:
 issue #8 (`countlen` reads uninitialised memory), #9 (`f2cl` prints heap
 pointers to stderr, making its stderr non-reproducible) and #10 (`restoreu`
 segfaults on a record-count mismatch, because its own check is unreachable).
@@ -687,7 +694,7 @@ made the port *more* faithful, suspect the staging first.
 ### An input with no bit-exact answer
 
 `getnumlen_nogap_countn` reads an uninitialised `nN` when a record has an empty
-body — reachable with a four-line input, valgrind-confirmed (upstream issue
+body — reachable with a four-line input, valgrind-confirmed (this repo's issue
 #8). There is no bit-exact answer to reproduce. `countlen-rs` picks the defined
 value, zero, which agrees with the C wherever the C is defined, and
 `verify_utils.sh` scores that input `indeterminate` rather than pass or fail.
@@ -696,7 +703,7 @@ prove the indeterminacy, choose deliberately, never hide it in a pass count.
 
 ### `f2cl`'s stderr is not reproducible
 
-It prints heap pointers (upstream issue #9), different on every run of the C
+It prints heap pointers (this repo's issue #9), different on every run of the C
 against itself. `verify_utils.sh` compares `f2cl` on stdout and exit status
 only.
 
@@ -704,7 +711,7 @@ only.
 
 `FASTMACHCALC` (no `T`) guards two functions, is defined nowhere, and the
 `#else` branch it forces differs semantically from the branch it hides —
-`+=` against `=` (upstream issue #11). The port implements the live `#else`.
+`+=` against `=` (this repo's issue #11). The port implements the live `#else`.
 Fixing the spelling upstream without also fixing the `=` would change
 alignments.
 
@@ -786,7 +793,11 @@ grep -aE '^(fn|cfn)=' cg.out | sed -E 's/^c?fn=//; s/^\([0-9]+\)[[:space:]]*//' 
 
 ## Upstream defects found while doing this
 
-All in unmodified MAFFT 7.526, all filed with corrected code:
+All in unmodified MAFFT 7.526. Each is written up in this repository's issue
+tracker with a reproduction and corrected code. None has been reported to the
+MAFFT authors yet; each issue carries that as a to-do:
+[#4](https://github.com/exazyme/mafft-provolut/issues/4) three memory-safety
+bugs (`--oneiteration`, `--treein auto`/`test`, `--anchors`),
 [#7](https://github.com/exazyme/mafft-provolut/issues/7) Makefile drops
 `$(MYCFLAGS)` (breaks GCC ≥ 14, mixes TLS storage class),
 [#8](https://github.com/exazyme/mafft-provolut/issues/8) uninitialised `nN`,
@@ -795,3 +806,52 @@ pointers, [#10](https://github.com/exazyme/mafft-provolut/issues/10)
 `restoreu`'s record-count check is unreachable and a mismatch segfaults,
 [#11](https://github.com/exazyme/mafft-provolut/issues/11) misspelled
 `FASTMACHCALC` hiding an `=`/`+=` difference.
+
+## License, credits and citing
+
+**License.** BSD 3-Clause. `LICENSE` holds two notices and both apply:
+Provolut GmbH's for the port, and MAFFT's (Copyright (c) 2009 Kazutaka Katoh)
+for everything the port is transliterated from. Keep both with any copy,
+source or binary. For binaries, BSD requires them in the documentation that
+ships with them. Under clause 3 of MAFFT's license, Katoh's name may not be
+used to endorse or promote this port or anything built on it.
+
+**What it is built on.** MAFFT 7.526 (https://mafft.cbrc.jp/alignment/software/),
+by Kazutaka Katoh and colleagues. Every alignment method here is theirs: the
+port transliterates `core/` from the C, and it counts as correct only when it
+produces the C's bytes. Specifically, the port takes from MAFFT:
+
+- the programs listed under "What is ported", from the corresponding
+  `core/*.c` files;
+- the scoring data as MAFFT ships it: the BLOSUM matrices (`core/blosum.c`),
+  the JTT and transmembrane substitution counts (`core/JTT.c`), Miyata's
+  volume and polarity scales that the FFT step correlates (`core/miyata.h`),
+  the nucleotide alphabet and defaults (`core/DNA.h`), and the default
+  parameters (`core/constants.c`);
+- the FFT, including the sine-table recurrence that `core/fft.c` credits to
+  Haruhiko Okumura's *C gengo niyoru saishin algorithm jiten*
+  (ISBN 4-87408-414-1).
+
+The port depends on no other crate: `Cargo.lock` has one entry, this one.
+MAFFT's RNA extensions (`extensions/`, under `../licenses/MAFFT-extensions`, not BSD)
+are not part of the port, and none of their code is in it.
+
+**Citing.** A mafft-oxide alignment is a MAFFT alignment, byte for byte, so
+cite MAFFT. The MAFFT homepage lists these as the papers describing it; for
+version 7:
+
+- Katoh, Standley 2013. MAFFT multiple sequence alignment software version 7:
+  improvements in performance and usability. *Molecular Biology and Evolution*
+  30:772-780.
+
+and, for the strategy used:
+
+- Katoh, Misawa, Kuma, Miyata 2002. MAFFT: a novel method for rapid multiple
+  sequence alignment based on fast Fourier transform. *Nucleic Acids Res.*
+  30:3059-3066. (FFT-NS-1, FFT-NS-2, FFT-NS-i)
+- Katoh, Kuma, Toh, Miyata 2005. MAFFT version 5: improvement in accuracy of
+  multiple sequence alignment. *Nucleic Acids Res.* 33:511-518. (G-INS-i,
+  L-INS-i, E-INS-i)
+
+Name mafft-oxide as well only if the implementation matters to your methods,
+e.g. when reporting runtimes.

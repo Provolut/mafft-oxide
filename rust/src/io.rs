@@ -293,7 +293,7 @@ pub fn getnumlen_nogap_countn(bytes: Vec<u8>, dorp_in: Option<u8>) -> LengthCoun
     // uninitialised, and `countATGCandN` returns early for an empty sequence
     // body writing `*total` but not `*countN` -- so an input whose first record
     // has an empty body reaches the `nfreq` division with a stack value.
-    // Valgrind names the allocation; upstream issue #8 has the four-line input
+    // Valgrind names the allocation; this repo's issue #8 has the four-line input
     // and the trace. There is no bit-exact answer to reproduce, so this picks
     // the defined one: zero, which agrees with the C on every input where the
     // C itself is defined. `verify_utils.sh` scores that input as
@@ -606,7 +606,7 @@ mod subaln_tests {
     fn with_table<T>(tag: &str, contents: &str, f: impl FnOnce() -> T) -> T {
         let _g = crate::cwd_lock();
         let d =
-            std::env::temp_dir().join(format!("mafft-rs-subaln-{}-{}", tag, std::process::id()));
+            std::env::temp_dir().join(format!("mafft-oxide-subaln-{}-{}", tag, std::process::id()));
         let _ = std::fs::create_dir_all(&d);
         let mut fh = std::fs::File::create(d.join("_subalignmentstable")).unwrap();
         fh.write_all(contents.as_bytes()).unwrap();

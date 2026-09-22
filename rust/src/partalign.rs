@@ -135,7 +135,7 @@ impl PartImp {
     /// matrix onto `imp`, walking the second group's gap map.
     ///
     /// The `#if FASTMACHCALC` branch beside this one in the C is unreachable --
-    /// that macro is misspelled and defined nowhere (upstream issue #11) -- so
+    /// that macro is misspelled and defined nowhere (this repo's issue #11) -- so
     /// the accumulating `#else` is what the shipped binary runs, and what this
     /// reproduces.
     pub fn add_row(&self, imp: &mut [f64], i1: usize, start2: usize, gapmap2: &[i32]) {
@@ -148,7 +148,7 @@ impl PartImp {
     ///
     /// **This one accumulates**, and its unreachable twin assigns. Fixing the
     /// misspelled macro without also fixing that `=` would change alignments;
-    /// see upstream issue #11. The accumulating form is the live one.
+    /// see this repo's issue #11. The accumulating form is the live one.
     pub fn add_column(&self, imp: &mut [f64], j1: usize, start1: usize, gapmap1: &[i32]) {
         for (dst, &g) in imp.iter_mut().zip(gapmap1) {
             *dst += self.mtx[start1 + g as usize][j1];
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn add_column_accumulates_rather_than_assigning() {
-        // The distinction upstream issue #11 is about: the live branch adds to
+        // The distinction this repo's issue #11 is about: the live branch adds to
         // whatever `imp` already holds. A port that assigned would pass a test
         // starting from zeros, so this one deliberately does not.
         let p = seeded(8, 4);

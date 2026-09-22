@@ -4,7 +4,7 @@
 //!
 //! The argument vector is `gen_tdcases.py`'s, and the printed lines are
 //! `gen_tdharness.c`'s, byte for byte.
-use mafft_rs::treeop::{
+use mafft_oxide::treeop::{
     calc_branch_weight, dist_from_a_branch, one_cluster_and_the_other_fast, tree_cnv,
     weight_from_a_branch, Topol,
 };

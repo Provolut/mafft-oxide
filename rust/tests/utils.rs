@@ -310,7 +310,7 @@ fn restoreu_puts_the_original_characters_back() {
 #[test]
 fn restoreu_reports_a_record_count_mismatch_instead_of_crashing() {
     // The C segfaults here with an empty stderr: its own check sits after the
-    // loops that overrun (upstream issue #10). The port checks first.
+    // loops that overrun (this repo's issue #10). The port checks first.
     let bin = env!("CARGO_BIN_EXE_restoreu-rs");
     let dir = std::env::temp_dir().join("restoreu_mismatch_fixture");
     let _ = std::fs::create_dir_all(&dir);

@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "mafft-rs"
+name = "mafft-oxide"
 version = "0.2.0"
