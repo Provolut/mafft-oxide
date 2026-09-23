@@ -1,7 +1,7 @@
 # mafft-oxide: MAFFT's alignment algorithms, in Rust
 
-[![CI](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml/badge.svg)](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml)
-[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/exazyme/mafft-provolut/blob/main/rust/LICENSE)
+[![CI](https://github.com/Provolut/mafft-oxide/actions/workflows/ci.yml/badge.svg)](https://github.com/Provolut/mafft-oxide/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/Provolut/mafft-oxide/blob/main/rust/LICENSE)
 
 An independent port of [MAFFT](https://mafft.cbrc.jp/alignment/software/) by
 Kazutaka Katoh, not affiliated with or endorsed by the MAFFT authors. BSD
@@ -799,15 +799,15 @@ grep -aE '^(fn|cfn)=' cg.out | sed -E 's/^c?fn=//; s/^\([0-9]+\)[[:space:]]*//' 
 All in unmodified MAFFT 7.526. Each is written up in this repository's issue
 tracker with a reproduction and corrected code. None has been reported to the
 MAFFT authors yet; each issue carries that as a to-do:
-[#4](https://github.com/exazyme/mafft-provolut/issues/4) three memory-safety
+[#4](https://github.com/Provolut/mafft-oxide/issues/4) three memory-safety
 bugs (`--oneiteration`, `--treein auto`/`test`, `--anchors`),
-[#7](https://github.com/exazyme/mafft-provolut/issues/7) Makefile drops
+[#7](https://github.com/Provolut/mafft-oxide/issues/7) Makefile drops
 `$(MYCFLAGS)` (breaks GCC ≥ 14, mixes TLS storage class),
-[#8](https://github.com/exazyme/mafft-provolut/issues/8) uninitialised `nN`,
-[#9](https://github.com/exazyme/mafft-provolut/issues/9) `f2cl` prints heap
-pointers, [#10](https://github.com/exazyme/mafft-provolut/issues/10)
+[#8](https://github.com/Provolut/mafft-oxide/issues/8) uninitialised `nN`,
+[#9](https://github.com/Provolut/mafft-oxide/issues/9) `f2cl` prints heap
+pointers, [#10](https://github.com/Provolut/mafft-oxide/issues/10)
 `restoreu`'s record-count check is unreachable and a mismatch segfaults,
-[#11](https://github.com/exazyme/mafft-provolut/issues/11) misspelled
+[#11](https://github.com/Provolut/mafft-oxide/issues/11) misspelled
 `FASTMACHCALC` hiding an `=`/`+=` difference.
 
 ## License, credits and citing
