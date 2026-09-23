@@ -18,9 +18,11 @@ jobs:
     name: pre-push gates
     runs-on: ubuntu-24.04
     # Coverage runs unoptimised, instrumented test binaries under Intel SDE,
-    # and SDE's speed depends on the host CPU: the same commit took 8 minutes
-    # of coverage on one hosted runner and 36 on another, which hit a 45-minute
-    # limit after every gate had passed.
+    # and SDE's speed depends on the host CPU. ubuntu-24.04 hands out both
+    # Intel Xeon Platinum 8370C (AVX-512 in hardware) and AMD EPYC 7763 (none,
+    # so SDE really emulates): the same commit took 8 minutes of coverage on
+    # the first and 36 on the second, which hit a 45-minute limit after every
+    # gate had passed.
     timeout-minutes: 90
     steps:
       # Hosted VMs are discarded after the job and the log does not name the
@@ -50,11 +52,11 @@ jobs:
         with:
           workspaces: rust
 
-      # The hosted runners have no AVX-512, so without this the kernels in
-      # lalign_avx512.rs and partalign_avx512.rs never execute here: they are
-      # neither checked for identical output nor counted by the coverage floor,
-      # which then reads 87.64% instead of the ~91% it measures on AVX-512
-      # hardware. Intel SDE emulates a Skylake-X CPU (AVX-512F and VL, what the
+      # Some hosted runners have no AVX-512 (see timeout-minutes above), and
+      # on those, without this, the kernels in lalign_avx512.rs and
+      # partalign_avx512.rs never execute: they are neither checked for
+      # identical output nor counted by the coverage floor, which then reads
+      # 87.64% instead of the ~91% it measures on AVX-512 hardware. Intel SDE emulates a Skylake-X CPU (AVX-512F and VL, what the
       # kernels need) for the test binaries cargo runs and for the programs
       # those tests launch. Downloaded from Intel, not a mirror, and pinned by
       # hash.
