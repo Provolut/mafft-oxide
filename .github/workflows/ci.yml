@@ -55,9 +55,24 @@ jobs:
       # neither checked for identical output nor counted by the coverage floor,
       # which then reads 87.64% instead of the ~91% it measures on AVX-512
       # hardware. Intel SDE emulates a Skylake-X CPU (AVX-512F and VL, what the
-      # kernels need) for every test binary cargo runs and for the programs
+      # kernels need) for the test binaries cargo runs and for the programs
       # those tests launch. Downloaded from Intel, not a mirror, and pinned by
       # hash.
+      #
+      # Every test binary runs under SDE except one: the debug build of
+      # tests/matrix.rs, which only bench/coverage.sh runs (the hook's own
+      # `cargo test` is --release). It launches a process per case, SDE costs
+      # each one a start-up, and it was 87% of the emulated time: 249 s of 287
+      # on an AVX-512 machine, far more on a hosted runner. Nothing is lost by
+      # running it natively:
+      # - the release build of matrix.rs, the same 553 C-derived cases, still
+      #   runs under SDE, so the kernels' output is still checked byte for byte;
+      # - kernel coverage comes from the unit tests in lalign_avx512.rs and
+      #   partalign_avx512.rs (98.97% and 98.72% on their own); with the debug
+      #   matrix native, both files and the total measure what they did with it
+      #   emulated, to within the one line that takes the non-AVX-512 branch.
+      # It also gains something: the scalar path the kernels replace is now
+      # compared against the C's bytes here, which no AVX-512 machine does.
       - name: Intel SDE (emulated AVX-512)
         env:
           SDE_URL: https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz
@@ -67,7 +82,15 @@ jobs:
           echo "$SDE_SHA256  $RUNNER_TEMP/sde.tar.xz" | sha256sum -c -
           mkdir "$RUNNER_TEMP/sde"
           tar xJf "$RUNNER_TEMP/sde.tar.xz" -C "$RUNNER_TEMP/sde" --strip-components=1
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=$RUNNER_TEMP/sde/sde64 -skx --" >> "$GITHUB_ENV"
+          cat > "$RUNNER_TEMP/test-runner" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            */debug/deps/matrix-*) exec "$@" ;;
+            *) exec "$RUNNER_TEMP/sde/sde64" -skx -- "$@" ;;
+          esac
+          EOF
+          chmod +x "$RUNNER_TEMP/test-runner"
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=$RUNNER_TEMP/test-runner" >> "$GITHUB_ENV"
 
       # The same script as the local hook, not a copy of its steps: the tests,
       # the coverage floor and the encoding check live in one place and cannot
