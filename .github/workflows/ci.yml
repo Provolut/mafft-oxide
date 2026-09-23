@@ -17,8 +17,25 @@ jobs:
   gates:
     name: pre-push gates
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Coverage runs unoptimised, instrumented test binaries under Intel SDE,
+    # and SDE's speed depends on the host CPU: the same commit took 8 minutes
+    # of coverage on one hosted runner and 36 on another, which hit a 45-minute
+    # limit after every gate had passed.
+    timeout-minutes: 90
     steps:
+      # Hosted VMs are discarded after the job and the log does not name the
+      # CPU, so record it here: a slow run can then be told apart from a slow
+      # machine.
+      - name: Runner
+        run: |
+          echo "runner:  $RUNNER_NAME ($RUNNER_ENVIRONMENT, $RUNNER_OS/$RUNNER_ARCH)"
+          echo "user:    $(id -un) (uid $(id -u)); triggered by $GITHUB_ACTOR"
+          echo "host:    $(hostname)"
+          echo "cpu:     $(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -1)"
+          echo "cores:   $(nproc)"
+          echo "memory:  $(awk '/^MemTotal:/ {printf "%.1f GiB", $2/1048576}' /proc/meminfo)"
+          echo "avx512f: $(grep -qw avx512f /proc/cpuinfo && echo yes || echo no)"
+
       - uses: actions/checkout@v5
 
       # Pinned to the toolchain the committed measurements were made with, so a
