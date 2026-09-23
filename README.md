@@ -1,6 +1,6 @@
 # MAFFT 7.526, Provolut fork
 
-[![CI](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml/badge.svg)](https://github.com/exazyme/mafft-provolut/actions/workflows/ci.yml)
+[![CI](https://github.com/Provolut/mafft-oxide/actions/workflows/ci.yml/badge.svg)](https://github.com/Provolut/mafft-oxide/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
 This repository is **MAFFT 7.526** by Kazutaka Katoh
