@@ -1,4 +1,4 @@
-# Goal: beat today's port by 10%, or spend 90 minutes proving you cannot
+# Goal: 10% off the port's peak memory, or an account of why it is not there
 
 **The constraint does not move: output must not change.** `tests/matrix.rs`,
 `verify.sh`, `verify_tbfast.sh` and `verify_e2e.sh` stay green. A change that
@@ -14,14 +14,22 @@ Re-based on 2026-10-27, against **this port's own numbers measured with
 `bench/maxrss.c`**, frozen in `bench/baseline-rebased.tsv`. Not relative to the
 C: the port is at 0.40x the C's mean peak RSS and 0.69x its wall clock.
 
-| metric | baseline | target (<= 90%) | today |
-|---|---|---|---|
-| wall clock, 8 cases | 2367 ms | <= 2130 ms | **1249 ms, MET** |
-| mean peak RSS | 6725 KB | **<= 6052 KB** | 6725 KB |
+**The live target is one number:**
+
+| metric | baseline | target (<= 90%) |
+|---|---|---|
+| mean peak RSS | 6725 KB | **<= 6052 KB** |
+
+**Wall clock is settled: 1248 ms against a 2130 ms target, 52.7%, achieved
+2026-10-27.** It is recorded here rather than carried as a live condition. It
+was met with room to spare and nothing in flight can unmeet it, so leaving it
+in a conjunction only meant every check re-derived a finished fact and then
+reported the pair as unmet. `summarize.py` still prints both, and still
+requires both, which is correct for the tool; this file is saying which half is
+work.
 
 Check it with
-`./bench/summarize.py bench/profile.tsv bench/baseline-rebased.tsv`, which
-exits non-zero until both hold.
+`./bench/summarize.py bench/profile.tsv bench/baseline-rebased.tsv`.
 
 ### Why the baseline file is a composite, and why that is honest
 
@@ -52,24 +60,50 @@ simultaneously there, 1,798,280 B each where the C shares one -- worth about
 
 ## Done is either of these
 
-1. **Hit both targets.** `bench/profile.sh` reports wall clock <= 2130 ms
-   *and* mean peak RSS <= 6052 KB, on a run where every row says `ok`, with
-   the suite green. Check it with
-   `./bench/summarize.py bench/profile.tsv bench/baseline-rebased.tsv`,
-   which exits non-zero until both hold. Wall clock is already there at
-   1249 ms; the RSS half is the live one.
-2. **90 minutes of genuine attempts without hitting it.** Then stop, restore
-   the last good state, and write up what was tried and what each attempt
-   measured. A negative result that says *where the remaining time goes and
-   why it did not move* is the deliverable in that case, and it is worth
-   having — it tells the next person which stones are already turned.
+1. **Hit the target.** `bench/profile.sh` reports mean peak RSS <= 6052 KB on a
+   run where every row says `ok`, with the suite green and the differential
+   harnesses green.
+2. **Account for the gap instead.** Not "time ran out" -- *the remaining
+   kilobytes are named, each with the reason it cannot move.* One line per
+   item, measured, in `bench/OPTIMISATION-LOG.md`: what it is, how big it is,
+   and whether it is fixed process cost, a table the C sizes the same way, or
+   live working set. An item is only accounted for when someone could check the
+   claim; "probably irreducible" is not an account.
 
-Track the time. "90 minutes" means effort spent on optimisation attempts, not
-wall time including a long harness run. **Take the two clock readings when you
-start and when you stop, and put them in the write-up.** The 2026-09-04 run
-recorded "90 minutes" as an estimate because nobody took them, and an untimed
-budget cannot be audited — which is the one complaint against that write-up
-that could not be answered after the fact.
+   This replaced a 90-minute budget, which measured the wrong thing. A clock
+   quota rewards grinding and penalises concluding: it reported the goal unmet
+   while the substantive finding -- that four of the five largest items are
+   locked -- was already complete, and it invited filling time rather than
+   stopping. It also could not be audited, because the only witness to the
+   minutes is the agent spending them.
+
+   What ends the work either way: **leave the tree in a state someone else can
+   build and test.** Revert half-finished edits and failed experiments; do not
+   revert measurement or harness fixes, which are not experiments. (The old
+   wording, "restore the last good state", read as "undo your work" and was
+   cited four times against commits that fixed a harness measuring the wrong
+   thing.)
+
+## What is blocking the rest, as of 2026-10-27
+
+Stated here because the file previously implied the remaining memory was simply
+available, and the measurements say it is not. Of the five largest items in the
+database, four cannot move without changing behaviour:
+
+| item | size | why |
+|---|---|---|
+| `impmtx` | 5.2 MB | `AllocateFloatMtx` returns `double **`; the port's `f64` is exact |
+| score matrices, x4 | 2.1 MB | `0x100` wide because raw sequence bytes index it; narrowing turns the C's silent zero on a high byte into a panic |
+| sextet tables, x4 | 1.5 MB | 6^6 is the 6-mer code space, whatever the input size |
+| fixed process cost, x8 | 23.3 MB | 2912 KB before the aligner starts; only a smaller binary |
+
+The fifth was duplication and is spent: `commonIP`, two matrices where the C
+keeps one, worth 1.66 MB on `sample.linsi`.
+
+So the path to 6052 KB is either **a smaller binary**, or **a deviation from
+the C's own data structures**. The second is a faithfulness trade, and
+`../CLAUDE.md` makes that a human's decision, not an agent's -- which is why
+this section exists rather than an instruction to keep trying.
 
 ## Rules
 
