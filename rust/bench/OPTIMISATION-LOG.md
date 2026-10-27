@@ -9,6 +9,13 @@ Output did not change at any point. Every kept change was measured with
 `bench/profile.sh`, which refuses to record a row unless both binaries exit 0
 and produce identical bytes.
 
+> **The 90 minutes here are an estimate, not a record.** GOAL.md asks for start
+> and finish times in the write-up and they were never taken; the figure is the
+> author's own tally of effort spent on optimisation attempts. Stated plainly
+> because a budget nobody timed cannot be audited, and the honest fix after the
+> fact is to say so rather than to reconstruct plausible timestamps. A later run
+> against this clause should take the two readings at the time.
+
 ## Result
 
 Not met. Both sides re-measured with the corrected harness (see *Measurement*),
@@ -840,3 +847,79 @@ change to an untested path is worse than a recorded one.
    in this log has been algorithmic.
 3. **`init_strict`, 12.5%**, still 0.67 G over the C's equivalent and still not
    localised beyond the function.
+
+
+# Peak RSS, 2026-10-27 -- the metric, not the code
+
+Where GOAL.md stands: wall clock is 1223 ms against the frozen baseline's 2367
+(51.7%, met with room to spare, thanks to the AVX-512 kernels that landed after
+the sections above). Mean peak RSS is 6527 KB against 5800 (112.5%, not met,
+and further off than when the goal was written). This was a diagnosis of that
+gap in answer to a question, not a timed attempt against the 90-minute clause.
+
+Most of the gap is not in the program.
+
+## The small cases do not reproduce
+
+Peak RSS over 21 runs each, release `disttbfast-rs`, a fresh working directory
+per run:
+
+```
+aa.fa   (6 seqs, ~1 ms)     median 3316 KB   min 1412   max 4104   spread 92-191%
+sample  (36 seqs, ~530 ms)  median 8912 KB   min 8804   max 8980   spread 2%
+```
+
+The heavy cases reproduce to 1-2%. The four toy cases do not reproduce at all.
+`summarize.py` averages peak RSS *unweighted* over all eight, so those four
+carry half the metric's weight, and the 5800 -> 6527 move is substantially that
+noise rather than the aligner getting hungrier. Where the number can be
+trusted it is flat: fftns2 8928 -> 8904, nwns2 8480 -> 8360, memsave
+5032 -> 5040, and linsi 13552 against the re-measured baseline's 13440.
+
+This is a *different* cause from the spread recorded on 2026-09-04. That one
+was the shared working directory and is fixed; these runs each had their own
+directory and still spread 191%. A process that lives a millisecond has a peak
+that depends on how much of the binary and how many zero pages happen to fault
+in before it exits.
+
+## A 1.6 MB red herring, now turned
+
+massif on `aa.fftns2` points straight at four eager allocations of 400,000 B
+each:
+
+- `cut1`, `cut2` -- `falign.rs:464-465`
+- `result1`, `result2` -- `falign.rs:295-296` (`BlockAlignState::new`)
+
+Four `vec![0; MAXSEG]` of `i32`, `MAXSEG = 100000`, allocated whatever the
+input -- sitting directly below the comment explaining that `segment`,
+`segment1` and `segment2` were made grow-on-demand for this exact reason.
+1.6 MB on a 510-byte input. An obvious win.
+
+It is not a win. Rebuilt with `MAXSEG = 1000`, a 100x cut, 21 runs each:
+
+```
+            MAXSEG 100000   MAXSEG 1000
+aa.fa       median 3316 KB  median 3432 KB
+sample      median 8912 KB  median 8928 KB
+```
+
+Zero on both, inside the noise. `vec![0; n]` allocates through `alloc_zeroed`;
+nothing ever writes those pages, so they never fault in and were never
+resident. **Allocated is not resident** -- the same mistake the 2026-09-04
+section records, wearing a new disguise, caught this time only because the
+claim was tested before it was believed.
+
+Worth removing for allocation hygiene by anyone already in the file. Worth
+nothing for peak RSS. Recorded here because massif will point the next person
+at it just as invitingly.
+
+## What has to happen before the RSS target means anything
+
+1. **Make the aggregate measure something.** Restrict it to the cases that
+   reproduce, weight it by work, or raise the sample count on the small ones.
+   This changes the yardstick, so per `../CLAUDE.md` it is a human's call and
+   was left for one rather than decided here.
+2. **Re-baseline RSS once it is stable.** The frozen 5800 KB came from the
+   shared-cwd harness; GOAL.md already carries that caveat.
+3. **Then look for real wins**, on `sample.linsi` -- 13.5 MB at 1.6x the C, the
+   only case that is both large and reproducible.
