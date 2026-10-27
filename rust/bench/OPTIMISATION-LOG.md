@@ -958,3 +958,48 @@ person at it just as invitingly.
 `sample.linsi`: 14.3 MB, 1.54x the C, reproducible to 0.8%, and 21% of the
 eight-case total on its own. Everything else is at or below the C, three cases
 by a factor of five.
+
+## The 5220 KB target is almost certainly out of reach
+
+Measured on the fixed instrument, what a run costs before any alignment:
+
+```
+/bin/true                                 1324 KB   kernel + loader
+version-rs (prints a string)              2092 KB   + Rust runtime
+disttbfast-rs, no args (exits on usage)   2912 KB   + this binary mapped in
+aa.fftns2 (6 seqs, a full alignment)      4228 KB   + 1316 KB of actual work
+```
+
+**2912 KB is spent before the aligner starts** -- 73% of the smallest case's
+peak. No amount of work on the DP or the allocator moves it; only a smaller
+binary would.
+
+The arithmetic that follows:
+
+- Today's mean is 6725 KB over eight cases, sum 53800. A 5220 KB mean needs the
+  sum at or under 41760, a cut of 12040 KB.
+- The four small cases cannot sum below 4 x 2912 = 11648 KB. Granting them
+  their floor, the four heavy cases must sum to <= 30112 KB against 36832
+  today, an 18% cut.
+- The only case worse than the C is `sample.linsi`, 14348 against 9312.
+  Bringing it all the way to C parity -- the most anyone could ask -- leaves
+  the heavy sum at 31796, still **1684 KB over**.
+- The remainder would have to come from `sample.fftns2`, `sample.nwns2` and
+  `sample.memsave`, which already run at 0.35x, 1.13x and 0.24x of the C.
+
+So condition (1) is not reachable by optimisation, and the reason is not that
+the port is wasteful: it is that 5220 was derived as 90% of 5800, and 5800 came
+from instrument one, which under-measured by three to seven times on half the
+cases. The target is an artifact of a broken measurement, not a goal anyone set
+on the evidence.
+
+What a human needs to decide, and an agent must not:
+
+1. Re-baseline against `bench/maxrss.c` and set the RSS number from numbers
+   that exist. On today's database, 90% of the mean would be about 6050 KB.
+2. Or drop the RSS half of the target and keep `sample.linsi` as the named
+   memory item, since it is the one case that is both measurable and worse than
+   the C.
+
+Either way `summarize.py` will keep reporting "116% of 5800 KB" until someone
+does, and that percentage is of a number that was never measured.
