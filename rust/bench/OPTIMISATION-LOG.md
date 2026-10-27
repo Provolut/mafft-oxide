@@ -1189,3 +1189,55 @@ heap -- is locked in: `Salignmm.c:110` allocates it with `AllocateFloatMtx`,
 and `mtxutl.c:174` shows that returns `double **`. The name is a legacy
 misnomer and the port's `f64` is exact. The four small cases are 69% fixed cost
 before the aligner starts, so only a smaller binary moves them.
+
+
+# The small cases, 2026-10-27 21:04:14Z to 21:05:40Z
+
+Timed attempts now total 23 + 2 = 25 minutes of the 90 the goal allows.
+
+With `commonIP` landed the gap is 455 KB of mean, and the four small cases
+looked like the place to find it: each sits about 1300 KB above the 2912 KB
+floor, so 5200 KB of apparent headroom against 3640 KB needed.
+
+It is not headroom. `aa.fftns2`, 4216 KB measured:
+
+```
+score matrix, 256x256 f64 (align.rs:1155)       522 KB
+Sextet 6-mer tables, 6^6 x 4 B, two of them     373 KB
+Constants::new_seq                              195 KB
+accounted for                                  1090 KB   84% of the heap above floor
+```
+
+All three are fixed-size tables, and all three are the size the C makes them:
+
+- **The score matrix is 0x100 x 0x100 because it is indexed by raw sequence
+  bytes.** `Galign11.c` allocates the same, and that width is load-bearing in a
+  way a Rust port makes sharper: the matrix is *written* only at `cn.amino[i]`
+  positions but *read* at `seq[i]`, so a byte of 200 in the input reads
+  `[200][...]`. In the C that is a calloc'd 0.0. In a 128-wide table it is a
+  panic. Narrowing it would turn the C's silent zero on malformed input into a
+  crash, which is a behaviour change however much memory it saves.
+- **The sextet tables are 6^6 entries** because that is the 6-mer code space;
+  `disttbfast.c` allocates them the same way. A six-sequence input does not
+  make the code space smaller.
+
+Four small cases at 522 KB of score matrix is 2088 KB of total, 261 KB of mean
+-- more than half the remaining gap, sitting in a table whose dimensions are
+not ours to choose.
+
+## Where that leaves the RSS half
+
+455 KB of mean, with no identified source. Each of the four largest items in
+the database is now accounted for and locked:
+
+| item | size | why it cannot move |
+|---|---|---|
+| `impmtx` | 5.2 MB | `AllocateFloatMtx` returns `double **`; the port's `f64` is exact |
+| score matrix, x4 | 2.1 MB | 0x100 wide because raw bytes index it |
+| sextet tables, x4 | 1.5 MB | 6^6 is the 6-mer code space |
+| fixed process cost, x8 | 23.3 MB | 2912 KB before the aligner starts; only a smaller binary |
+
+`commonIP` was the one piece of genuine duplication and it is spent. What is
+left would need either a smaller binary, or a deviation from the C's own data
+structures -- and `../CLAUDE.md` puts the second one out of reach without a
+human deciding that memory now outranks faithfulness.
