@@ -56,6 +56,18 @@ pub(crate) fn take(orlgth1: usize, orlgth2: usize) -> Vec<Vec<i32>> {
             return vec![vec![0i32; ll2 + 10]; ll1 + 10];
         }
         if orlgth1 > p.alloc1 || orlgth2 > p.alloc2 {
+            // Free the old matrix *before* allocating the replacement.
+            // `p.mtx = vec![..]` evaluates its right-hand side first, so the
+            // two exist at once and peak RSS pays for both -- and growth
+            // happens at exactly the moment the working set is largest, so
+            // that overlap lands on the peak rather than beside it. massif
+            // caught it on `sample.nwns2`: 2,095,760 B and 1,798,280 B live in
+            // the same snapshot, 54% of that case's heap, for one matrix's
+            // worth of information.
+            //
+            // The same overlap was in both `ensure_ijp` implementations before
+            // they shared a pool; it is not new here, only visible here.
+            p.mtx = Vec::new();
             p.mtx = vec![vec![0i32; ll2 + 10]; ll1 + 10];
             p.alloc1 = ll1;
             p.alloc2 = ll2;

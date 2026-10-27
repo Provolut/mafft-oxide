@@ -1241,3 +1241,66 @@ the database is now accounted for and locked:
 left would need either a smaller binary, or a deviation from the C's own data
 structures -- and `../CLAUDE.md` puts the second one out of reach without a
 human deciding that memory now outranks faithfulness.
+
+
+# Growing a matrix cost two of them, 2026-10-27 21:09:09Z to 21:36:37Z (27 min)
+
+Started on `sample.nwns2`, the one case never broken down -- 8276 KB and 1.12x
+the C, the second-worst ratio. massif found something better than a lead.
+
+At its peak, **two** `commonip::take` allocations were live: 2,095,760 B and
+1,798,280 B, 54% of that case's heap, for one matrix's worth of information.
+
+My first reading was that the pool's fallback path had fired -- the one for "a
+caller that asks while the matrix is already out", which `commonip.rs`'s own
+comment says has no path today. Wrong. Reading the code instead of the comment:
+
+```rust
+p.mtx = vec![vec![0i32; ll2 + 10]; ll1 + 10];
+```
+
+An assignment evaluates its right-hand side before dropping the old value, so
+during growth the old matrix and its replacement both exist. And growth happens
+at exactly the moment the working set is largest, so the overlap lands *on* the
+peak rather than beside it.
+
+`p.mtx = Vec::new();` first. One line.
+
+```
+                      before    after    delta
+sample.fftns2          8864     7596    -1268
+sample.nwns2           8276     7220    -1056
+sample.linsi          12560    12100     -460
+sample.memsave         5332     5332        0
+mean peak RSS          6507     6153   91.5% of baseline, target 6052
+```
+
+**2.8 MB, against the 1.66 MB that sharing `commonIP` was worth.** The
+refactor's value turned out to be mostly that it put the allocation somewhere a
+profiler would point at.
+
+Not a regression introduced by that refactor, either: both `ensure_ijp`
+implementations had the same `self.ijp = vec![..]` shape before they shared a
+pool. The overlap has been there as long as the port has grown these matrices.
+
+### Verified
+
+```
+verify.sh         pass=12018  fail=0
+verify_tbfast.sh  pass=1690   fail=0
+verify_e2e.sh     pass=28     fail=0  refused=1
+cargo test        238 tests, including the 553-case matrix
+```
+
+### 101 KB short, and where to look next
+
+The target is 6052 and the database says 6153. The gap is now small enough that
+the next thing to try is obvious: **this pattern, everywhere else it occurs.**
+Any `x = vec![...]` that replaces a live buffer pays for both copies at the
+moment it is most expensive. It paid twice here. `grep` for assignments to a
+field that already holds a `Vec` and check each one -- `align.rs`'s and
+`lalign.rs`'s scratch buffers (`w1`, `w2`, `initverticalw`, `m`, `mp`) all grow
+the same way, and so do `falign.rs`'s.
+
+That is a mechanical sweep, not a redesign, and it is the first lead in this
+log that is both unexplored and cheap.

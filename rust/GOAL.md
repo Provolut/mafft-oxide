@@ -100,6 +100,14 @@ database, four cannot move without changing behaviour:
 The fifth was duplication and is spent: `commonIP`, two matrices where the C
 keeps one, worth 1.66 MB on `sample.linsi`.
 
+**That table omitted something, and the omission was worth more than anything
+in it.** Growing a matrix with `x = vec![..]` evaluates the right-hand side
+before dropping the old one, so both exist at the instant the working set is
+largest. Dropping first was worth 2.8 MB across three cases. The same pattern
+is still in `align.rs`, `lalign.rs` and `falign.rs`'s scratch buffers and has
+not been swept -- which is the open lead, and it is mechanical rather than a
+faithfulness question.
+
 So the path to 6052 KB is either **a smaller binary**, or **a deviation from
 the C's own data structures**. The second is a faithfulness trade, and
 `../CLAUDE.md` makes that a human's decision, not an agent's -- which is why
