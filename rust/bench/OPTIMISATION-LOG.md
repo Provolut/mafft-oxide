@@ -959,7 +959,7 @@ person at it just as invitingly.
 eight-case total on its own. Everything else is at or below the C, three cases
 by a factor of five.
 
-## The 5220 KB target is almost certainly out of reach
+## The 5220 KB target is out of reach, with the floor measured
 
 Measured on the fixed instrument, what a run costs before any alignment:
 
@@ -992,6 +992,47 @@ the port is wasteful: it is that 5220 was derived as 90% of 5800, and 5800 came
 from instrument one, which under-measured by three to seven times on half the
 cases. The target is an artifact of a broken measurement, not a goal anyone set
 on the evidence.
+
+### The floor, measured rather than assumed
+
+The paragraph above argued from "these cases already beat the C", which is not
+a floor. So the floor was measured: massif's peak *live* heap per case, plus the
+kernel-and-loader cost of any process at all, granting zero bytes for the
+binary, the Rust runtime, malloc slack and the stack.
+
+```
+case              RSS    live heap   slack   generous floor
+sample.fftns2    8864      7275       1589        8599
+sample.nwns2     8296      6974       1322        8298
+sample.memsave   5324      3390       1934        4714
+sample.linsi    14348     12554       1794       13878
+four small cases                                4 x 2912
+                                    generous floor mean 5892 KB
+                                    GOAL.md target      5220 KB
+```
+
+Malloc overhead is 46-65 KB per case, under 1%: the slack column is the binary
+and the runtime, not fragmentation. These cases are **live-data bound**. There
+is no waste to reclaim; the memory is the working set.
+
+So the floor sits **672 KB above the target**, and that is with every case
+granted a floor it cannot actually reach.
+
+One structural redundancy is known and still present: `align.rs`, `genalign.rs`
+and `lalign.rs` each keep their own `commonIP` traceback matrix where the C
+shares one TLS global (`core/dp.h:15`), about 2.4 MB each at `sample.linsi`'s
+sizes. Eliminating it *entirely* -- all of it, from every case -- gives:
+
+```
+  -2400 KB of live heap -> mean 5592 KB   still over
+  -4800 KB of live heap -> mean 5292 KB   still over
+```
+
+Below that, the only remaining route is for the port to hold less live data
+than a faithful transliteration holds. The C holds *more* on three of these
+four cases -- 25668 KB against 8864 on `sample.fftns2` -- so this is not a
+matter of the port being wasteful, and `../CLAUDE.md`'s "faithfulness beats
+idiom" is the rule that would have to give.
 
 What a human needs to decide, and an agent must not:
 
