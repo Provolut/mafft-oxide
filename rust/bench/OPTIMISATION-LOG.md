@@ -1079,3 +1079,45 @@ What a human needs to decide, and an agent must not:
 
 Either way `summarize.py` will keep reporting "116% of 5800 KB" until someone
 does, and that percentage is of a number that was never measured.
+
+
+# Re-baselined, 2026-10-27
+
+The RSS target was re-based on the fixed instrument, by the repository owner's
+decision. What changed and what it means:
+
+- The baseline is now `bench/baseline-rebased.tsv`: today's HEAD measured with
+  `bench/maxrss.c` for peak RSS, with the wall-clock column carried over from
+  2026-09-04 because the instrument fault was in RSS only.
+- **The old target could not be reached.** 5220 KB was 90% of 5800 KB, and
+  5800 came from the poller. The measured floor is 5892 KB, so the target sat
+  672 KB *below* the floor.
+- The new target is 6052 KB, 90% of a correctly measured 6725. It sits
+  **above** the floor, so the RSS half is a real target for the first time:
+  673 KB of mean to find against roughly 160 KB of headroom.
+
+`77dd5a6`, the original baseline commit, could not be re-measured: the squash
+merge of #5 collapsed it and the object is gone from the clone and from the
+remote. Recorded because it is the reason the re-baseline had to use today's
+HEAD rather than re-measuring the commit the old number came from, and because
+it is a general lesson -- a squash merge destroys the ability to re-measure
+anything the collapsed commits were the baseline for.
+
+`bench/baseline-2026-09-04-remeasured.tsv` is deleted. It was the half-fix
+(fresh working directory, still polling) and keeping a third baseline file
+measured by the broken instrument is how today's confusion started.
+
+## What is left on the RSS half
+
+1. **`commonIP`, about 220 KB of the mean.** The two traceback matrices live
+   simultaneously at `sample.linsi`'s peak, 1,798,280 B each, where the C
+   shares one TLS global. Necessary, not sufficient. A `thread_local` pool
+   with a take/put API is drafted and parked, not landed: it needs the
+   hour-long differential harnesses behind it, and both aligners' restore
+   points changed (`align.rs:1099`, `align.rs:1318`, `lalign.rs:515`).
+2. **The other 453 KB is not identified.** `impmtx` -- 5.2 MB, 40% of
+   `sample.linsi`'s heap -- is locked in: `Salignmm.c:110` allocates it with
+   `AllocateFloatMtx`, which `mtxutl.c:174` shows returns `double **`. The
+   name is a misnomer and the port's `f64` is exact.
+3. The four small cases are 69% fixed cost (2912 KB before the aligner
+   starts). Nothing in the DP moves them; only a smaller binary would.
