@@ -849,40 +849,81 @@ change to an untested path is worse than a recorded one.
    localised beyond the function.
 
 
-# Peak RSS, 2026-10-27 -- the metric, not the code
+# Peak RSS, 2026-10-27 -- the instrument, not the metric
 
-Where GOAL.md stands: wall clock is 1223 ms against the frozen baseline's 2367
-(51.7%, met with room to spare, thanks to the AVX-512 kernels that landed after
-the sections above). Mean peak RSS is 6527 KB against 5800 (112.5%, not met,
-and further off than when the goal was written). This was a diagnosis of that
-gap in answer to a question, not a timed attempt against the 90-minute clause.
+Where GOAL.md stands: wall clock is 1249 ms against the frozen baseline's 2367
+(52.8%, met with room to spare, thanks to the AVX-512 kernels). Mean peak RSS
+is 6725 KB against a 5220 KB target, and **not** met.
 
-Most of the gap is not in the program.
+This section was first written to say that the four small cases are inherently
+unmeasurable and that the metric therefore needed reweighting before anything
+else. That was wrong. The cases are fine. Three instruments in a row were not,
+and the record is kept in order because each failure is a different one and all
+three are easy to repeat.
 
-## The small cases do not reproduce
+## Instrument one: polling VmHWM races the program
 
-Peak RSS over 21 runs each, release `disttbfast-rs`, a fresh working directory
-per run:
+`profile.sh` polled `/proc/<pid>/status` for VmHWM while the process ran. The
+four small cases finish in about a millisecond, so they exit before the first
+read, and the poller reported whatever it caught during start-up -- or nothing.
+`aa.fftns2` read as a 92-191% spread across repeats. `/bin/true` measured 0 KB,
+which should have given it away at once.
+
+This is a *different* fault from the one the 2026-09-04 section records. That
+was the shared working directory, and it is fixed; these runs each had their
+own directory and still spread 191%.
+
+## Instrument two: fork copies the parent
+
+The replacement read `ru_maxrss` from `wait4` in Python. `fork` copies the
+parent's address space before `exec`, and `ru_maxrss` counts it, so the
+interpreter put a floor of 8188 KB under every case. Five of the eight read
+exactly 8188 with zero variance, which is how it showed.
+
+## Instrument three: wait4 from a small parent
+
+`bench/maxrss.c`, about thirty lines: fork, chdir, exec, `wait4`, print
+`ru_maxrss`. The parent is a few hundred KB, so the floor is 1324 KB
+(`/bin/true`), and the kernel's own high-water mark needs no sampling interval.
+`profile.sh` builds it on demand; the bench path already needs `cc` for
+`core/`.
+
+Eleven runs per case, fresh directory each:
 
 ```
-aa.fa   (6 seqs, ~1 ms)     median 3316 KB   min 1412   max 4104   spread 92-191%
-sample  (36 seqs, ~530 ms)  median 8912 KB   min 8804   max 8980   spread 2%
+sample.fftns2    8888 (8800- 8944)      aa.fftns2      4208 (4084-4304)
+sample.nwns2     8316 (8264- 8408)      nuc.fftns2     4212 (4140-4376)
+sample.memsave   5308 (5184- 5372)      tandem.fftns2  4492 (4376-4592)
+sample.linsi    14296 (14284-14396)     dup.nwns2      4048 (3960-4168)
 ```
 
-The heavy cases reproduce to 1-2%. The four toy cases do not reproduce at all.
-`summarize.py` averages peak RSS *unweighted* over all eight, so those four
-carry half the metric's weight, and the 5800 -> 6527 move is substantially that
-noise rather than the aligner getting hungrier. Where the number can be
-trusted it is flat: fftns2 8928 -> 8904, nwns2 8480 -> 8360, memsave
-5032 -> 5040, and linsi 13552 against the re-measured baseline's 13440.
+Every case inside 5%, `sample.linsi` inside 0.8%. There was never anything
+wrong with the small cases or with an unweighted mean; the harness simply could
+not see a process that short.
 
-This is a *different* cause from the spread recorded on 2026-09-04. That one
-was the shared working directory and is fixed; these runs each had their own
-directory and still spread 191%. A process that lives a millisecond has a peak
-that depends on how much of the binary and how many zero pages happen to fault
-in before it exits.
+## What the fixed instrument changes
 
-## A 1.6 MB red herring, now turned
+The C was under-reported far worse than the port. Its small cases read 3260,
+3472 and 3384 KB before; they are 22140, 22204 and 22212 KB. MAFFT allocates by
+upper bound at start-up, and the poller never saw it happen.
+
+```
+mean peak RSS   port 6725 KB   C 16913 KB   (0.40x)
+per-case ratio  mean 0.61x, worst 1.54x (sample.linsi)
+```
+
+So the port's memory advantage over the C is much larger than this database
+has ever recorded, and the single case where it loses is `sample.linsi` at
+14.3 MB against the C's 9.3 -- now measurable to under 1%, which is what makes
+it worth working on.
+
+**The baseline's RSS column came from instrument one.** Comparing 6725 KB
+against its 5800 KB is not a comparison; `summarize.py` will keep saying 116%
+of a number that was never measured. Correcting it relaxes the RSS target,
+which `../CLAUDE.md` puts to a human, so it is left alone and flagged here and
+in GOAL.md.
+
+## A 1.6 MB red herring, turned twice
 
 massif on `aa.fftns2` points straight at four eager allocations of 400,000 B
 each:
@@ -891,35 +932,29 @@ each:
 - `result1`, `result2` -- `falign.rs:295-296` (`BlockAlignState::new`)
 
 Four `vec![0; MAXSEG]` of `i32`, `MAXSEG = 100000`, allocated whatever the
-input -- sitting directly below the comment explaining that `segment`,
-`segment1` and `segment2` were made grow-on-demand for this exact reason.
-1.6 MB on a 510-byte input. An obvious win.
+input -- directly below the comment explaining that `segment`, `segment1` and
+`segment2` were made grow-on-demand for this exact reason. 1.6 MB on a
+510-byte input. An obvious win.
 
-It is not a win. Rebuilt with `MAXSEG = 1000`, a 100x cut, 21 runs each:
+It is not a win. Rebuilt with `MAXSEG = 1000`, a 100x cut, and measured on both
+instruments, because the first result rested on the broken one:
 
 ```
-            MAXSEG 100000   MAXSEG 1000
-aa.fa       median 3316 KB  median 3432 KB
-sample      median 8912 KB  median 8928 KB
+                 polled          wait4
+aa.fa    100000  3316 KB         4176 KB
+aa.fa      1000  3432 KB         4228 KB
+sample   100000  8912 KB         8868 KB
+sample     1000  8928 KB         8872 KB
 ```
 
-Zero on both, inside the noise. `vec![0; n]` allocates through `alloc_zeroed`;
-nothing ever writes those pages, so they never fault in and were never
-resident. **Allocated is not resident** -- the same mistake the 2026-09-04
-section records, wearing a new disguise, caught this time only because the
-claim was tested before it was believed.
+Zero either way. `vec![0; n]` allocates through `alloc_zeroed`; nothing writes
+those pages, so they never fault in and were never resident. **Allocated is not
+resident.** Worth removing for allocation hygiene by anyone already in the
+file; worth nothing for peak RSS. Recorded because massif will point the next
+person at it just as invitingly.
 
-Worth removing for allocation hygiene by anyone already in the file. Worth
-nothing for peak RSS. Recorded here because massif will point the next person
-at it just as invitingly.
+## Where the RSS work actually is
 
-## What has to happen before the RSS target means anything
-
-1. **Make the aggregate measure something.** Restrict it to the cases that
-   reproduce, weight it by work, or raise the sample count on the small ones.
-   This changes the yardstick, so per `../CLAUDE.md` it is a human's call and
-   was left for one rather than decided here.
-2. **Re-baseline RSS once it is stable.** The frozen 5800 KB came from the
-   shared-cwd harness; GOAL.md already carries that caveat.
-3. **Then look for real wins**, on `sample.linsi` -- 13.5 MB at 1.6x the C, the
-   only case that is both large and reproducible.
+`sample.linsi`: 14.3 MB, 1.54x the C, reproducible to 0.8%, and 21% of the
+eight-case total on its own. Everything else is at or below the C, three cases
+by a factor of five.

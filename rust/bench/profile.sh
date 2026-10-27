@@ -55,16 +55,29 @@ EOF
 # Peak RSS in KB, by polling VmHWM: the kernel's own high-water mark, so the
 # sampling interval does not matter.
 #
-# Reported as the median of several runs, not one. A single sample of this once
-# read as a 7.6% memory regression from a change that only ever removed
-# allocations, and as "no change" from one that removed 7 MB of arrays.
+# Read from wait4's `ru_maxrss` after the process exits, via `bench/maxrss.c`.
 #
-# The spread that caused it -- 31% on `sample.linsi`, clustered at 11.0, 13.4
-# and 14.4 MB -- was the harness, not the program: every run shared one working
-# directory, and these binaries write `hat2`, `hat3`, `order` and `pre` there
-# and read them back. Each run now gets its own empty directory (see
-# `scratch`), and the same binary then repeats inside 1%. The median is kept
-# because it costs nothing and a stale conclusion costs a day.
+# This replaces polling `/proc/<pid>/status` for VmHWM while the process runs.
+# Polling cannot measure a case that finishes in a millisecond: the four small
+# cases here exit before the first read, so the poller reported whatever it
+# caught during start-up, or nothing at all. On `aa.fftns2` that read as a
+# 92-191% spread across repeats and was mistaken for the program being
+# unmeasurable. With wait4 the same case repeats inside 5% -- 4084 to 4304 KB
+# over eleven runs -- and the kernel's own high-water mark needs no sampling
+# interval.
+#
+# A C helper rather than a line of shell or Python because `ru_maxrss` of a
+# child includes whatever the parent's address space cost before `exec`, which
+# `fork` copies. Measuring from Python put an 8188 KB floor under every case --
+# the interpreter's own RSS -- and five cases read exactly that, which is how
+# that mistake showed. `maxrss` is a few hundred KB, so the floor (1324 KB for
+# /bin/true) is out of the way.
+#
+# The median of several runs is kept. It costs nothing, and the history of this
+# one number is three retracted conclusions: a single sample read as a 7.6%
+# regression from a change that only removed allocations, then as "no change"
+# from one that removed 7 MB of arrays, then a median against a lucky draw as
+# 5.5% worse.
 # Every measured run gets an empty working directory of its own. Sharing one
 # made the numbers meaningless: `tbfast` and `disttbfast` write `hat2`, `hat3`,
 # `order` and `pre` into the cwd and read them back, so the second run of a
@@ -74,18 +87,19 @@ EOF
 # inside 1%.
 scratch() { mktemp -d "$work/run.XXXXXX"; }
 
+MAXRSS="$work/maxrss"
+cc -O2 -o "$MAXRSS" "$here/maxrss.c" 2>/dev/null \
+  || { echo "profile: cannot build $here/maxrss.c (need a C compiler)" 1>&2; exit 2; }
+
 peak_rss_once() {
-  local d; d=$(scratch)
-  ( cd "$d" && exec "$@" ) >/dev/null 2>&1 &
-  local pid=$! peak=0 v
-  while kill -0 "$pid" 2>/dev/null; do
-    v=$(awk '/VmHWM/{print $2}' "/proc/$pid/status" 2>/dev/null)
-    [ -n "${v:-}" ] && [ "$v" -gt "$peak" ] && peak=$v
-    sleep 0.02
-  done
-  wait "$pid" 2>/dev/null
+  local d kb rc; d=$(scratch)
+  kb=$("$MAXRSS" "$d" "$@"); rc=$?
   rm -rf "$d"
-  echo "$peak"
+  # A failed run is not a small run: report 0 so the caller's `check_pair`
+  # verdict is the thing that decides, never a flattering number from a
+  # process that died early.
+  [ $rc -eq 0 ] || { echo 0; return; }
+  echo "$kb"
 }
 
 peak_rss() {

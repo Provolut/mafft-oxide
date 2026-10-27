@@ -17,14 +17,19 @@ already reached and is no longer the objective.
 | wall clock, 8 cases | 2367 ms | **<= 2130 ms** |
 | mean peak RSS | 5800 KB | **<= 5220 KB** |
 
-> **The RSS row is measured on a harness that was wrong.** The frozen file was
-> recorded when every run shared one working directory, which these binaries
-> write into and read back; peak RSS spread 31% because of it. `profile.sh` now
-> gives each run its own directory, and `bench/baseline-2026-09-04-remeasured.tsv`
-> is the same commit re-measured that way -- 6084 KB, not 5800. The frozen file
-> and the targets above are **left as they are**: correcting them relaxes the
-> RSS target, which is not an agent's call to make. See
-> `bench/OPTIMISATION-LOG.md`.
+> **The RSS row was produced by an instrument that could not see these
+> processes.** It polled `/proc/<pid>/status` while the program ran, and the
+> four small cases exit in about a millisecond -- before the first read.
+> `/bin/true` measured 0 KB on it. `profile.sh` now reads `ru_maxrss` from
+> `wait4` after exit (`bench/maxrss.c`), on which every case reproduces inside
+> 5% and the C's small cases turn out to use 22 MB rather than the 3.3 MB that
+> was recorded. So `5800 KB` is not a measurement and `116% of it` is not a
+> comparison.
+>
+> The frozen file and the targets above are nevertheless **left exactly as they
+> are**: correcting them relaxes the RSS target, which is not an agent's call to
+> make. A human should re-baseline against the fixed instrument and set the
+> number. See `bench/OPTIMISATION-LOG.md`, section 2026-10-27.
 
 **Both are required.** One without the other is not done: a change that buys
 speed with memory, or memory with speed, is not progress here, and
