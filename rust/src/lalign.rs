@@ -188,6 +188,12 @@ impl LalignState {
             self.mp = vec![0; ll2 + 2];
             self.miv = vec![0.0; ll2 + 2];
             self.mpiv = vec![0; ll2 + 2];
+            // Freed before the replacement is built: an assignment evaluates its
+            // right-hand side first, so the old buffer and the new one are both
+            // live for the duration -- and a growth happens at the moment the
+            // working set is largest, so the overlap lands on the peak. Worth
+            // 2.8 MB where `commonip.rs` had the same shape.
+            self.amino_dynamicmtx = Vec::new();
             self.amino_dynamicmtx = vec![vec![0.0; 0x100]; 0x100];
             self.orlgth1 = ll1 - 100;
             self.orlgth2 = ll2 - 100;
@@ -535,6 +541,7 @@ impl LalignState {
             self.n_initverticalw = vec![0.0; ll1 + 2];
             self.n_lastverticalw = vec![0.0; ll1 + 2];
             self.n_m = vec![0.0; ll2 + 2];
+            self.n_amino_dynamicmtx = Vec::new();
             self.n_amino_dynamicmtx = vec![vec![0.0; 0x100]; 0x100];
             self.n_orlgth1 = ll1 - 100;
             self.n_orlgth2 = ll2 - 100;
@@ -658,6 +665,7 @@ impl LalignState {
             self.g_initverticalw = vec![0.0; ll1 + 2];
             self.g_lastverticalw = vec![0.0; ll1 + 2];
             self.g_m = vec![0.0; ll2 + 2];
+            self.g_amino_dynamicmtx = Vec::new();
             self.g_amino_dynamicmtx = vec![vec![0.0; 0x100]; 0x100];
             self.g_orlgth1 = ll1 - 100;
             self.g_orlgth2 = ll2 - 100;

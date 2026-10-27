@@ -107,6 +107,12 @@ impl PartImp {
     ) {
         if self.alloclen < lgth1 + 2 || self.alloclen < lgth2 + 2 {
             self.alloclen = lgth1.max(lgth2) + 2;
+            // Freed before the replacement is built: an assignment evaluates its
+            // right-hand side first, so the old buffer and the new one are both
+            // live for the duration -- and a growth happens at the moment the
+            // working set is largest, so the overlap lands on the peak. Worth
+            // 2.8 MB where `commonip.rs` had the same shape.
+            self.mtx = Vec::new();
             self.mtx = vec![vec![0.0; self.alloclen]; self.alloclen];
         }
         fillimp(

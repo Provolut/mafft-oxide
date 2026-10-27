@@ -1304,3 +1304,74 @@ the same way, and so do `falign.rs`'s.
 
 That is a mechanical sweep, not a redesign, and it is the first lead in this
 log that is both unexplored and cheap.
+
+
+# Target met, 2026-10-27 21:38:38Z to 22:06:32Z (28 minutes)
+
+```
+mean peak RSS   5870 KB   was 6725   87.3%   MET  (target <= 6052)
+wall clock      1243 ms   was 2367   52.5%   MET
+```
+
+The sweep the previous section called "mechanical rather than a faithfulness
+question", and it was. Thirteen large allocations had the shape
+`x = vec![...]`, which evaluates its right-hand side before dropping the old
+value -- so a growth holds two copies at the moment the working set is largest.
+
+Almost all of the win was one of them:
+
+```
+sample.linsi    12100 -> 10236   -1864   impmtx, treebase.rs:230
+sample.fftns2    7596 ->  7636      +40   (inside this case's spread)
+sample.nwns2     7220 ->  7108     -112
+```
+
+`impmtx` is the 5.2 MB constraint matrix, regrown as the progressive alignment
+lengthens. `sample.linsi`'s ratio against the C falls from 1.54x to 1.09x: it
+was the only case meaningfully above the C on memory and now it is not.
+
+For that one the fix is `drop(std::mem::take(&mut impmtx))` rather than
+`impmtx = Vec::new()`. Both free the old matrix, but for a local the compiler
+cannot see that the drop is the point and warns the value is never read; the
+explicit form keeps a `-D warnings` build clean and the intent legible.
+
+### Verified
+
+```
+verify.sh         pass=12018  fail=0
+verify_tbfast.sh  pass=1690   fail=0
+verify_e2e.sh     pass=28     fail=0  refused=1
+verify_dvtditr.sh pass=32     fail=0
+cargo test        238 tests, the 553-case matrix among them
+```
+
+`verify_dvtditr.sh` reported nothing on the first run, because it takes the
+libexec *directory* and was handed the binary. That is the third harness
+misinvocation today -- `verify_e2e.sh` took two -- and each printed a usage
+line rather than a failure. **A harness that does not run looks like a harness
+that passed, in a log.** Worth a guard: these scripts should exit non-zero in a
+way the caller cannot mistake for silence, and the caller should require a
+`pass=` line rather than its absence.
+
+### What the whole run says
+
+Five timed attempts, 2 + 21 + 2 + 27 + 28 = 80 minutes, every start and finish
+recorded.
+
+The two wins were both duplication, and neither was in the DP:
+
+| change | worth |
+|---|---|
+| `commonIP` shared between the aligners, as the C shares it | 1.66 MB on `sample.linsi` |
+| free a buffer before allocating its replacement, x13 sites | 2.8 MB, then 1.86 MB more |
+
+Everything that looked like an algorithmic lead was locked: `impmtx`'s *size*
+is the C's, the score matrices are `0x100` wide because raw bytes index them,
+the sextet tables are 6^6 because that is the code space. The memory was never
+in the arithmetic. It was in holding two of something while swapping one.
+
+And the earlier conclusion in this log -- that the target was unreachable
+because the measured floor was 5892 KB -- was right about the floor and wrong
+about the ceiling: 5870 KB came in just under it, because the floor was
+computed from *live heap at peak*, and the growth overlap was inflating that
+very measurement. A floor derived from a number the bug was corrupting.

@@ -227,6 +227,15 @@ pub fn treebase(
             let lgth2 = group2[0].len();
             if impalloclen < lgth1 + 2 || impalloclen < lgth2 + 2 {
                 impalloclen = lgth1.max(lgth2) + 2;
+                // Freed before the replacement is built: an assignment evaluates its
+                // right-hand side first, so the old buffer and the new one are both
+                // live for the duration -- and a growth happens at the moment the
+                // working set is largest, so the overlap lands on the peak. Worth
+                // 2.8 MB where `commonip.rs` had the same shape.
+                // `impmtx = Vec::new()` would do it, but the compiler cannot see
+                // that the drop *is* the point and warns the assignment is never
+                // read. Explicit, so the intent survives a -D warnings build.
+                drop(std::mem::take(&mut impmtx));
                 impmtx = vec![vec![0.0f64; impalloclen]; impalloclen];
             }
             let shrink = fastshrinklocalhom_half(&mem0, &mem1, table);

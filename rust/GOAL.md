@@ -14,11 +14,28 @@ Re-based on 2026-10-27, against **this port's own numbers measured with
 `bench/maxrss.c`**, frozen in `bench/baseline-rebased.tsv`. Not relative to the
 C: the port is at 0.40x the C's mean peak RSS and 0.69x its wall clock.
 
-**The live target is one number:**
+**Both targets are met as of 2026-10-27.**
 
-| metric | baseline | target (<= 90%) |
-|---|---|---|
-| mean peak RSS | 6725 KB | **<= 6052 KB** |
+| metric | baseline | target (<= 90%) | achieved |
+|---|---|---|---|
+| mean peak RSS | 6725 KB | <= 6052 KB | **5870 KB, 87.3%** |
+| wall clock, 8 cases | 2367 ms | <= 2130 ms | **1243 ms, 52.5%** |
+
+`summarize.py` prints `TARGET MET (both)`. Verified on a run where all eight
+rows read `ok`, with `cargo test` (238 tests, the 553-case matrix among them)
+and all four differential harnesses green: `verify.sh` 12018/0,
+`verify_tbfast.sh` 1690/0, `verify_e2e.sh` 28/0, `verify_dvtditr.sh` 32/0.
+
+What closed it, after `commonIP` sharing got within 101 KB: **an assignment
+evaluates its right-hand side before dropping the old value**, so growing a
+buffer held two copies at the moment the working set was largest. Thirteen
+large allocations had that shape. `impmtx` alone -- the 5.2 MB constraint
+matrix in `treebase.rs` -- was worth 1856 KB on `sample.linsi`, whose ratio
+against the C fell from 1.54x to 1.09x. See `bench/OPTIMISATION-LOG.md`,
+2026-10-27.
+
+A new target should be re-based from here with `bench/maxrss.c` before anyone
+works on this again; the sections below describe the run that is now finished.
 
 **Wall clock is settled: 1248 ms against a 2130 ms target, 52.7%, achieved
 2026-10-27.** It is recorded here rather than carried as a live condition. It

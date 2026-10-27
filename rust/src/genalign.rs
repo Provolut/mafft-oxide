@@ -127,6 +127,12 @@ impl GenalignState {
             self.mp = vec![0i32; ll2 + 2];
             self.large_m = vec![0.0; ll2 + 2];
             self.mp_big = vec![0i32; ll2 + 2];
+            // Freed before the replacement is built: an assignment evaluates its
+            // right-hand side first, so the old buffer and the new one are both
+            // live for the duration -- and a growth happens at the moment the
+            // working set is largest, so the overlap lands on the peak. Worth
+            // 2.8 MB where `commonip.rs` had the same shape.
+            self.amino_dynamicmtx = Vec::new();
             self.amino_dynamicmtx = vec![vec![0.0; 0x100]; 0x100];
             self.orlgth1 = ll1 - 100;
             self.orlgth2 = ll2 - 100;
@@ -138,7 +144,9 @@ impl GenalignState {
         if self.orlgth1 > self.common_alloc1 || self.orlgth2 > self.common_alloc2 {
             let ll1 = max_usize(self.orlgth1, self.common_alloc1);
             let ll2 = max_usize(self.orlgth2, self.common_alloc2);
+            self.ijpi = Vec::new();
             self.ijpi = vec![vec![0i32; ll2 + 10]; ll1 + 10];
+            self.ijpj = Vec::new();
             self.ijpj = vec![vec![0i32; ll2 + 10]; ll1 + 10];
             self.common_alloc1 = ll1;
             self.common_alloc2 = ll2;
