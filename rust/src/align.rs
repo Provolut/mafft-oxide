@@ -66,8 +66,6 @@ pub struct AlignState {
 
     // --- commonIP, shared by both aligners ---
     ijp: Vec<Vec<i32>>,
-    common_alloc1: usize,
-    common_alloc2: usize,
 
     // --- G__align11 ---
     g_orlgth1: usize,
@@ -117,8 +115,6 @@ impl AlignState {
             previousfirstmem: 0,
             previouscall: 0,
             ijp: Vec::new(),
-            common_alloc1: 0,
-            common_alloc2: 0,
             g_orlgth1: 0,
             g_orlgth2: 0,
             g_w1: Vec::new(),
@@ -132,14 +128,13 @@ impl AlignState {
     }
 
     /// `commonIP` growth, driven by whichever aligner's `orlgth` is larger.
+    /// Borrow `commonIP` from the shared pool, grown if this call needs it
+    /// bigger. Returned by `commonip::put` at the end of the call, so the
+    /// matrix lives in the pool between calls rather than in this struct --
+    /// which is what lets the other aligner have the same one, as the C's
+    /// single TLS global does.
     fn ensure_ijp(&mut self, orlgth1: usize, orlgth2: usize) {
-        if orlgth1 > self.common_alloc1 || orlgth2 > self.common_alloc2 {
-            let ll1 = max_usize(orlgth1, self.common_alloc1);
-            let ll2 = max_usize(orlgth2, self.common_alloc2);
-            self.ijp = vec![vec![0i32; ll2 + 10]; ll1 + 10];
-            self.common_alloc1 = ll1;
-            self.common_alloc2 = ll2;
-        }
+        self.ijp = crate::commonip::take(orlgth1, orlgth2);
     }
 }
 
@@ -1096,7 +1091,7 @@ impl AlignState {
         self.gapfreq2 = gapfreq2;
         self.doublework = doublework;
         self.intwork = intwork;
-        self.ijp = ijp;
+        crate::commonip::put(ijp);
 
         (wm, cpmxresult)
     }
@@ -1315,7 +1310,7 @@ impl AlignState {
         self.g_lastverticalw = lastverticalw;
         self.g_m = m;
         self.g_mp = mp;
-        self.ijp = ijp;
+        crate::commonip::put(ijp);
 
         wm
     }

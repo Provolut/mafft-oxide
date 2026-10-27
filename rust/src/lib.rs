@@ -24,6 +24,7 @@ pub mod anchors;
 pub mod blosum;
 pub mod cargs;
 pub mod cerand;
+pub mod commonip;
 pub mod compacttree;
 pub mod constants;
 pub mod dalign;

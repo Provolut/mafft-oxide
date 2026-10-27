@@ -1121,3 +1121,71 @@ measured by the broken instrument is how today's confusion started.
    name is a misnomer and the port's `f64` is exact.
 3. The four small cases are 69% fixed cost (2912 KB before the aligner
    starts). Nothing in the DP moves them; only a smaller binary would.
+
+
+# `commonIP` shared, 2026-10-27 20:33:48Z to 20:55:08Z (21 minutes)
+
+Both clock readings taken, as the re-based GOAL.md now requires.
+
+`AlignState` and `LalignState` each kept their own traceback matrix. At
+`sample.linsi`'s peak both are live, 1,798,280 B apiece -- 28% of that case's
+heap, for one matrix's worth of information. The C has had one for this all
+along: `extern TLS int **commonIP` in `dp.h`, grown monotonically by whichever
+aligner needs it biggest.
+
+`src/commonip.rs` is a thread-local pool with `take(orlgth1, orlgth2)` and
+`put(mtx)`. Five places changed, not the thirty a threaded parameter would
+have needed: the two `ensure_ijp` bodies now borrow from the pool, and the
+three restore points (`align.rs` twice, `lalign.rs` once) hand the matrix back
+to it instead of to `self`. Both `common_alloc1`/`common_alloc2` pairs move
+into the pool, which holds the running maximum the way the C's single
+`commonAlloc1` does.
+
+Why this cannot change a value: neither aligner reads a cell it has not written
+in the same call -- which is what makes the C's sharing safe too -- and neither
+re-zeroes the buffer on entry today, so handing over dirty contents is already
+the behaviour. What changes is that the matrix is sized to the larger of the
+two demands instead of allocated twice.
+
+The buffer is lent out rather than borrowed in place, so no borrow is held
+across a DP and a future reentrant path would cost memory rather than panic.
+There is none today: `align.rs` never calls into `lalign.rs` or the reverse.
+
+### Measured
+
+```
+sample.linsi peak RSS   14296 -> 12636 KB   (-1660 KB, median of 11, spread 0.8%)
+mean peak RSS            6725 -> ~6517 KB   (target 6052)
+```
+
+Predicted 1756 KB from massif, got 1660: the difference is that not every page
+of the second matrix was resident. Prediction high rather than low, which is
+the right direction to be wrong in.
+
+### Verified
+
+```
+verify.sh         (disttbfast, A__align)            pass=12018  fail=0
+verify_tbfast.sh  (tbfast, L__align11 + A__align)   pass=1690   fail=0
+verify_e2e.sh     (real mafft wrapper, L-INS-i in)  pass=28     fail=0  refused=1
+cargo test        (199 unit + the 553-case matrix)  green
+```
+
+`verify_tbfast.sh` is the one that decides: `tbfast` is where both matrices are
+live at once, so it exercises the sharing directly. The `refused` is by design,
+a configuration outside the ported path.
+
+`verify_e2e.sh` took three attempts to run at all -- twice for invocation
+errors of mine (no arguments, then no `MAFFT=`), and once because `make` leaves
+`core/mafft` without its execute bit so the harness's `-x` test rejected it.
+Recorded because a harness that prints its usage message looks nothing like a
+failure in a log, and the first two attempts produced no `pass=` line at all.
+
+### Still open
+
+~465 KB of mean. This was always necessary-but-not-sufficient; nothing about
+the remaining gap is identified. `impmtx` -- 5.2 MB, 40% of `sample.linsi`'s
+heap -- is locked in: `Salignmm.c:110` allocates it with `AllocateFloatMtx`,
+and `mtxutl.c:174` shows that returns `double **`. The name is a legacy
+misnomer and the port's `f64` is exact. The four small cases are 69% fixed cost
+before the aligner starts, so only a smaller binary moves them.

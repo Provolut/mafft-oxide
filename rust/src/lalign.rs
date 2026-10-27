@@ -57,8 +57,6 @@ pub struct LalignState {
 
     /// `commonIP`, shared with the other aligners in the same process.
     ijp: Vec<Vec<i32>>,
-    common_alloc1: usize,
-    common_alloc2: usize,
 }
 
 impl Default for LalignState {
@@ -106,19 +104,16 @@ impl LalignState {
             g_m: Vec::new(),
             g_amino_dynamicmtx: Vec::new(),
             ijp: Vec::new(),
-            common_alloc1: 0,
-            common_alloc2: 0,
         }
     }
 
+    /// Borrow `commonIP` from the shared pool, grown if this call needs it
+    /// bigger. Returned by `commonip::put` at the end of the call, so the
+    /// matrix lives in the pool between calls rather than in this struct --
+    /// which is what lets the other aligner have the same one, as the C's
+    /// single TLS global does.
     fn ensure_ijp(&mut self, orlgth1: usize, orlgth2: usize) {
-        if orlgth1 > self.common_alloc1 || orlgth2 > self.common_alloc2 {
-            let ll1 = max_usize(orlgth1, self.common_alloc1);
-            let ll2 = max_usize(orlgth2, self.common_alloc2);
-            self.ijp = vec![vec![0i32; ll2 + 10]; ll1 + 10];
-            self.common_alloc1 = ll1;
-            self.common_alloc2 = ll2;
-        }
+        self.ijp = crate::commonip::take(orlgth1, orlgth2);
     }
 }
 
@@ -512,7 +507,7 @@ impl LalignState {
         self.mp = mp;
         self.miv = miv;
         self.mpiv = mpiv;
-        self.ijp = ijp;
+        crate::commonip::put(ijp);
 
         result
     }
