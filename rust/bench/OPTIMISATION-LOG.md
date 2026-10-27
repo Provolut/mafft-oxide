@@ -1034,6 +1034,41 @@ four cases -- 25668 KB against 8864 on `sample.fftns2` -- so this is not a
 matter of the port being wasteful, and `../CLAUDE.md`'s "faithfulness beats
 idiom" is the rule that would have to give.
 
+### Timed attempt, 2026-10-27 19:46:46Z to 19:48:18Z (2 minutes)
+
+Start and finish recorded this time, as GOAL.md asks. Two minutes, because the
+attempt was to establish whether the one known structural win is real before
+spending an hour on the refactor -- and the answer arrived from massif rather
+than from editing.
+
+**The two traceback matrices are genuinely live at the same time.** At
+`sample.linsi`'s peak:
+
+```
+treebase::treebase (impmtx)   5,208,800 B   40%   <- largest single item
+align::ensure_ijp             1,798,280 B   14%
+lalign::l_align11 ijp         1,798,280 B   14%   <- same size, both live
+lalign::l_align11 (f64)         522,240 B    4%
+```
+
+So consolidating them, as the C does with its one `commonIP` TLS global, saves
+**1,798,280 B of live heap** -- measured as simultaneously live, not assumed.
+`genalign.rs`'s pair does not appear: L-INS-i never takes the generalised
+affine path, so only two of the three are ever in play here.
+
+That is a real win and it is more faithful to the C, not less. It is also not
+enough. Floor with it applied: 45381 KB, **mean 5673 KB against the 5220
+target**. The conclusion above holds, now on a measured saving rather than the
+2.4-4.8 MB that was guessed at.
+
+**`impmtx`, the 5.2 MB that is 40% of the peak, is locked in.** `Salignmm.c:110`
+allocates it with `AllocateFloatMtx( impalloclen, impalloclen )`, which looks
+like a 2x saving sitting in plain sight -- until you read `mtxutl.c:174`, where
+`AllocateFloatMtx` returns `double **` and allocates `sizeof( double * )`. The
+name is a legacy misnomer; it allocates doubles. The port's `Vec<Vec<f64>>` is
+exact, and narrowing it to `f32` would change every score it feeds. The largest
+item in the heaviest case cannot be touched.
+
 What a human needs to decide, and an agent must not:
 
 1. Re-baseline against `bench/maxrss.c` and set the RSS number from numbers
