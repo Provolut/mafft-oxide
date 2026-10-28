@@ -124,6 +124,39 @@ quirk (`nweaker = 2`, README item 14) that only a differential found.
   need `splittbfast`. That failure is loud, but it is data-dependent rather
   than configuration-dependent, which is why it is written here.
 
+## Evidence from outside this repository
+
+Recorded here rather than in `rust/README.md`'s harness table, because that
+table is for runs reproducible from this tree and these payloads are not in it.
+Measured by the consumer's own session, on its machine, with `verify_pkg.sh`
+from this commit and a conda-forge 7.526 libexec whose nine components were
+checked against the upstream package manifest. Not run here, so attributed
+rather than claimed.
+
+    100 real production payloads, 51 x 286, captured from the consumer's
+    pipeline by wrapping its aligner variable during one real run:
+
+        pkg: pass=3100 fail=0 refused=100
+
+31 passes and one refusal per payload across 32 cases, and the single refusal
+on every one of them is `--allowshift --globalpair --maxiterate 100`. Zero
+`--clustalout` refusals, which is the check that the writers added in this
+commit hold on real input and not only on the corpus.
+
+The production invocation at true size -- `--auto --preservecase` on a
+3831 x 334 input, where `disttbfast` is 98% of the call -- is byte-identical to
+the C at 4,542,015 bytes.
+
+The strategy matrix was *not* run at 3831 sequences, deliberately and after
+discussion. `--globalpair --maxiterate 100` at that size is on the order of
+seven million pairwise alignments, and it would characterise a strategy nobody
+runs at that size rather than the package. A 600 x 297 input takes the
+identical `--auto` branch -- `core/mafft.tmpl` sends any `nseq` between 500 and
+20000 to the `iterate=0 cycle=2` arm, so 600 and 3831 reach the same components
+by the same route -- and the full matrix finishes there. Two bounded claims
+rather than one unbounded run: the production path verified at true size, the
+strategy matrix verified at a size where it can complete.
+
 ## If parity is the goal, the order that makes sense
 
 Ranked by what it unblocks per unit of risk, not by size.
