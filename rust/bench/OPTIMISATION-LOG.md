@@ -1391,12 +1391,17 @@ machine has AVX-512 in hardware, so the kernel on/off split is meaningful.
 ## The brief's profiling recipe does not run the program
 
 Its §5 gives the `tbfast` argv verbatim and says components read `infile` from
-the current directory. They do not. The driver appends `-i infile`, and without
-it `tbfast` prints `Warning: Only 0 sequence found.`, **exits 0**, and finishes
-in 3 ms. Both binaries "agree" at 3 ms and `pre` is 0 bytes.
+the current directory. Run exactly as given, `tbfast` prints
+`Warning: Only 0 sequence found.`, **exits 0**, and finishes in 3 ms -- both
+binaries "agree" at 3 ms and `pre` is 0 bytes.
 
-`dvtditr` is worse: it reads its input on **stdin** (`core/mafft:2693` ends
-`< pre`), so no amount of staging `infile` feeds it.
+The mechanism, corrected: the driver **redirects stdin** (`core/mafft:2525`
+ends `< infile`; `core/mafft:2693` ends `< pre` for `dvtditr`). An earlier
+version of this section said the driver appends `-i infile`; it does not, and
+the brief's author was right about that. `-i <file>` is a second input path the
+binary also accepts, and it is what the timings below used -- all three
+variants wrote a byte-identical 26387-byte `pre`, so the measurements stand
+even though the explanation of the driver was wrong.
 
 A recipe that profiles nothing, exits 0, and reports plausible-looking
 millisecond numbers is the same failure this log records three times already
@@ -1418,7 +1423,12 @@ oxide, NO_AVX512=1    291 ms   0.99x of C      kernel worth 16%
 
 The port is already 17% faster than the C here, and the kernel is already
 earning 16%. The brief's own table shows this faintly -- 94.8 ms on against
-105.4 ms off -- and reads a real 10% as absence.
+105.4 ms off -- and read a real 10% as absence.
+
+Its author has since revised that to "the Rust code is ~7% behind C" scalar,
+and deferred the kernel question ("You know your own code"). Neither half holds
+on this machine: the kernel is there (64 zmm), and the scalar path is 0.99x of
+C rather than 7% behind it.
 
 ## There is no 3.9x scalar deficit in `tbfast` (their priority 3)
 
