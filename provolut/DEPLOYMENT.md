@@ -141,3 +141,85 @@ that will run it. The kernel is guarded by
 `#if defined(__AVX512F__) && defined(__AVX512VL__)` so the source compiles
 anywhere, but that guard resolves at compile time, not run time: a binary built
 with `-march=native` on a machine with AVX-512 will not run on one without it.
+
+
+# Measured, 2026-10-28: the components are already enough
+
+A question this document left open -- whether the Rust port can serve a real
+`mafft` invocation -- turns out to be answerable by measurement rather than by
+inventory, and the answer is yes for the only invocation this pipeline makes.
+
+## What the pipeline calls
+
+`mafft --auto --preservecase <input.fasta>`, from
+`src/pml/bioseq/gemme/pipeline.py:366` and `src/pml/bioseq/msa.py:687`.
+
+## What `--auto` selects, and what it then runs
+
+`core/mafft:1290` picks the strategy from sequence count and length. Each
+component was wrapped in a logging shim and the real driver run, so this is
+what fired rather than what the script could reach:
+
+```
+branch                                    components invoked
+nlen<3000 & nseq<100   (local, it=1000)   countlen replaceu tbfast dvtditr restoreu f2cl version
+nlen<1000 & nseq<200   (local, it=2)      same seven
+nlen<10000 & nseq<500  (ktuples, cyc=2)   the above, plus dndpre and disttbfast
+```
+
+**All of those are in `mafft-oxide` 0.2.0.** `pairlocalalign` is never
+invoked: on the local branch the pairwise stage runs inside `tbfast -L`, which
+is why the port's `sample.linsi` profiling case is a `tbfast` invocation and
+not a `pairlocalalign` one. A component inventory suggests 26 are missing; for
+this invocation the number that matters is zero.
+
+What does still fall through to C: the `parttree` branches, which need
+`splittbfast` (unported). Those are reached at roughly 200k sequences or very
+long input -- nothing this pipeline feeds.
+
+## Byte-identical through the real driver
+
+The C driver with all seven (or nine) components replaced by their Rust
+counterparts, against pure C, on `mafft --auto --preservecase`:
+
+```
+25 inputs, 25 byte-identical, 0 differing
+  test/sample (36 protein seqs), aa.fa, dup.fa, tandem.fa
+  21 generated sub-alignments: 2-34 sequences x 25%/50%/100% truncation
+```
+
+This is the composition the deployment options below contemplate, and it works
+today with no porting at all: install the C `mafft` as now, point
+`MAFFT_BINARIES` at a directory of Rust components. The driver's own contract
+(`$MAFFT_BINARIES`, falling back to its `libexec`) is what makes that possible,
+and nothing in the port had to change to support it.
+
+## What it buys
+
+Best of three, same driver, same inputs:
+
+```
+input              C(ms)  Rust(ms)  ratio
+sub_34_100.fa       1452       798   0.55x
+sub_21_100.fa        640       395   0.62x
+sub_13_100.fa        334       234   0.70x
+sub_08_100.fa        281       228   0.81x
+test/sample         1522       813   0.53x
+TOTAL               4229      2468   0.58x
+```
+
+1.7x on the shape the pipeline actually feeds, rising with sequence count.
+That is wall clock through the real driver, so it includes the process
+start-ups and the shell, not just the aligner.
+
+## What this does not establish
+
+- One machine, one invocation shape. The consumer's own parity test (135 real
+  sub-alignments from ProteinGym) is the gate that matters, and it should be
+  run against a composed directory before anything is adopted.
+- Only `--auto --preservecase` was traced. Another flag can reach a component
+  that is not ported; the branch table above is the map, not a guarantee.
+- No `mafft` driver is ported, and on this evidence none needs to be. Porting
+  the driver would mean reproducing its strategy selection exactly -- a
+  different choice produces different output even with bit-exact components --
+  for no benefit over composing with the C script.
