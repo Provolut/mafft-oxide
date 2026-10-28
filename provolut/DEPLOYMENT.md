@@ -212,6 +212,41 @@ TOTAL               4229      2468   0.58x
 That is wall clock through the real driver, so it includes the process
 start-ups and the shell, not just the aligner.
 
+## The driver does not block packaging
+
+A second trace, run independently against a conda-forge 7.526 libexec with
+synthetic protein input at three shapes, reached the same nine binaries -- so
+two methods agree that `--auto --preservecase` needs nothing outside the crate.
+
+That trace concluded the missing `mafft` driver is therefore "the whole gap",
+blocking a conda package because any package would still need conda's `mafft`
+script. It does not, and the reason is in this repository's own Makefile:
+
+```
+mafft: mafft.tmpl mltaln.h
+	sed "s:_LIBDIR:$(LIBDIR):" mafft.tmpl  > mafft
+```
+
+The driver is `mafft.tmpl` plus one substitution, it is BSD-3-Clause, and it is
+already here. A `provolut-mafft` package runs that same `sed` and ships the
+result next to the Rust components -- which is what conda-forge's own recipe
+does. No dependency on another package's script, and nothing ported.
+
+It needs no interpreter either: on the whole file the only external commands
+are `cat awk grep tr head sed wc mktemp basename uname tail sort dirname`, and
+both `perl` references (`mafft:2366`, `:2370`, the `seekquencer` branch) are
+commented out.
+
+What the absent driver does block is a **standalone** Rust MAFFT -- `cargo
+install mafft-oxide` giving a working `mafft` with no shell script. That is a
+real gap and a reasonable product goal. It is not an adoption blocker, and it
+is worth weighing against the cost: `--auto`'s strategy selection is part of
+the algorithm (the branch table above shows it switching aligners as input
+grows), so a driver that chooses differently changes output even with
+bit-exact components. Composing with the upstream script gets that selection
+right by construction; reimplementing it is a risk taken for packaging
+convenience.
+
 ## What this does not establish
 
 - One machine, one invocation shape. The consumer's own parity test (135 real
