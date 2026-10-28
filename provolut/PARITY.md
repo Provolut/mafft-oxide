@@ -82,11 +82,21 @@ rather than approximate.
   `--allowshift` with iterations. Needs `scoringmatrices`, `classifypairs` and
   `partA__align_variousdist`. This is the substantial one -- a scoring family,
   not a formatter.
-- **`f2cl-rs` refuses `-d` (`--dash` record exclusion).** Small, but it drops
-  records and re-picks common gaps, so it changes the alignment and not its
-  format. Needs its own differential rather than a writer.
+- **`f2cl-rs` refuses `-d` (`--dash` record exclusion).** It looks like the
+  cheapest item on this page and it is not. `commongappick` is already in the
+  lib (`src/addfunctions.rs`), so the filtering itself is a few dozen lines.
+  The problem is the order in `core/f2cl.c:311-362`: `fillspace` pads every
+  record to `nlenmax`, then the DASH filter builds a reordered subset, then
+  `commongappick` *shortens* those records in place -- and `setmark_clustal`
+  and `clustalout_pointer` are then both called with the original `nlenmax`.
+  So the marking loop reads `seq[j][i]` past each shortened record's NUL, into
+  whatever the buffer held before `commongappick` moved the terminator. The
+  conservation row therefore depends on stale heap contents, and reproducing
+  it means keeping that tail rather than truncating. That is the same class as
+  items 1 and 2 of the README's extending notes, and it needs a differential
+  built for it rather than an afternoon.
 
-The clustal and phylip writers were a third refusal until today's commit and
+The clustal and phylip writers were the third refusal until today's commit and
 are now compared byte-for-byte against the C (860 cases). That is the shape the
 remaining two should follow: port, then a differential over the corpus, then
 the refusal goes away. It is also the evidence for how long each takes --

@@ -13,7 +13,11 @@ source:
   git_rev: HEAD
 
 build:
-  number: 0
+  # Bumped from 0: the contents changed after a 0 had been built (the driver
+  # became self-locating, and `f2cl-rs` gained the clustal and phylip writers).
+  # rattler and conda cache by filename, so shipping different contents under
+  # one build string hands whoever installs next whichever copy landed first.
+  number: 1
   # `build.sh` next to this file is picked up automatically; naming it in a
   # `script:` key as well is an error ("Found a build.sh script and a
   # build/script section inside meta.yaml").
@@ -56,10 +60,12 @@ about:
     `mafft` driver -- generated from `core/mafft.tmpl` by the same single `sed`
     the upstream Makefile uses -- as **`mafft-oxide`**.
 
-    Because the driver has its component directory baked in, the launcher is
-    self-contained and sets no environment variable. A conda-forge `mafft` in
-    the same environment is untouched and remains genuinely stock, so the two
-    can be compared against each other.
+    The launcher is self-contained and sets no environment variable: it works
+    its component directory out from its own location, so it keeps working if
+    the environment is copied or moved. `MAFFT_BINARIES` is still honoured when
+    set, which is what lets the package be compared against another build. A
+    conda-forge `mafft` in the same environment is untouched and remains
+    genuinely stock, so the two can be compared against each other.
 
     Supported envelope. The nine components cover `mafft --auto` for inputs up
     to 20,000 sequences, which is every branch of the driver's strategy table
@@ -67,12 +73,15 @@ about:
     exits non-zero naming the missing component rather than producing a
     different alignment:
 
-      * `--clustalout` / `--phylipout`: `f2cl-rs` implements the FASTA writer
-        only and refuses the others.
       * `--allowshift` with iterations: `dvtditr-rs` refuses the specificity
         scoring path.
-      * `--parttree` and inputs past 20,000 sequences: need `splittbfast`,
-        which is not ported.
+      * `--dash`: `f2cl-rs` refuses `-d`, which excludes records and re-picks
+        common gaps -- a change to the alignment rather than to its format.
+      * `--parttree`, and inputs past 20,000 sequences: these need
+        `splittbfast`, which is not ported.
+
+    FASTA, clustal (`--clustalout`) and phylip (`--phylipout`) output are all
+    verified byte-identical to the C.
 
     Use the stock `mafft` for those. Nothing in this package degrades silently.
   doc_url: https://github.com/Provolut/mafft-oxide/blob/main/rust/README.md
