@@ -1375,3 +1375,93 @@ because the measured floor was 5892 KB -- was right about the floor and wrong
 about the ceiling: 5870 KB came in just under it, because the floor was
 computed from *live heap at peak*, and the growth overlap was inflating that
 very measurement. A floor derived from a number the bug was corrupting.
+
+
+# Checking a consumer-side optimisation brief, 2026-10-28
+
+A session working the consumer side (`provolut-ml`) sent a measured brief
+ranking what to optimise, from 100 real realign payloads on a Zen 5. Three of
+its four priorities rest on claims that do not reproduce here. Recorded with
+what was measured, because the ranking changes.
+
+Input: 51 unaligned sequences, 180-285 aa, synthesized to the brief's shape
+(`countlen`: `51 x 285 - 180 p`, against the brief's `51 x 286 - 180 p`). This
+machine has AVX-512 in hardware, so the kernel on/off split is meaningful.
+
+## The brief's profiling recipe does not run the program
+
+Its §5 gives the `tbfast` argv verbatim and says components read `infile` from
+the current directory. They do not. The driver appends `-i infile`, and without
+it `tbfast` prints `Warning: Only 0 sequence found.`, **exits 0**, and finishes
+in 3 ms. Both binaries "agree" at 3 ms and `pre` is 0 bytes.
+
+`dvtditr` is worse: it reads its input on **stdin** (`core/mafft:2693` ends
+`< pre`), so no amount of staging `infile` feeds it.
+
+A recipe that profiles nothing, exits 0, and reports plausible-looking
+millisecond numbers is the same failure this log records three times already
+under harness misinvocation. Anyone following §5 verbatim measures start-up.
+
+## `dvtditr` already has a kernel (their priority 1)
+
+The brief calls it "the biggest untouched win", "no AVX-512 kernel", "net gain
+from the first instruction". `dvtditr-rs` carries **64 zmm references** --
+`partalign_avx512.rs`, reached through `partalign.rs` for the restricted
+iterative refinement. Measured, staged from one C `tbfast` run so every
+variant sees identical inputs:
+
+```
+C dvtditr             294 ms
+oxide, kernel on      245 ms   0.83x of C
+oxide, NO_AVX512=1    291 ms   0.99x of C      kernel worth 16%
+```
+
+The port is already 17% faster than the C here, and the kernel is already
+earning 16%. The brief's own table shows this faintly -- 94.8 ms on against
+105.4 ms off -- and reads a real 10% as absence.
+
+## There is no 3.9x scalar deficit in `tbfast` (their priority 3)
+
+```
+                      this machine              brief's Zen 5
+C                       581 ms                    121 ms
+oxide, kernel on        154 ms  0.27x of C        119 ms  0.98x
+oxide, NO_AVX512=1      525 ms  0.90x of C        473 ms  3.9x
+```
+
+The *Rust* columns nearly agree across the two machines (154/119, 525/473).
+The **C** differs 4.8x. And `core/tbfast` here contains **0 zmm references**:
+`Lalign11.c`'s kernel is behind `#if LALIGN11_AVX512`, which `CFLAGS = -O3`
+never satisfies, so this repository's own C is scalar.
+
+Against that scalar C the Rust scalar path is **0.90x -- marginally faster, at
+parity**. The brief's 3.9x is a Rust-scalar-against-something-else comparison;
+whatever its conda-forge build is doing, this repo's `gcc -O3` build does not
+do it. So "every scalar-side win in tbfast is pure net speedup on top of a
+kernel that already works" is still true as an aspiration, but the 3.9x hole it
+was meant to fill is not there.
+
+Why their C is 4.8x faster than ours is unresolved and cannot be settled from
+here. It matters, because the whole ranking depends on which C is the baseline.
+
+## `disttbfast` is the real target (their priority 2, confirmed)
+
+```
+            C zmm   Rust zmm
+tbfast          0         68
+dvtditr         0         64
+disttbfast      0          0
+dndpre          0          0
+```
+
+`disttbfast` has no kernel on either side, and the brief measures it at 99.3%
+of a 17.8 s cold-build call. That is the one priority that survives checking,
+and it is the largest single cost in the pipeline. Its inner loop is 6-mer
+distances and two progressive cycles -- not what either existing kernel does,
+so it needs its own.
+
+## Bit-exactness
+
+Unchanged and verified again on this shape: `tbfast` and `dvtditr` output
+identical to the C with the kernel on **and** off. The `MAFFT_RS_NO_AVX512`
+escape hatch proving both paths agree is what makes that checkable.
