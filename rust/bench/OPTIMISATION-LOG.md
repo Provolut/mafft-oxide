@@ -1475,3 +1475,52 @@ so it needs its own.
 Unchanged and verified again on this shape: `tbfast` and `dvtditr` output
 identical to the C with the kernel on **and** off. The `MAFFT_RS_NO_AVX512`
 escape hatch proving both paths agree is what makes that checkable.
+
+## The C baseline's provenance, and why the cross-machine ratio is still open
+
+The consumer-side brief's author proposed that this repo's C baseline might be
+unoptimised, which would make "Rust scalar at 0.90x of C" a property of the
+baseline rather than of the port. Checked, because it is cheap and because it
+underwrites every ratio in `profile.tsv`:
+
+```
+core/Makefile:23                  CFLAGS = -O3
+readelf -p .comment core/tbfast   GCC: (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+objdump -d | grep -c zmm          0
+objdump -d | grep -cE 'ymm|xmm'   19244      <- auto-vectorised at -O3
+```
+
+An optimised release build. The hypothesis is refuted and the baseline stands.
+
+That does not reconcile the two machines, and the reason is worth keeping. The
+brief reports, at n=100 on a 17121-byte payload on a 6-core Zen 5: C 121.2 ms,
+Rust kernel-off 490.7 ms. This machine, on a 26387-byte payload on a 4-core
+cloud Xeon: C 581 ms, Rust kernel-off 525 ms. The Rust arms agree to 1.07x; the
+C arms differ by 4.8x.
+
+Payload size and machine speed cannot explain that, because both would move the
+two arms together. A 1.54x payload and a roughly 2x slower core predict the
+single-threaded Rust number should be about 3x larger here; it is 1.07x larger.
+The port is single-threaded on both sides -- no `std::thread` and no rayon
+anywhere in `rust/src/` -- so that 1.07x is a clean per-core comparison, and it
+says the two machines and the two payloads very nearly cancel. Whatever moves
+the C arm by 4.8x therefore does not touch the Rust arm at all.
+
+One candidate visible from here, unresolved: this build has threading compiled
+in.
+
+```
+core/Makefile:9    ENABLE_MULTITHREAD = -Denablemultithread
+core/Makefile:39   LIBS = -lm -lpthread
+objdump -T core/tbfast | grep -c pthread_create   1
+```
+
+The C threads only when told to (`-thread n`) and the port never does, so if the
+two invocations differ in that argument -- or in any other algorithm-selecting
+flag -- the two C numbers are of different work and the ratio between them means
+nothing. Settling it needs one shared payload and one pinned argv with
+`-thread 1` forced, three arms each, not more sampling. Until then neither
+`tbfast` scalar figure is actionable: 0.90x here against 4.05x behind there.
+
+Recorded so the next person does not re-derive it: the disagreement is in the
+argv, not in the optimiser.
