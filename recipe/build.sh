@@ -45,12 +45,52 @@ done
 # that is not in fact ported.
 test "$(ls -1 "$LIBEXEC" | wc -l)" = 9
 
-# The driver. `conda-build` notices the build prefix in a text file and records
-# it in `has_prefix`, so the path is rewritten to the real prefix at install
-# time; the launcher therefore works from whatever directory the environment
-# ends up in, with no environment variable.
-sed "s:_LIBDIR:$LIBEXEC:" "$SRC_DIR/core/mafft.tmpl" > "$PREFIX/bin/mafft-oxide"
+# The driver, generated the way the upstream Makefile generates it -- one
+# substitution over `_LIBDIR` -- but substituting a path the script works out
+# from its own location rather than a baked absolute one.
+#
+# An absolute `_LIBDIR` is what upstream and conda-build expect to work:
+# conda-build finds the build prefix in a text file, records it in `has_prefix`,
+# and rewrites it at install time, which was verified to happen. The reason not
+# to rely on it is what happens when a prefix moves *after* install. A copied or
+# relocated environment keeps the old absolute path, which does not fail -- it
+# silently resolves to the components of the *original* installation, so the
+# launcher in environment B runs environment A's binaries. Measured: a `cp -a`
+# of the installed env produced a working launcher still pointing at the source
+# env's libexec. Silently running a different installation is a worse failure
+# than not starting, and this port exists not to produce quietly-different
+# answers.
+#
+# Self-locating costs one `cd`. `$0` is the path the shell resolved, including
+# via PATH, and this line runs before the driver changes directory, so a
+# relative invocation still resolves. If the directory is absent the
+# substitution yields an empty prefix and the driver fails at its first
+# component rather than guessing.
+#
+# awk on an exact line match rather than sed: the replacement text is full of
+# characters sed would reinterpret (`&`, `$`, quotes), and matching the whole
+# line guarantees nothing else in a 3069-line script is touched.
+REPL='"$(cd "$(dirname "$0")/../libexec/mafft-oxide" && pwd)"'
+awk -v repl="$REPL" '
+  $0 == "\tprefix=_LIBDIR" { print "\tprefix=" repl; n++; next }
+  { print }
+  END { if (n != 1) { print "expected exactly one prefix=_LIBDIR line, saw " n > "/dev/stderr"; exit 1 } }
+' "$SRC_DIR/core/mafft.tmpl" > "$PREFIX/bin/mafft-oxide"
 chmod 755 "$PREFIX/bin/mafft-oxide"
+
+# That substitution is the one piece of this recipe that edits executable logic
+# rather than copying it, so check it landed and that nothing else changed.
+grep -qF 'prefix="$(cd "$(dirname "$0")/../libexec/mafft-oxide" && pwd)"' \
+  "$PREFIX/bin/mafft-oxide" \
+  || { echo "the _LIBDIR substitution did not produce the expected line" >&2; exit 1; }
+d=$(diff <(sed 's:^\tprefix=.*:PREFIXLINE:' "$SRC_DIR/core/mafft.tmpl") \
+         <(sed 's:^\tprefix=.*:PREFIXLINE:' "$PREFIX/bin/mafft-oxide") | wc -l)
+test "$d" = 0 \
+  || { echo "generated driver differs from mafft.tmpl beyond the prefix line" >&2; exit 1; }
+
+# It must be a valid shell script. A substitution that produced something
+# syntactically broken would otherwise only show up at run time.
+bash -n "$PREFIX/bin/mafft-oxide"
 
 # The driver compares its own version string against what `$prefix/version`
 # prints and warns on stdout if they disagree -- which would land in the

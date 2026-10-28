@@ -141,6 +141,39 @@ fi
 case "$MAFFT" in /*) ;; *) MAFFT="$(pwd)/$MAFFT" ;; esac
 echo "verify_pkg.sh: driver $MAFFT"
 
+# Guard four, and the only one that is about the *run* rather than the two
+# directories. The three above prove the arms hold different binaries; none of
+# them can see a driver that never consults MAFFT_BINARIES at all. A driver
+# with its component directory wired in some other way -- a packaged launcher
+# whose generated prefix line overwrote the `if [ "$MAFFT_BINARIES" ]` branch,
+# say -- would run its own components for both arms, and then every case below
+# compares an implementation against itself and passes. That is the same false
+# pass the ELF guard exists for, reached by a route the ELF guard cannot cover,
+# and output alone cannot distinguish it from a correct port: byte-identity is
+# the expected result either way.
+#
+# Pointing the variable at an empty directory settles it in one run. A driver
+# that honours it finds no components and fails; a driver that ignores it
+# succeeds. No reliance on the two arms differing in any observable way, so
+# this keeps working as components stop refusing things.
+canary=$(mktemp -d)
+# Always test/sample, never "$@": by this point the positional arguments may
+# start with `--shapes`, and a flag where a filename belongs makes the driver
+# fail for the wrong reason, which would pass this guard vacuously.
+MAFFT_BINARIES="$canary" "$MAFFT" --retree 2 --maxiterate 0 "$repo/test/sample" > "$canary/out" 2>/dev/null
+cst=$?
+csz=$(wc -c < "$canary/out")
+rm -rf "$canary"
+if [ $cst -eq 0 ] && [ "$csz" -gt 0 ]; then
+  echo "verify_pkg.sh: the driver aligned successfully with MAFFT_BINARIES pointing at an" 1>&2
+  echo "               empty directory, so it is not resolving components through that" 1>&2
+  echo "               variable. Both arms below would run the same components and every" 1>&2
+  echo "               case would pass while comparing an implementation against itself." 1>&2
+  echo "               Refusing to run." 1>&2
+  exit 2
+fi
+echo "verify_pkg.sh: driver honours MAFFT_BINARIES (empty-dir canary failed as it must)"
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -162,6 +195,9 @@ STRATS=(
   "--maxiterate 2 --thread 0"           # FFT-NS-i
   "--retree 2 --maxiterate 0 --reorder"
   "--retree 2 --maxiterate 0 --clustalout"
+  "--retree 2 --maxiterate 0 --clustalout --reorder"
+  "--retree 2 --maxiterate 0 --phylipout"
+  "--retree 2 --maxiterate 0 --phylipout --reorder"
   "--localpair --maxiterate 0"
   "--localpair --maxiterate 2 --thread 0"
   "--localpair --maxiterate 100 --thread 0"
@@ -175,23 +211,25 @@ STRATS=(
   "--auto"
 )
 
-# Two strategies are refused by the port rather than approximated, and a
-# packaged libexec always contains the binary that refuses them -- so unlike
-# verify_e2e.sh, where the refusing component may or may not be swapped in,
-# this is unconditional. Each is counted separately: not as a pass, which would
-# hide it, and not as a failure, which would be untrue.
+# One strategy is refused by the port rather than approximated, and a packaged
+# libexec always contains the binary that refuses it -- so unlike verify_e2e.sh,
+# where the refusing component may or may not be swapped in, this is
+# unconditional. It is counted separately: not as a pass, which would hide it,
+# and not as a failure, which would be untrue.
 #
 #  * `--allowshift` passes `dvtditr -s 0.8`, which selects the specificity
 #    scoring path (`scoringmatrices`, `classifypairs`,
 #    `partA__align_variousdist`) that `dvtditr-rs` refuses.
-#  * `--clustalout` passes `f2cl -c`, and `f2cl-rs` implements the FASTA writer
-#    only (see the header of `src/bin/f2cl.rs`): clustal and phylip each need
-#    their own writer plus the conservation marking in `setmark_clustal`.
-#
-# This is the whole reason an all-nine harness is not verify_e2e.sh with more
-# binaries swapped. verify_e2e.sh keeps the C `f2cl`, so its `--clustalout`
-# cases pass; a package that ships `f2cl-rs` under that name cannot serve them,
-# and that is a fact about the package's envelope rather than a divergence.
+# `--clustalout` was the second, until `f2cl-rs` grew the clustal and phylip
+# writers. It is now a compared case rather than a refused one, and
+# `--clustalout --reorder` / `--phylipout` / `--phylipout --reorder` are here
+# with it -- `--reorder` makes the driver pass `-r order`, which is a different
+# path through both writers. It is worth recording why that pair was ever
+# refused, because it is the reason this harness exists separately:
+# verify_e2e.sh keeps the C `f2cl`, so its `--clustalout` cases passed while a
+# package shipping `f2cl-rs` under that name could not serve them at all. An
+# all-nine harness saw it on its first run; a one-swap harness structurally
+# cannot.
 #
 # The refusal is only accepted as one on the evidence that it *is* a refusal:
 # non-zero exit AND an empty stdout. A port that wrote a plausible-looking but
@@ -199,7 +237,7 @@ STRATS=(
 # instead of failing, which is precisely the outcome this repository exists to
 # prevent. verify_e2e.sh checks the exit status alone; this is deliberately
 # stricter, and the extra check costs nothing.
-REFUSED_BY_PKG=("--allowshift" "--clustalout")
+REFUSED_BY_PKG=("--allowshift")
 
 is_refusable() {
   local s="$1" pat

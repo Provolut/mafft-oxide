@@ -82,6 +82,25 @@ if [ "$REGEN" = "1" ]; then
       >> "$GOLDEN/countlen.expected"
   done
   "$CORE/version" > "$GOLDEN/version.expected"
+  # The digest tables. `tests/utils.rs` tells the reader to regenerate here, so
+  # here is where it has to be possible; these three were previously made by
+  # hand and the instruction was aspirational.
+  #
+  # One digest per input per format, taken from the C. `-n -1` leaves each
+  # format to its own default name width (15 clustal, 10 phylip), and `-N` is
+  # the ordinary alphabet -- the argument vectors `tests/utils.rs` asserts with.
+  for spec in "f2cl.expected:-n|-1|-f|-l|60" \
+              "f2cl_clustal.expected:-n|-1|-c|FFT-NS-2|-N" \
+              "f2cl_phylip.expected:-n|-1|-y"; do
+    out="$GOLDEN/${spec%%:*}"
+    IFS='|' read -r -a fargs <<< "${spec#*:}"
+    : > "$out"
+    for f in $(ls "$GOLDEN/in" | sort); do
+      printf '%s\t%s\n' "$f" \
+        "$("$CORE/f2cl" "${fargs[@]}" -i "$GOLDEN/in/$f" </dev/null 2>/dev/null \
+            | sha256sum | cut -d" " -f1)" >> "$out"
+    done
+  done
   echo "verify_utils: regenerated $GOLDEN/*.expected from $CORE"
   exit 0
 fi
@@ -215,8 +234,9 @@ cmp_run "replaceu -Z"            "$CORE/replaceu" "$RSDIR/replaceu-rs" -Z
 cmp_run "replaceu positional"    "$CORE/replaceu" "$RSDIR/replaceu-rs" "$protf"
 cmp_run "replaceu -i /nope"      "$CORE/replaceu" "$RSDIR/replaceu-rs" -i /nope
 
-# f2cl: only the FASTA path is ported (see the binary's own header), so only
-# the FASTA path is compared. `-n -1 -f -l 60` is what `--auto` passes.
+# f2cl: the FASTA, clustal and phylip paths are all ported now, so all three
+# are compared. `-n -1 -f -l 60` is what `--auto` passes; the other two are
+# what `--clustalout` and `--phylipout` pass.
 for f in "$inputs"/*; do
   base=$(basename "$f")
   is_indeterminate "$base" && continue
@@ -244,6 +264,34 @@ for f in "$inputs"/*; do
     echo "FAIL f2cl -f (unwrapped) < $base (status C=$cs RS=$rs)"
   fi
 done
+
+# The clustal and phylip writers, over the same corpus. Name widths are
+# separate cases because `%-*.*s` both pads and truncates, so a width under the
+# longest name is a different code path from one over it, and the two formats
+# default to different widths when `-n -1`.
+for fmt in "-c|FFT-NS-2|-N" "-c|FFT-NS-2|-E" "-y"; do
+  IFS='|' read -r -a fargs <<< "$fmt"
+  for f in "$inputs"/*; do
+    base=$(basename "$f")
+    is_indeterminate "$base" && continue
+    co=$("$CORE/f2cl" -n -1 "${fargs[@]}" < "$f" 2>/dev/null); cs=$?
+    ro=$("$RSDIR/f2cl-rs" -n -1 "${fargs[@]}" < "$f" 2>/dev/null); rs=$?
+    if [ "$co" = "$ro" ] && [ "$cs" = "$rs" ]; then
+      pass=$((pass+1))
+    else
+      fail=$((fail+1))
+      echo "FAIL f2cl ${fargs[*]} < $base (status C=$cs RS=$rs)"
+    fi
+  done
+done
+
+for n in 0 1 3 10 15 30; do
+  cmp_stdout "f2cl -c -n $n"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n "$n" -c X -N -i "$inputs/sample.fa"
+  cmp_stdout "f2cl -y -n $n"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n "$n" -y -i "$inputs/sample.fa"
+done
+# No `-c` value at all: the C's header omits the strategy rather than printing
+# "(null)", and the two spellings differ by one space.
+cmp_stdout "f2cl -c absent"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -N -i "$inputs/sample.fa"
 
 cmp_stdout "f2cl -l 1"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 1 -i "$inputs/sample.fa"
 cmp_stdout "f2cl -l 7"  "$CORE/f2cl" "$RSDIR/f2cl-rs" -n -1 -f -l 7 -i "$inputs/sample.fa"

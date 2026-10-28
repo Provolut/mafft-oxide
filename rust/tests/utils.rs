@@ -270,24 +270,105 @@ fn f2cl_matches_the_c_on_the_fasta_path() {
 }
 
 #[test]
-fn f2cl_refuses_the_formats_it_does_not_implement() {
-    // Refusing is the contract: a plausible-looking clustal file from a writer
-    // that was never compared against the C is the one outcome to avoid.
+fn f2cl_matches_the_c_on_the_clustal_path() {
+    // These two formats were refused rather than approximated until this
+    // existed. The digests are the C's own output, so a writer that looks
+    // plausible but differs anywhere -- the header, the name column width, the
+    // 60-column blocks, or the conservation row under each block -- fails here.
+    let bin = env!("CARGO_BIN_EXE_f2cl-rs");
+    let cases = expected_digests("f2cl_clustal.expected");
+    assert!(cases.len() >= 10, "fixture table looks truncated");
+    for (name, want) in cases {
+        let input = Path::new(GOLDEN).join("in").join(&name);
+        let got = run(
+            bin,
+            &[
+                "-n",
+                "-1",
+                "-c",
+                "FFT-NS-2",
+                "-N",
+                "-i",
+                input.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(sha256_hex(&got), want, "f2cl clustal disagrees on {name}");
+    }
+}
+
+#[test]
+fn f2cl_matches_the_c_on_the_phylip_path() {
+    let bin = env!("CARGO_BIN_EXE_f2cl-rs");
+    let cases = expected_digests("f2cl_phylip.expected");
+    assert!(cases.len() >= 10, "fixture table looks truncated");
+    for (name, want) in cases {
+        let input = Path::new(GOLDEN).join("in").join(&name);
+        let got = run(bin, &["-n", "-1", "-y", "-i", input.to_str().unwrap()]);
+        assert_eq!(sha256_hex(&got), want, "f2cl phylip disagrees on {name}");
+    }
+}
+
+#[test]
+fn f2cl_clustal_nucleotide_marking_skips_the_unused_group() {
+    // `core/f2cl.c:35-38` assigns three nucleotide "weaker" groups and then
+    // sets `nweaker = 2`, so `"CU"` is declared and never consulted. Including
+    // it is the obvious tidy-up and it changes the conservation row: a column
+    // of C and U is marked `.` instead of being left blank. Pinned on a
+    // hand-built input so the intent is visible rather than buried in a digest
+    // over a corpus file.
+    let bin = env!("CARGO_BIN_EXE_f2cl-rs");
+    let dir = std::env::temp_dir().join("f2cl_cu_group");
+    std::fs::create_dir_all(&dir).expect("tmpdir");
+    let input = dir.join("cu.fa");
+    // Column 0 is C/C (identical -> '*'), column 1 is C/U, column 2 is A/G
+    // (the group that IS consulted -> '.'), column 3 is T/T.
+    std::fs::write(&input, b">a\nCCAT\n>b\nCUGT\n").expect("write");
+    let got = run(bin, &["-n", "-1", "-c", "X", "-N", "-i", input.to_str().unwrap()]);
+    let text = String::from_utf8_lossy(&got);
+    let mark = text
+        .lines()
+        .last()
+        .expect("a mark row");
+    // 15-wide name column plus a space, then the four columns.
+    let cols = &mark[16..20];
+    assert_eq!(
+        cols, "* .*",
+        "C/U must be blank (\"CU\" is past nweaker) and A/G must be '.'; got {cols:?}"
+    );
+}
+
+#[test]
+fn f2cl_still_refuses_dash_record_exclusion() {
+    // `-d` is not an output format: it drops records and re-picks common gaps,
+    // which changes the alignment. Refusing stays the contract there.
     let bin = env!("CARGO_BIN_EXE_f2cl-rs");
     let input = Path::new(GOLDEN).join("in").join("sample.fa");
-    for args in [
-        vec!["-n", "-1", "-i", input.to_str().unwrap()],
-        vec!["-n", "-1", "-y", "-i", input.to_str().unwrap()],
-    ] {
-        let out = Command::new(bin)
-            .args(&args)
-            .stdin(std::process::Stdio::null())
-            .output()
-            .expect("run f2cl-rs");
-        assert_eq!(out.status.code(), Some(1), "args were {args:?}");
-        assert!(out.stdout.is_empty(), "a refused format must write nothing");
-        assert!(String::from_utf8_lossy(&out.stderr).contains("not implemented"));
-    }
+    let out = Command::new(bin)
+        .args(["-n", "-1", "-f", "-d", "-i", input.to_str().unwrap()])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run f2cl-rs");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty(), "a refused option must write nothing");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not implemented"));
+}
+
+#[test]
+fn f2cl_clustal_header_version_matches_version_rs() {
+    // The version string is duplicated in `src/bin/f2cl.rs` because
+    // `src/bin/version.rs` deliberately keeps it beside the code that prints
+    // it. This is what stops the two drifting: the clustal header must carry
+    // exactly what `version-rs` prints, since the driver compares them and
+    // warns on stdout when they disagree.
+    let ver = run(env!("CARGO_BIN_EXE_version-rs"), &[]);
+    let ver = String::from_utf8(ver).expect("utf8");
+    let input = Path::new(GOLDEN).join("in").join("sample.fa");
+    let got = run(
+        env!("CARGO_BIN_EXE_f2cl-rs"),
+        &["-n", "-1", "-c", "X", "-N", "-i", input.to_str().unwrap()],
+    );
+    let first = String::from_utf8_lossy(&got).lines().next().unwrap().to_string();
+    assert_eq!(first, format!("CLUSTAL format alignment by MAFFT X (v{ver})"));
 }
 
 #[test]

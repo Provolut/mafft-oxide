@@ -843,3 +843,135 @@ pub fn read_localhomtable2_half(
     }
     kozoarivec
 }
+
+/// `extractfirstword()` from `core/io.c`.
+///
+/// Tabs become spaces, leading spaces are skipped, and the result ends at the
+/// first space after that. The C does this destructively on the name buffer and
+/// returns a pointer into it; both output formats below call it once per record
+/// per block, so the second call sees an already-truncated name and returns the
+/// same bytes. Returning a slice reproduces that without the mutation.
+pub fn extractfirstword(name: &[u8]) -> &[u8] {
+    // `tabtospace` rewrites '\t' to ' ' first, so a tab delimits exactly as a
+    // space does; comparing against both is the non-destructive equivalent.
+    let is_sp = |c: u8| c == b' ' || c == b'\t';
+    let start = name.iter().position(|&c| !is_sp(c)).unwrap_or(name.len());
+    let end = name[start..]
+        .iter()
+        .position(|&c| is_sp(c))
+        .map(|p| start + p)
+        .unwrap_or(name.len());
+    &name[start..end]
+}
+
+/// `fprintf( fp, "%-*.*s", namelen, namelen, s )`: pad right with spaces to
+/// `namelen`, and truncate to `namelen` if longer. Both at once, which is what
+/// the `-*.*` pair means and the reason a name over the width is cut rather
+/// than widening the column.
+fn pad_truncate(out: &mut Vec<u8>, s: &[u8], namelen: usize) {
+    let n = s.len().min(namelen);
+    out.extend_from_slice(&s[..n]);
+    out.extend(std::iter::repeat(b' ').take(namelen - n));
+}
+
+/// `clustalout_pointer()` from `core/io.c`.
+///
+/// `seq` must already be padded to `maxlen` -- the C's own comment on the two
+/// sequence writes is "長さが違うとだめ" ("it is no good if the lengths
+/// differ"), and `f2cl` calls `fillspace` before getting here for exactly that
+/// reason. `%.60s` stops at the NUL of a short record, so an unpadded sequence
+/// silently shortens its line instead of erroring.
+pub fn clustalout_pointer(
+    out: &mut Vec<u8>,
+    nseq: usize,
+    maxlen: usize,
+    seq: &[Vec<u8>],
+    name: &[Vec<u8>],
+    mark: Option<&[u8]>,
+    comment: Option<&str>,
+    order: &[usize],
+    namelen: i64,
+    version: &str,
+) {
+    let namelen = if namelen == -1 { 15 } else { namelen.max(0) as usize };
+    match comment {
+        None => out.extend_from_slice(
+            format!("CLUSTAL format alignment by MAFFT (v{version})\n\n").as_bytes(),
+        ),
+        Some(c) => out.extend_from_slice(
+            format!("CLUSTAL format alignment by MAFFT {c} (v{version})\n\n").as_bytes(),
+        ),
+    }
+
+    let mut pos = 0usize;
+    while pos < maxlen {
+        out.push(b'\n');
+        for j in 0..nseq {
+            let k = order[j];
+            // `name[k]+1`: the stored name keeps MAFFT's leading marker byte.
+            pad_truncate(out, extractfirstword(&name[k][1..]), namelen);
+            out.push(b' ');
+            let s = &seq[k];
+            let end = (pos + 60).min(s.len());
+            if pos < s.len() {
+                out.extend_from_slice(&s[pos..end]);
+            }
+            out.push(b'\n');
+        }
+        if let Some(m) = mark {
+            pad_truncate(out, b"", namelen);
+            out.push(b' ');
+            let end = (pos + 60).min(m.len());
+            if pos < m.len() {
+                out.extend_from_slice(&m[pos..end]);
+            }
+            out.push(b'\n');
+        }
+        pos += 60;
+    }
+}
+
+/// `phylipout_pointer()` from `core/io.c`.
+///
+/// The chunking is not a 50-wide block written in one piece: the inner loop
+/// bound is `pos2 < pos+41` in steps of 10, which emits exactly five
+/// space-prefixed 10-column groups, and the outer step is 50. Writing it as
+/// "50 columns in groups of 10" happens to agree, but the `41` is what the C
+/// says, so it is what is reproduced here.
+pub fn phylipout_pointer(
+    out: &mut Vec<u8>,
+    nseq: usize,
+    maxlen: usize,
+    seq: &[Vec<u8>],
+    name: &[Vec<u8>],
+    order: &[usize],
+    namelen: i64,
+) {
+    let namelen = if namelen == -1 { 10 } else { namelen.max(0) as usize };
+    out.extend_from_slice(format!(" {nseq} {maxlen}\n").as_bytes());
+
+    let mut pos = 0usize;
+    while pos < maxlen {
+        for j in 0..nseq {
+            let k = order[j];
+            if pos == 0 {
+                pad_truncate(out, extractfirstword(&name[k][1..]), namelen);
+            } else {
+                pad_truncate(out, b"", namelen);
+            }
+            let s = &seq[k];
+            let mut pos2 = pos;
+            while pos2 < pos + 41 && pos2 < maxlen {
+                out.push(b' ');
+                let end = (pos2 + 10).min(s.len());
+                if pos2 < s.len() {
+                    out.extend_from_slice(&s[pos2..end]);
+                }
+                pos2 += 10;
+            }
+            out.push(b'\n');
+        }
+        out.push(b'\n');
+        pos += 50;
+    }
+}
