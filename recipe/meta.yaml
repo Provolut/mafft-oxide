@@ -1,0 +1,82 @@
+{% set version = "0.2.0" %}
+{% set mafft_version = "7.526" %}
+
+package:
+  name: mafft-oxide
+  version: {{ version }}
+
+source:
+  # A clone of the committed tree, not `path: ..`, which would copy
+  # `rust/target/` -- several GB of build output -- into the work directory.
+  # For a release build, replace this with the tagged tarball and its sha256.
+  git_url: ..
+  git_rev: HEAD
+
+build:
+  number: 0
+  # `build.sh` next to this file is picked up automatically; naming it in a
+  # `script:` key as well is an error ("Found a build.sh script and a
+  # build/script section inside meta.yaml").
+  #
+  # No `activate.d` script and no `MAFFT_BINARIES`: see recipe/build.sh for why
+  # an environment-wide export of that variable is a correctness hazard rather
+  # than a convenience.
+
+requirements:
+  build:
+    - {{ compiler('rust') }}
+    - {{ compiler('c') }}        # cargo needs a linker
+  run:
+    # The driver is a POSIX shell script. Its only external commands are
+    # cat awk grep tr head sed wc mktemp basename uname tail sort dirname --
+    # all coreutils/busybox-level, and both `perl` references in the template
+    # are commented out. So there is no interpreter dependency to declare.
+    - __unix
+
+test:
+  files:
+    - test_pkg.sh
+  commands:
+    - bash test_pkg.sh
+
+about:
+  home: https://github.com/Provolut/mafft-oxide
+  license: BSD-3-Clause
+  license_family: BSD
+  license_file:
+    - ../LICENSE
+  summary: Bit-exact Rust port of MAFFT's alignment components, with the upstream driver
+  description: |
+    mafft-oxide is a Rust port of the numerical core of MAFFT {{ mafft_version }},
+    verified byte-identical against the unmodified upstream C build rather than
+    argued to be equivalent.
+
+    This package installs the nine ported components into a private libexec
+    under the names MAFFT's driver calls them by, and ships the upstream
+    `mafft` driver -- generated from `core/mafft.tmpl` by the same single `sed`
+    the upstream Makefile uses -- as **`mafft-oxide`**.
+
+    Because the driver has its component directory baked in, the launcher is
+    self-contained and sets no environment variable. A conda-forge `mafft` in
+    the same environment is untouched and remains genuinely stock, so the two
+    can be compared against each other.
+
+    Supported envelope. The nine components cover `mafft --auto` for inputs up
+    to 20,000 sequences, which is every branch of the driver's strategy table
+    that does not need an unported binary. Outside that envelope the launcher
+    exits non-zero naming the missing component rather than producing a
+    different alignment:
+
+      * `--clustalout` / `--phylipout`: `f2cl-rs` implements the FASTA writer
+        only and refuses the others.
+      * `--allowshift` with iterations: `dvtditr-rs` refuses the specificity
+        scoring path.
+      * `--parttree` and inputs past 20,000 sequences: need `splittbfast`,
+        which is not ported.
+
+    Use the stock `mafft` for those. Nothing in this package degrades silently.
+  doc_url: https://github.com/Provolut/mafft-oxide/blob/main/rust/README.md
+
+extra:
+  recipe-maintainers:
+    - Provolut
