@@ -153,9 +153,22 @@ seven million pairwise alignments, and it would characterise a strategy nobody
 runs at that size rather than the package. A 600 x 297 input takes the
 identical `--auto` branch -- `core/mafft.tmpl` sends any `nseq` between 500 and
 20000 to the `iterate=0 cycle=2` arm, so 600 and 3831 reach the same components
-by the same route -- and the full matrix finishes there. Two bounded claims
-rather than one unbounded run: the production path verified at true size, the
-strategy matrix verified at a size where it can complete.
+by the same route -- and the full matrix finishes there. It was run, same
+harness, same two arms:
+
+    one 600 x 297 input of the shape the consumer's build step produces:
+
+        pkg: pass=31 fail=0 refused=1
+
+Thirty-one passes and one refusal across the same 32 cases, and the refusal is
+again `--allowshift --globalpair --maxiterate 100`. That strategy is now the
+only one refused on two unrelated input shapes, which makes the refusal a
+property of the port -- `dvtditr -s` is unported, see the table above -- rather
+than of a payload. One input is evidence about one shape and one strategy set,
+nothing wider.
+
+Two bounded claims rather than one unbounded run: the production path verified
+at true size, the strategy matrix verified at a size where it can complete.
 
 ## If parity is the goal, the order that makes sense
 
