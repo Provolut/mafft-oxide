@@ -23,7 +23,7 @@ same argument vector, same input, same output files:
 | `version-rs` | `version` | the version string, with the missing trailing newline the script relies on |
 | `replaceu-rs` | `replaceu` | folds the input to a known alphabet and stamps the `_os_<i>_oe_<name>` markers |
 | `restoreu-rs` | `restoreu` | writes the original characters back onto the finished alignment's gap pattern |
-| `f2cl-rs` | `f2cl` | the output writer, **FASTA path only** -- clustal and phylip are refused, not approximated |
+| `f2cl-rs` | `f2cl` | the output writer: FASTA, clustal and phylip. `-d` (`--dash` record exclusion) is refused, not approximated |
 | `dndpre-rs` | `dndpre` | re-derives the `hat2` distance matrix from a finished alignment, for the second progressive cycle |
 
 The two aligners handle protein and nucleotide input, which the reader tells
@@ -220,7 +220,7 @@ them.
 | | |
 |---|---|
 | `src/`, `examples/`, `tests/` | the port, its harness support programs, its tests |
-| `verify/` | the twelve differential harnesses |
+| `verify/` | the thirteen differential harnesses |
 | `gen/` | the seventeen case and corpus generators they call |
 | `bench/` | profiling and the optimisation log |
 
@@ -321,6 +321,24 @@ at several `--maxiterate` settings, `--allowshift`, `--auto`, `--reorder`,
 *reference* run fails, so a missing wrapper cannot make the comparison pass
 vacuously.
 
+`verify_pkg.sh` is its all-nine sibling, for the conda package: one driver,
+`MAFFT_BINARIES` set explicitly per arm, a C libexec against an installed
+`libexec/mafft-oxide`. The difference is not the number of binaries but what it
+can see. `verify_e2e.sh` swaps one to three aligners into a copy of the C
+libexec and keeps the C's `f2cl`, so its `--clustalout` cases pass whatever
+`f2cl-rs` does; an all-nine run found on its first attempt that a package
+shipping `f2cl-rs` under that name could not serve them at all. Four guards,
+each verified by building the failure rather than reasoned about: the arms must
+not be byte-identical, every component must be a native executable (a
+`#!/bin/sh` shim that `exec`s the other arm passes a byte comparison and makes
+both arms one implementation), none may be missing, and `pass=0` is refused.
+The fourth is about the run rather than the directories -- `MAFFT_BINARIES`
+pointed at an empty directory must make the driver fail, because a driver that
+ignores the variable runs its own components for both arms and then every case
+passes while comparing an implementation against itself. Byte-identity being
+the expected result is exactly what makes that one invisible to the other
+three.
+
 `cargo test` needs no C build. Beyond four golden alignments and two bit-exact
 tables dumped from the C (the derived score matrix and the FFT sine table), it
 checks properties that must hold on *every* input, which is what catches the
@@ -353,6 +371,7 @@ different for the two at the top than for the rest:
 | `verify.sh`, generated `disttbfast` corpus | 12018/12018 identical | 8m 36s; **1m 34s** parallel, **54s** replayed |
 | `verify_tbfast.sh`, generated `tbfast` corpus | 1690/1690 identical | 3m 41s; **1m 17s** parallel, **27s** replayed |
 | `verify_e2e.sh`, 2 inputs × 22 wrapper strategies, all three aligners in Rust | 56/58 identical, 2 refused (`--allowshift`) | 28s |
+| `verify_pkg.sh --shapes`, the conda-installed package vs C, **all nine** components | 37/38 identical, 1 refused (`--allowshift`) | 42s |
 | 120 ProteinGym payloads through `mafft --auto`, all binaries Rust | 120/120 identical | 27s (10 workers) |
 | `verify_dvtditr.sh`, 32 staged `dvtditr` runs | 32/32 identical | 12s |
 | `verify_lalign_kernel.sh`, both AVX-512 kernels against the scalar paths | 15/15 identical | 8s |
@@ -360,10 +379,10 @@ different for the two at the top than for the rest:
 | `verify_tdi.sh`, 126 staged refinement runs | 126/126 identical | 3s |
 | `verify_td.sh`, 96 staged guide trees through the branch-weighting family | 96/96 identical | 2s |
 | `verify_gaplen.sh`, the `Gaplen` half of `-@` | 203/203 identical | 2s |
-| `verify_utils.sh`, the four utility binaries | 119/119 identical, 1 indeterminate | under 1s |
+| `verify_utils.sh`, the four utility binaries | 177/177 identical, 1 indeterminate | under 1s |
 | upstream `test/script`, the 9 cases runnable here | 8/9; `--allowshift` is refused, not wrong | — |
-| `cargo test --release` | 236/236, 0 ignored | 1.4s warm |
-| `bench/coverage.sh` | 91.20% region, 90.64% line | 16s |
+| `cargo test --release` | 242/242, 0 ignored | 1.4s warm |
+| `bench/coverage.sh` | 91.29% region, 90.74% line | 16s |
 
 **`verify_parallel.sh` runs either of the two big ones across every core**, and
 it is the same run rather than a cheaper one:
@@ -509,7 +528,7 @@ does not hold. `lalign_avx512`'s own documentation carries the argument.
 
 ## Notes for anyone extending this
 
-Thirteen things about the C are load-bearing and easy to "clean up" by accident.
+Fourteen things about the C are load-bearing and easy to "clean up" by accident.
 Most were found the hard way, by a corpus case rather than by reading.
 
 1. **Scratch buffers are never cleared.** `A__align` and friends keep `static`
@@ -594,6 +613,15 @@ Most were found the hard way, by a corpus case rather than by reading.
    "both negative" makes it live at `(0, 0)` and silently drops that last
    `part_imp_match_out_sc` — same rows, same DP score, wrong `impmatch`. Only a
    differential on the constraint score sees it (`verify_flh.sh`, 3 of 98).
+14. **`setmark_clustal`'s nucleotide table declares one group it never uses.**
+   `core/f2cl.c:35-38` assigns `weaker[0] = "AG"`, `weaker[1] = "CT"`,
+   `weaker[2] = "CU"` and then sets `nweaker = 2`, so the loop stops before
+   `"CU"` and a column of `C` and `U` gets no mark. Counting the assignments
+   instead of reading `nweaker` — which is what the code looks like it means —
+   marks that column `.` and changes the conservation row on nucleotide input.
+   It was 4 of 688 cases on the first differential run of the clustal writer,
+   all on `d_rna.fa`, all in the mark row only. The protein branch has no such
+   gap: its `nstrong`/`nweaker` match its nine and eleven groups.
 
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a
