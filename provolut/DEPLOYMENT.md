@@ -167,7 +167,7 @@ nlen<1000 & nseq<200   (local, it=2)      same seven
 nlen<10000 & nseq<500  (ktuples, cyc=2)   the above, plus dndpre and disttbfast
 ```
 
-**All of those are in `mafft-oxide` 0.2.0.** `pairlocalalign` is never
+**All of those are in `mafft-oxide` 0.3.0**, and have been since 0.2.0. `pairlocalalign` is never
 invoked: on the local branch the pairwise stage runs inside `tbfast -L`, which
 is why the port's `sample.linsi` profiling case is a `tbfast` invocation and
 not a `pairlocalalign` one. A component inventory suggests 26 are missing; for

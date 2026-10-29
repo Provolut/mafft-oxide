@@ -28,7 +28,16 @@ mkdir -p "$LIBEXEC" "$PREFIX/bin"
 # than aspirational: there is nothing to resolve and nothing to fetch.
 pushd "$SRC_DIR/rust"
 cargo build --release --locked --offline
+
+# conda-forge asks every Rust recipe to vendor its dependencies' licence text.
+# This crate has none -- `rust/Cargo.toml` declares no `[dependencies]` at all
+# -- so what this writes describes only the crate itself. Generated anyway:
+# the requirement is that the artifact be self-describing, and an empty answer
+# that was produced by the tool beats an absent one backed by an argument.
+cargo-bundle-licenses --format yaml --output "$SRC_DIR/THIRDPARTY.yml"
 popd
+
+test -s "$SRC_DIR/THIRDPARTY.yml" || { echo "cargo-bundle-licenses wrote nothing" >&2; exit 1; }
 
 # conda's rust activation exports CARGO_BUILD_TARGET, which puts the output
 # under `target/<triple>/release/` rather than `target/release/`. Handle both,
@@ -46,47 +55,70 @@ done
 test "$(ls -1 "$LIBEXEC" | wc -l)" = 9
 
 # The driver, generated the way the upstream Makefile generates it -- one
-# substitution over `_LIBDIR` -- but substituting a path the script works out
-# from its own location rather than a baked absolute one.
+# substitution over `_LIBDIR` -- plus one added fallback line.
 #
-# An absolute `_LIBDIR` is what upstream and conda-build expect to work:
-# conda-build finds the build prefix in a text file, records it in `has_prefix`,
-# and rewrites it at install time, which was verified to happen. The reason not
-# to rely on it is what happens when a prefix moves *after* install. A copied or
-# relocated environment keeps the old absolute path, which does not fail -- it
-# silently resolves to the components of the *original* installation, so the
-# launcher in environment B runs environment A's binaries. Measured: a `cp -a`
-# of the installed env produced a working launcher still pointing at the source
-# env's libexec. Silently running a different installation is a worse failure
-# than not starting, and this port exists not to produce quietly-different
-# answers.
+# `_LIBDIR` becomes the absolute libexec path, which is what upstream and
+# conda-build expect: conda-build finds the build prefix in a text file,
+# records it in `has_prefix`, and rewrites it at install time. Verified to
+# happen. Two reasons that literal matters rather than being merely
+# traditional. It is how the conda-forge C `mafft` package resolves its own
+# components, so this package resolves by the same mechanism as the package it
+# substitutes for. And it is *statically readable*: a tool that wants to know
+# which binaries a driver will run can read the line. A self-locating
+# `$(cd ...)` is opaque to that -- anything containing `$` is a shell expansion
+# an inspector should refuse to evaluate rather than guess at -- so a driver
+# with no literal anywhere makes such a check fail closed. The consumer's
+# build-parity test does exactly that check and did exactly that.
 #
-# Self-locating costs one `cd`. `$0` is the path the shell resolved, including
-# via PATH, and this line runs before the driver changes directory, so a
-# relative invocation still resolves. If the directory is absent the
-# substitution yields an empty prefix and the driver fails at its first
-# component rather than guessing.
+# The fallback covers what the literal cannot. A copied or relocated
+# environment keeps the old absolute path, which does not fail -- it silently
+# resolves to the components of the *original* installation, so the launcher in
+# environment B runs environment A's binaries. Measured: a `cp -a` of the
+# installed env produced a working launcher still pointing at the source env's
+# libexec. So `[ -d "$prefix" ]` guards the literal and self-location takes
+# over only when that directory is gone, which is precisely the moved-or-copied
+# case -- and the case where there is nothing static to read anyway. Normal
+# installs never reach it, so what an inspector reads is what runs.
+#
+# Order matters and the obvious order is wrong. Literal-as-fallback, with
+# self-location first, would leave an inspector reading a literal the driver
+# does not use -- reporting a component directory that is not the one in use.
+# Confidently wrong beats refusing only in the sense that it is quieter.
+#
+# `$0` is the path the shell resolved, including via PATH, and this runs before
+# the driver changes directory, so a relative invocation still resolves. Note
+# the whole block sits in the `else` of `if [ "$MAFFT_BINARIES" ]`, so an
+# explicit `MAFFT_BINARIES` still wins over both -- which is what lets this
+# package be compared against another build.
 #
 # awk on an exact line match rather than sed: the replacement text is full of
 # characters sed would reinterpret (`&`, `$`, quotes), and matching the whole
 # line guarantees nothing else in a 3069-line script is touched.
-REPL='"$(cd "$(dirname "$0")/../libexec/mafft-oxide" && pwd)"'
-awk -v repl="$REPL" '
-  $0 == "\tprefix=_LIBDIR" { print "\tprefix=" repl; n++; next }
+FALLBACK='\t[ -d "$prefix" ] || prefix="$(cd "$(dirname "$0")/../libexec/mafft-oxide" && pwd)"'
+awk -v lib="$LIBEXEC" -v fb="$FALLBACK" '
+  $0 == "\tprefix=_LIBDIR" { print "\tprefix=" lib; print fb; n++; next }
   { print }
   END { if (n != 1) { print "expected exactly one prefix=_LIBDIR line, saw " n > "/dev/stderr"; exit 1 } }
 ' "$SRC_DIR/core/mafft.tmpl" > "$PREFIX/bin/mafft-oxide"
 chmod 755 "$PREFIX/bin/mafft-oxide"
 
 # That substitution is the one piece of this recipe that edits executable logic
-# rather than copying it, so check it landed and that nothing else changed.
-grep -qF 'prefix="$(cd "$(dirname "$0")/../libexec/mafft-oxide" && pwd)"' \
+# rather than copying it, so check both lines landed and that nothing else
+# changed.
+grep -qxF "	prefix=$LIBEXEC" "$PREFIX/bin/mafft-oxide" \
+  || { echo "the _LIBDIR substitution did not bake the literal libexec path" >&2; exit 1; }
+grep -qF '[ -d "$prefix" ] || prefix="$(cd "$(dirname "$0")/../libexec/mafft-oxide" && pwd)"' \
   "$PREFIX/bin/mafft-oxide" \
-  || { echo "the _LIBDIR substitution did not produce the expected line" >&2; exit 1; }
+  || { echo "the self-locating fallback line is missing" >&2; exit 1; }
+test "$(grep -cF '[ -d "$prefix" ] || prefix=' "$PREFIX/bin/mafft-oxide")" = 1 \
+  || { echo "the fallback line appears more than once" >&2; exit 1; }
+# Drop the one line this recipe adds, normalise the two `prefix=` lines that
+# upstream already has, and the rest must be byte-identical to the template.
 d=$(diff <(sed 's:^\tprefix=.*:PREFIXLINE:' "$SRC_DIR/core/mafft.tmpl") \
-         <(sed 's:^\tprefix=.*:PREFIXLINE:' "$PREFIX/bin/mafft-oxide") | wc -l)
+         <(grep -vF '[ -d "$prefix" ] || prefix=' "$PREFIX/bin/mafft-oxide" \
+           | sed 's:^\tprefix=.*:PREFIXLINE:') | wc -l)
 test "$d" = 0 \
-  || { echo "generated driver differs from mafft.tmpl beyond the prefix line" >&2; exit 1; }
+  || { echo "generated driver differs from mafft.tmpl beyond the prefix lines" >&2; exit 1; }
 
 # It must be a valid shell script. A substitution that produced something
 # syntactically broken would otherwise only show up at run time.

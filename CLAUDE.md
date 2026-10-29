@@ -95,8 +95,8 @@ reasoning about it.
 
 `rust/` transliterates C. Where the C's evaluation order, its persistent
 `static` scratch buffers, or its edge-case behaviour look wrong, they are
-usually load-bearing: `rust/README.md`'s "Notes for anyone extending this"
-lists eleven cases where tidying the obvious way changes alignments. Do not
+usually load-bearing: `rust/EXTENDING.md`'s "Notes for anyone extending this"
+lists fourteen cases where tidying the obvious way changes alignments. Do not
 "clean up" C-shaped code without a differential run proving the output is
 unchanged.
 

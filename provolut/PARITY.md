@@ -93,7 +93,7 @@ rather than approximate.
   whatever the buffer held before `commongappick` moved the terminator. The
   conservation row therefore depends on stale heap contents, and reproducing
   it means keeping that tail rather than truncating. That is the same class as
-  items 1 and 2 of the README's extending notes, and it needs a differential
+  items 1 and 2 of `rust/EXTENDING.md`'s notes, and it needs a differential
   built for it rather than an afternoon.
 
 The clustal and phylip writers were the third refusal until today's commit and

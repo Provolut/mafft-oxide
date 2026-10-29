@@ -1,6 +1,6 @@
 [package]
 name = "mafft-oxide"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Bit-exact Rust port of MAFFT's multiple-sequence-alignment algorithms"
 license = "BSD-3-Clause"

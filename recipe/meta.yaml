@@ -1,4 +1,4 @@
-{% set version = "0.2.0" %}
+{% set version = "0.3.0" %}
 {% set mafft_version = "7.526" %}
 
 package:
@@ -13,11 +13,21 @@ source:
   git_rev: HEAD
 
 build:
-  # Bumped from 0: the contents changed after a 0 had been built (the driver
-  # became self-locating, and `f2cl-rs` gained the clustal and phylip writers).
-  # rattler and conda cache by filename, so shipping different contents under
-  # one build string hands whoever installs next whichever copy landed first.
+  # Bumped on every content change, because rattler and conda cache by
+  # filename: shipping different contents under one build string hands
+  # whoever installs next whichever copy landed first. 0 -> 1 was the
+  # self-locating driver and `f2cl-rs`'s clustal and phylip writers; 1 -> 2 is
+  # the driver's baked literal prefix (see recipe/build.sh). The version
+  # change reset this to 0; 0 -> 1 is the corrected `about.description`, which
+  # had still described the driver as self-locating and the substitution as a
+  # single `sed`. A 0 had already been built by then, so it gets a new number
+  # rather than new contents under the same filename -- the rule above,
+  # applied to myself.
   number: 1
+  # The driver is a POSIX shell script and the components are built with
+  # conda's unix rust toolchain. `__unix` as a run dependency expressed this
+  # too, but a skip is what conda-forge's build matrix reads.
+  skip: true  # [win]
   # `build.sh` next to this file is picked up automatically; naming it in a
   # `script:` key as well is an error ("Found a build.sh script and a
   # build/script section inside meta.yaml").
@@ -30,12 +40,14 @@ requirements:
   build:
     - {{ compiler('rust') }}
     - {{ compiler('c') }}        # cargo needs a linker
-  run:
-    # The driver is a POSIX shell script. Its only external commands are
-    # cat awk grep tr head sed wc mktemp basename uname tail sort dirname --
-    # all coreutils/busybox-level, and both `perl` references in the template
-    # are commented out. So there is no interpreter dependency to declare.
-    - __unix
+    - {{ stdlib('c') }}          # required alongside a compiler
+    - cargo-bundle-licenses      # writes THIRDPARTY.yml, listed below
+  # No `run:` section at all. The driver is a POSIX shell script whose only
+  # external commands are cat awk grep tr head sed wc mktemp basename uname
+  # tail sort dirname -- all coreutils/busybox-level -- and both `perl`
+  # references in the template are commented out. The nine components are
+  # static but for libc, which the compiler's own run-export pins. So there is
+  # nothing left to declare.
 
 test:
   files:
@@ -47,8 +59,22 @@ about:
   home: https://github.com/Provolut/mafft-oxide
   license: BSD-3-Clause
   license_family: BSD
+  # Resolved against the extracted source, not against this directory: a
+  # `../LICENSE` works here only because conda-build also searches the recipe
+  # dir, and in a feedstock layout that path is the feedstock root instead.
+  #
+  # `licenses/MAFFT` ships because this package redistributes `core/mafft.tmpl`
+  # essentially verbatim -- 3069 of 3070 lines, still declaring
+  # `version="v7.526"` -- so Katoh's licence applies to what is installed, not
+  # merely to what it was derived from. `licenses/MAFFT-extensions` is
+  # deliberately *not* here: its Vienna RNA and MXSCARNA terms forbid
+  # redistribution for a fee, and shipping that text would assert those terms
+  # over a package containing nothing from `extensions/`. Checked rather than
+  # assumed -- no file under `rust/src/` derives from it.
   license_file:
-    - ../LICENSE
+    - LICENSE
+    - licenses/MAFFT
+    - THIRDPARTY.yml
   summary: Bit-exact Rust port of MAFFT's alignment components, with the upstream driver
   description: |
     mafft-oxide is a Rust port of the numerical core of MAFFT {{ mafft_version }},
@@ -57,13 +83,19 @@ about:
 
     This package installs the nine ported components into a private libexec
     under the names MAFFT's driver calls them by, and ships the upstream
-    `mafft` driver -- generated from `core/mafft.tmpl` by the same single `sed`
-    the upstream Makefile uses -- as **`mafft-oxide`**.
+    `mafft` driver as **`mafft-oxide`**: `core/mafft.tmpl` with its `_LIBDIR`
+    placeholder resolved the way the upstream Makefile resolves it, plus one
+    added fallback line. 3070 lines out of 3069 in, and nothing else changed.
 
-    The launcher is self-contained and sets no environment variable: it works
-    its component directory out from its own location, so it keeps working if
-    the environment is copied or moved. `MAFFT_BINARIES` is still honoured when
-    set, which is what lets the package be compared against another build. A
+    The launcher sets no environment variable. Its component directory is
+    baked in as a literal path and rewritten at install time -- the same
+    mechanism the conda-forge `mafft` package uses -- so a tool that inspects
+    the driver can read which components it will run instead of having to
+    evaluate shell. If that directory is ever missing, which is what a copied
+    or relocated environment leaves behind, the launcher works the directory
+    out from its own location rather than silently running another
+    installation's binaries. `MAFFT_BINARIES` overrides both when it is set,
+    which is what lets this package be compared against another build. A
     conda-forge `mafft` in the same environment is untouched and remains
     genuinely stock, so the two can be compared against each other.
 
@@ -88,4 +120,4 @@ about:
 
 extra:
   recipe-maintainers:
-    - Provolut
+    - ingmarschuster
