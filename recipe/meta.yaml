@@ -6,11 +6,13 @@ package:
   version: {{ version }}
 
 source:
-  # A clone of the committed tree, not `path: ..`, which would copy
-  # `rust/target/` -- several GB of build output -- into the work directory.
-  # For a release build, replace this with the tagged tarball and its sha256.
-  git_url: ..
-  git_rev: HEAD
+  # The tagged release tarball rather than `path: ..` (which would copy
+  # `rust/target/`, several GB of build output, into the work directory) and
+  # rather than `git_url` (which builds whatever is checked out, so the recipe
+  # and the thing it builds could disagree). A url plus a sha256 is also what
+  # conda-forge requires: it pins the build to bytes a reviewer can fetch.
+  url: https://github.com/Provolut/mafft-oxide/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: 186f2244c6ab3c3d4550af9fe4b66dac59655ca2a8f31d90143507836abb7130
 
 build:
   # Bumped on every content change, because rattler and conda cache by
@@ -22,8 +24,10 @@ build:
   # had still described the driver as self-locating and the substitution as a
   # single `sed`. A 0 had already been built by then, so it gets a new number
   # rather than new contents under the same filename -- the rule above,
-  # applied to myself.
-  number: 1
+  # applied to myself. 1 -> 2 is `source:` moving from the working tree to the
+  # tagged tarball; the tree is the same commit, but the recipe is not, and the
+  # rule above does not make an exception for a change I expect to be a no-op.
+  number: 2
   # The driver is a POSIX shell script and the components are built with
   # conda's unix rust toolchain. `__unix` as a run dependency expressed this
   # too, but a skip is what conda-forge's build matrix reads.
