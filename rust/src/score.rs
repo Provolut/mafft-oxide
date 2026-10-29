@@ -5,6 +5,7 @@
 //! `core/mltaln9.c`.
 
 use crate::constants::Constants;
+use std::cell::RefCell;
 
 /// `commongappickpair()`: drop columns that are gaps in both sequences.
 fn commongappickpair(i1: &[u8], i2: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -36,11 +37,45 @@ pub fn makeskiptable(seq: &[u8]) -> Vec<i32> {
 }
 
 /// `commongappickpairfast()`: the skip-table accelerated form of the above.
-fn commongappickpairfast(i1: &[u8], i2: &[u8], skip1: &[i32], skip2: &[i32]) -> (Vec<u8>, Vec<u8>) {
-    let mut r1 = Vec::with_capacity(i1.len());
-    let mut r2 = Vec::with_capacity(i1.len());
-    let mut p1 = 0usize;
-    let mut p2 = 0usize; // cursors into i1 / i2 (they advance together)
+///
+/// Writes into `r1`/`r2` rather than returning two fresh `Vec`s, and returns
+/// how many columns it wrote. `naivepairscorefast` calls this once per
+/// sequence pair -- 311,655 times on a 790-sequence input -- and the two
+/// allocations cost 1.53G instructions in `Vec::push` plus 0.42G in allocator
+/// plumbing, measured with callgrind against the C's 5.89G for this function
+/// and the scoring loop together. The C `calloc`s and `free`s two buffers per
+/// call; this reuses one pair per thread.
+///
+/// The bytes written and the order they are written in are unchanged, so the
+/// f64 sum `pairscore` then computes over them is bit-identical.
+fn commongappickpairfast(
+    i1: &[u8],
+    i2: &[u8],
+    skip1: &[i32],
+    skip2: &[i32],
+    r1: &mut Vec<u8>,
+    r2: &mut Vec<u8>,
+) -> usize {
+    // The two aligned rows are the same length by construction; the C walks
+    // them with one pair of pointers that it advances together. Slicing both
+    // to one hoisted length lets the indexing below drop its bounds checks.
+    debug_assert_eq!(i1.len(), i2.len());
+    let len = i1.len().min(i2.len());
+    let i1 = &i1[..len];
+    let i2 = &i2[..len];
+    if r1.len() < len {
+        r1.resize(len, 0);
+    }
+    if r2.len() < len {
+        r2.resize(len, 0);
+    }
+    let o1 = &mut r1[..len];
+    let o2 = &mut r2[..len];
+
+    let mut n = 0usize;
+    // `p1` and `p2` in the C advance by the same amounts and are compared
+    // against the same bound, so they are one cursor.
+    let mut p = 0usize;
     let mut k1 = 0usize;
     let mut k2 = 0usize; // cursors into skip1 / skip2
     let mut skipped1 = 0i32;
@@ -49,48 +84,65 @@ fn commongappickpairfast(i1: &[u8], i2: &[u8], skip1: &[i32], skip2: &[i32]) -> 
         let cand1 = skip1[k1] - skipped1;
         let cand2 = skip2[k2] - skipped2;
         let skip = if cand1 < cand2 { cand1 } else { cand2 };
-        p1 += skip as usize;
-        p2 += skip as usize;
+        p += skip as usize;
         skipped1 += skip;
         skipped2 += skip;
-        if p1 >= i1.len() {
+        if p >= len {
             break;
         }
-        if i1[p1] != b'-' {
+        // Read before the two updates below, which cannot touch `i1`/`i2`.
+        let b1 = i1[p];
+        let b2 = i2[p];
+        if b1 != b'-' {
             skipped1 = 0;
             k1 += 1;
         } else {
             skipped1 += 1;
         }
-        if i2[p2] != b'-' {
+        if b2 != b'-' {
             skipped2 = 0;
             k2 += 1;
         } else {
             skipped2 += 1;
         }
-        r1.push(i1[p1]);
-        r2.push(i2[p2]);
-        p1 += 1;
-        p2 += 1;
+        o1[n] = b1;
+        o2[n] = b2;
+        n += 1;
+        p += 1;
     }
-    (r1, r2)
+    n
+}
+
+thread_local! {
+    /// The scratch pair `commongappickpairfast` writes into, grown
+    /// monotonically and never shrunk -- the same shape as `commonip`'s
+    /// matrix pool, and for the same reason.
+    static PICKED: RefCell<(Vec<u8>, Vec<u8>)> = const { RefCell::new((Vec::new(), Vec::new())) };
 }
 
 /// The shared scoring loop of `naivepairscore11` / `naivepairscorefast`.
 fn pairscore(cn: &Constants, s1: &[u8], s2: &[u8], penal: i32) -> f64 {
+    // Both callers build the two rows in lockstep, so they are the same
+    // length and the C's `while( *p1 )` and its inner `while( *p2 == '-' )`
+    // run to the same bound. Hoisting it lets the indexing below drop its
+    // bounds checks; the additions, and their order, are untouched.
+    debug_assert_eq!(s1.len(), s2.len());
+    let n = s1.len().min(s2.len());
+    let s1 = &s1[..n];
+    let s2 = &s2[..n];
     let mut vali = 0.0f64;
     let mut p = 0usize;
-    while p < s1.len() {
+    while p < n {
         if s1[p] == b'-' {
             vali += penal as f64;
-            while p < s1.len() && s1[p] == b'-' {
+            while p < n && s1[p] == b'-' {
                 p += 1;
             }
             continue;
         }
         if s2[p] == b'-' {
             vali += penal as f64;
-            while p < s2.len() && s2[p] == b'-' {
+            while p < n && s2[p] == b'-' {
                 p += 1;
             }
             continue;
@@ -116,8 +168,12 @@ pub fn naivepairscorefast(
     skip2: &[i32],
     penal: i32,
 ) -> f64 {
-    let (s1, s2) = commongappickpairfast(seq1, seq2, skip1, skip2);
-    pairscore(cn, &s1, &s2, penal)
+    PICKED.with(|cell| {
+        let mut cell = cell.borrow_mut();
+        let (r1, r2) = &mut *cell;
+        let n = commongappickpairfast(seq1, seq2, skip1, skip2, r1, r2);
+        pairscore(cn, &r1[..n], &r2[..n], penal)
+    })
 }
 
 /// `intergroup_score()`: the weighted sum-of-pairs score between two aligned
