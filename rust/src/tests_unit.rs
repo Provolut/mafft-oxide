@@ -1093,6 +1093,97 @@ fn fast_and_plain_pair_scores_agree() {
     }
 }
 
+/// The premise that lets `pairscore` accumulate in `i64`.
+///
+/// Its two addends are `penalty_dist` and an `amino_dis` entry, both `i32`, so
+/// every partial sum is an exact integer and the `i64` chain agrees with the
+/// C's `double` chain bit-for-bit. That is an argument about the *types* of
+/// the addends, and a future change could break it without touching
+/// `pairscore` at all -- by scaling the matrix to a fraction, say. This fails
+/// if that happens, rather than letting the port quietly diverge from the C.
+///
+/// Also pins the magnitude. Integers stay exactly representable in an f64 up
+/// to 2^53; the bound asserted here is twelve orders of magnitude below that,
+/// so the exactness does not rest on the sum merely happening to be small.
+#[test]
+fn score_is_integral() {
+    use crate::score;
+    let cn = tree_constants();
+
+    // Every matrix entry the loop can reach is an integer, and so is the
+    // penalty -- the two facts the `i64` accumulator rests on.
+    assert_eq!(cn.penalty_dist as f64, (cn.penalty_dist as f64).trunc());
+    for i in 0..cn.nalphabets {
+        for j in 0..cn.nalphabets {
+            let v = cn.amino_dis[cn.amino[i] as usize][cn.amino[j] as usize];
+            assert_eq!(
+                v as f64,
+                (v as f64).trunc(),
+                "amino_dis[{}][{}] is not an integer",
+                i,
+                j
+            );
+        }
+    }
+
+    let mut ast = AlignState::new();
+    let seqs = deterministic_seqs(6, 70, 13579);
+    let mut aligned: Vec<Vec<u8>> = Vec::new();
+    for i in 0..seqs.len() - 1 {
+        let mut a = seqs[i].clone();
+        let mut b = seqs[i + 1].clone();
+        ast.g_align11(
+            &cn,
+            &cn.n_dis_consweight_multi,
+            cn.penalty,
+            cn.penalty_ex,
+            &mut a,
+            &mut b,
+            false,
+            false,
+            b'-',
+        );
+        aligned.push(a);
+        aligned.push(b);
+    }
+    let w = aligned.iter().map(|s| s.len()).max().unwrap();
+    for s in aligned.iter_mut() {
+        while s.len() < w {
+            s.push(b'-');
+        }
+    }
+    let skip: Vec<Vec<i32>> = aligned.iter().map(|s| score::makeskiptable(s)).collect();
+
+    let mut checked = 0usize;
+    for i in 0..aligned.len() {
+        for j in i + 1..aligned.len() {
+            for &penal in &[0, cn.penalty_dist] {
+                let plain = score::naivepairscore11(&cn, &aligned[i], &aligned[j], penal);
+                let fast = score::naivepairscorefast(
+                    &cn,
+                    &aligned[i],
+                    &aligned[j],
+                    &skip[i],
+                    &skip[j],
+                    penal,
+                );
+                for (what, v) in [("naivepairscore11", plain), ("naivepairscorefast", fast)] {
+                    assert_eq!(v, v.trunc(), "{} returned {}, not an integer", what, v);
+                    assert!(
+                        v.abs() < 1.0e9,
+                        "{} returned {}, outside the magnitude this accumulator assumes",
+                        what,
+                        v
+                    );
+                }
+                checked += 1;
+            }
+        }
+    }
+    // A pass count of zero would make every assertion above vacuous.
+    assert_eq!(checked, aligned.len() * (aligned.len() - 1), "wrong case count");
+}
+
 /// The skip table counts the gaps before each residue, so it must sum to the
 /// number of gaps and have one more entry than there are residues.
 #[test]
