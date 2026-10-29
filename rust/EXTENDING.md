@@ -177,6 +177,27 @@ Most were found the hard way, by a corpus case rather than by reading.
    all on `d_rna.fa`, all in the mark row only. The protein branch has no such
    gap: its `nstrong`/`nweaker` match its nine and eleven groups.
 
+15. **A dropped column must not end a gap run.** `naivepairscorefast` scores the
+   columns that are left after the ones gapped in *both* rows are thrown away,
+   and it charges a gap run once rather than per column. Those two rules
+   interact: a run of gaps in row 1 that is interrupted only by a column gapped
+   in both rows is still *one* run, because that column is not there any more.
+   The C gets this for free by picking the columns into a buffer first and
+   scoring the buffer second. The port fuses the two passes, so it carries the
+   open run across columns explicitly, and the obvious tidy — clearing that
+   state when a column is dropped, which reads like the right thing to do —
+   charges the second half of the run again. Measured, not reasoned: it moves
+   the distance matrix on ordinary input, caught by
+   `fused_pair_score_matches_the_unfused_one_on_gap_heavy_rows`, which exists
+   because an aligner's own output rarely produces interior both-gap columns
+   and so would not have caught it.
+
+   The same function reads its two skip tables only at a both-gap column. That
+   is not a shortcut: the C's `min(skip1[k1] - skipped1, skip2[k2] - skipped2)`
+   is non-zero exactly there, because a row sitting on a residue has consumed
+   every gap recorded before it and contributes zero. Reading them on every
+   column instead is correct and was 1.56x slower.
+
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a
 power of two) and Rust's `f64::sin` is the platform libm, so it agrees here;

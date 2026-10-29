@@ -1636,3 +1636,152 @@ silently if anyone does want to vectorise this loop later.
 Byte-identical to the C on both payloads, and identical to the port's own
 pre-patch output; `verify.sh` pass=12018 fail=0; `verify_tbfast.sh` pass=1690
 fail=0; 243 tests; region coverage 91.30%.
+
+## The FFT-NS-2 build path: 1.37x slower becomes 1.14x faster
+
+The 1.35x left at the end of the previous entry was recorded as "bounds-check
+branch throughput in the O(n²) distance matrix", with the work named as
+iterator rewrites in `a_align`, the distance-matrix loop, `falign` and
+`match_calc`. Three of those four would have been wasted effort. The entry also
+said the warm path does not run the build step, which stopped being true: the
+port became the default aligner on linux-64 for a consumer whose production
+call is `--auto --preservecase` at 3831 sequences, so the build step is the
+path that runs.
+
+### Where the gap was, by subtraction rather than by profile
+
+`-E` is the number of progressive cycles. `-E 1` does the ktuple matrix, the
+guide tree and one progressive alignment; `-E 2` adds a second cycle and, in
+between, the O(n²) distance matrix recomputed over the *aligned* sequences.
+790 sequences, best of five, same binaries, same input:
+
+```
+arm     -E 1    -E 2    increment
+C       357     823     466
+port    357    1124     767
+```
+
+Everything `-E 1` touches is at parity to the millisecond. The whole of the gap
+is in the increment, and the increment is dominated by the one function the
+recompute calls per pair. That is a two-line measurement and it retired three
+of the four candidate sites outright: `a_align` and `falign` run in the half
+that already matches, and `match_calc` -- which costs 1.365G against the C's
+0.361G, the worst *ratio* anywhere in the binary -- also runs there, so its
+3.8x buys nothing. A ratio is not a priority.
+
+### What was actually expensive, and the hypothesis that was wrong
+
+A line-table build (`CARGO_PROFILE_RELEASE_DEBUG=line-tables-only` into a
+separate target dir, so the shipped profile is untouched; output byte-identical
+to the release binary) splits `naivepairscorefast`'s 6.81G:
+
+```
+commongappickpairfast  ~4.50G   skip1[k1] 555M, skip2[k2] 694M,
+                                the two `!= '-'` branches 831M + 969M,
+                                the scratch writes 415M + 138M
+pairscore              ~1.55G   of which amino_dis 202M
+```
+
+So two thirds of it was the column *picking*, and `amino_dis` -- the line an
+`i64` accumulator would have touched -- was 0.83% of the program. The previous
+entry's revert of that accumulator was right, and right for this path and not
+only for the refinement one.
+
+The obvious reading of that table is that the scratch writes and the second
+pass are the waste, so the two were fused: generate each kept column and score
+it in the same walk, no buffers, columns read once. The addend chain is
+untouched, so it is bit-identical by construction rather than by tolerance.
+
+**It was worth 0.25%.** 24,224M instructions to 24,164M, and 1123 ms to 1081.
+The second pass was walking a small cache-hot buffer with no carried
+dependency, which is the cheapest kind of work there is; removing 1.7G of
+instructions that retire several per cycle buys close to nothing.
+
+### The real cost was the skip tables, consulted per column
+
+What the fusion did not remove is the loop's serial dependency: `skip1[k1]`
+loads, feeds a subtract, feeds a min, feeds the cursor, feeds the next load,
+with two bounds checks in the middle. Dropping the tables entirely and walking
+every column of the alignment -- same scoring, same order -- was measured as a
+control:
+
+```
+best of 9, interleaved, 790 sequences, -E 2 -F, all byte-identical to the C
+  C                    822 ms   1.000
+  port, HEAD          1123 ms   1.366
+  port, fused         1081 ms   1.315
+  port, no tables      708 ms   0.861
+```
+
+1.59x, from deleting the accelerator. The per-column table traffic cost far
+more than the columns it skipped.
+
+That control cannot ship: it is O(alignment width) per pair where the table is
+O(columns kept), and for two short rows in a wide alignment those diverge
+without bound. That is the case `naivepairscorefast` was added upstream for.
+Stated as a bound, not as a measurement -- a 300-row payload of 40- and
+1200-residue sequences failed to show it, because at 300 rows the O(n·L²)
+progressive step swamps the O(n²) matrix and all arms land within noise.
+
+The shipped loop keeps the jump and pays for it only where it can fire. The
+C computes `min(skip1[k1] - skipped1, skip2[k2] - skipped2)` at the top of
+every column; that minimum is non-zero **exactly** when both rows are inside a
+gap run, because a row sitting on a residue has consumed every gap recorded
+before it and contributes 0. Both rows gapped is also exactly the condition for
+dropping the column. So testing the two bytes first and reading the tables only
+then makes the same jumps, with the loads and the dependency off the common
+path:
+
+```
+  C                    822 ms   1.000
+  port, hybrid         720 ms   0.876
+```
+
+1.56x against HEAD, and the port now beats the C on the build path. The hybrid
+gives up 2% against the no-table control to keep the asymptotic bound, which is
+the right trade for a function whose whole reason to exist is that bound.
+
+### Verified
+
+Byte-identical to the C, and to the port's own pre-patch output, on both
+payloads and both `-E` arms. `verify.sh` pass=12018 fail=0;
+`verify_tbfast.sh` pass=1690 fail=0; 244 tests; region coverage
+91.33%, line 90.77%.
+
+`fused_pair_score_matches_the_unfused_one_on_gap_heavy_rows` is the new test
+and it generates its gaps rather than taking what an aligner produces, because
+the paths the fusion introduced -- the skip-table jump, and a gap run in one
+row spanning a column dropped for being gapped in both -- need both-gap columns
+on purpose. It asserts bit equality against `naivepairscore11`, which drops
+those columns by looking at them and consults no table, and it asserts both a
+case count and that at least 200 of its row pairs contained a both-gap column,
+so it cannot pass by having tested the old path only. Four mutations were run
+against it: charging every gap column instead of once per run, failing to
+terminate a run on a residue pair, and letting a dropped column terminate a run
+are all caught; widening the jump test from "both rows gapped" to "row 2
+gapped" is not, and should not be -- with only one row gapped the minimum is 0
+and the `skip > 0` guard declines the jump, so that mutation is slower and not
+wrong.
+
+### Why `profile.tsv` could not have caught this
+
+The database barely moves: `sample.fftns2` goes 923,130,040 instructions to
+908,784,979, and the other rows likewise shift by about a percent. `test/sample`
+is 36 sequences, so its cycle-2 recompute is 630 pairs where the production call
+has 7.3 million, and the function that carried the whole gap is nearly absent
+from every row. The database is still the right evidence for what it covers; it
+just does not cover this, and the `-E 1`/`-E 2` subtraction above is what does.
+`sample.memsave`'s `ms_ratio` reads 1.033 to 1.121 in the same regeneration
+while its instruction count *falls*, which is wall-clock noise on a 848 ms case
+and not a finding.
+
+Those two counts are from a second run. The first one also reported 12018/0 and
+1690/0, but `cargo` relinked `target/release/disttbfast-rs` two minutes and
+forty-seven seconds into it, because the new test went into the library and the
+binaries depend on the library. The mutation runs in between used
+`cargo test --lib`, which does not build the binaries, and the timestamps say
+the relink happened after the last mutation was reverted -- so the first run
+almost certainly tested the right thing. "Almost certainly" is not what these
+harnesses are for. They were re-run against binaries copied to a directory
+nothing else writes to, with `sha256sum -c` after the run confirming neither
+had changed while it was in progress.

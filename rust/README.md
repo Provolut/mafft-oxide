@@ -68,13 +68,18 @@ It depends on the shape of the work, in both directions:
 | workload | port against the C |
 |---|---|
 | L-INS-i refinement (ESCOTT's `--auto`, 12 ProteinGym payloads) | **2.32x faster** than `gcc -O3`; 1.38x faster than `-march=native` |
-| FFT-NS-2 build path, 790 to 3831 sequences | **1.35x slower** |
+| FFT-NS-2 build path, 790 sequences | **1.14x faster** |
 
 The refinement win is two AVX-512 kernels in `L__align11` plus removed work in
-`dvtditr`'s hot loops. The build-path deficit is bounds-check branch throughput
-in the O(n²) distance matrix that `--auto`'s second cycle recomputes: the port
-issues 1.96G more conditional branches than the C there, at a *better*
-mispredict rate and with better cache behaviour.
+`dvtditr`'s hot loops. The build-path win is in the O(n²) distance matrix that
+`--auto`'s second cycle recomputes over the aligned rows: the port reads its gap
+skip tables only at a column gapped in both rows, which is the only place their
+jump can be non-zero, instead of on every column as the C does.
+
+The build path was 1.37x *slower* until it was measured properly rather than
+profiled by function. Everything outside that one matrix is at parity to the
+millisecond, so three of the four sites an earlier profile had implicated were
+in the half that already matched.
 
 The C's kernel is compiled in, so a build carrying it crashes without AVX-512
 and a portable build never gets it — which is why the conda-forge 7.526 is the
@@ -88,7 +93,7 @@ Bit-exactness is measured, not argued.
 | | |
 |---|---|
 | differential against a compiled `core/` | **12,018 + 1,690** comparisons, all byte-identical |
-| unit and property tests, no C needed | **243**, 0 ignored |
+| unit and property tests, no C needed | **244**, 0 ignored |
 | region coverage | **91.33%** |
 | upstream's own `test/script` | 8/9 — the ninth is `--allowshift`, refused rather than wrong |
 
@@ -98,7 +103,7 @@ present.
 
 ## Extending it
 
-`EXTENDING.md` first. Fourteen things about the C are load-bearing and easy to
+`EXTENDING.md` first. Fifteen things about the C are load-bearing and easy to
 "clean up" by accident — scratch buffers that are never zeroed, deliberate
 off-by-one reads of the gap tables, a comparison against the wrong variable
 that decides which anchors survive. Most were found by a corpus case rather
