@@ -43,68 +43,68 @@ quietly returning a different alignment:
   own past 30000 columns) is ported, both its DP and its FFT anchoring, and so
   is `-&` (`Aalign`).
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
-- **threads.** The port is single-threaded and refuses `-C > 0`. For
-  `disttbfast` and `tbfast` that is a "not implemented", not a "cannot be":
-  measured on 39 corpus inputs x 3 repeats, the C's own binaries give
-  byte-identical `pre`, `order`, `hat2` and `hat3` at `-C 4` as at `-C 0`,
-  including on an 80-sequence input where four threads are a real 3.3x speedup.
-  For `dvtditr` it is closer to "cannot": the C's threaded refinement is
-  **nondeterministic** — three `--thread 4` runs of one input give three
-  different alignments — so there is no fixed reference to be byte-identical
-  to. A callgrind profile confirms `athread` never runs at `-C 0`. Run with
-  `-C 0` / `-C 0-0`, which is what the wrapper passes by default.
+- **threads, partly.** `disttbfast` honours `-C` for the three all-pairs
+  matrices -- the k-tuple matrix, its length-corrected second pass, and the
+  matrix recomputed over the aligned rows -- and runs everything else
+  sequentially. `tbfast` and `dvtditr` still refuse `-C > 0` entirely.
 
-  Re-measured and widened on 2026-10-29, because the refusal's own message
-  ("threads change the result") is not true for `disttbfast` and was costing a
-  consumer a real speedup. `disttbfast -C 0-0` against `-C 1-1`, `-C 8-8` and
-  `-C 8-0`, comparing stdout *and* every side file the run leaves: 86 corpus
-  inputs x 3 specs x 4 strategies (FFT-NS-2, NW-NS-2, memsave, cycle-1) = 1032
-  comparisons, plus the 790- and 123-sequence payloads x 3 = 6. All 1038
-  byte-identical, against a `core/` built with `-Denablemultithread`. On 12
-  cores at 790 sequences the C gets 825 ms to 464 at `-C 8-8` and 569 at
-  `-C 8-0`; a consumer measured 3.74x at 3831.
+  Those matrices are safe to thread for a structural reason, not a measured
+  one: each cell is a pure function of its own `(i, j)` and of data the loop
+  does not write, so no thread count can change the result. `verify_threads.sh`
+  checks it anyway, over eight `-C` specs including counts that do not divide
+  the row count and one larger than it -- 2752 comparisons, each against the
+  C's *sequential* output rather than against the port's own, since a port that
+  were self-consistently wrong at every count would pass the weaker test.
 
-  **It still refuses, and that is a decision rather than an omission.** Three
-  things carried it. `dvtditr` is the "cannot" above and `--thread n` reaches
-  it on every `-INS-i` strategy, so accepting `-C` for `disttbfast` alone buys
-  a flag that works on one arm of `--auto` and not another. The 1038
-  comparisons cover four strategies and not `--add`, `--merge` or `--treein`,
-  so the invariance is established where it was measured and nowhere else. And
-  after the skip-table fix the port does that build path in 724 ms against the
-  C's unthreaded 825, so the gap threading would close is against a C that is
-  itself already behind on one core.
+  **The progressive step is not threaded, and this is the interesting half.**
+  It is not merely risky: above 30000 columns the C has no fixed answer to be
+  identical to. `alg` is a process-wide global (`defs.c:80`, `extern` in
+  `mltaln.h:138`) that selects between `A__align` and `MSalignmm` -- two
+  different recurrences, see note 12 -- and `disttbfast.c:1929`, inside
+  `treebasethread`, writes it with no lock when a node crosses that width.
+  Upstream documents the consequence itself on the very next line:
 
-  The cost of refusing, stated plainly because it is sharp: `--thread 1` exits
-  1 with no output, and one thread is semantically sequential, so a caller
-  passing an explicit default gets a hard failure. Accepting `-C` and running
-  the existing sequential path would fix that on its own, with no threading and
-  no output change. If anyone revisits this, that is the cheap half, and the
-  numbers above are the expensive half's budget.
+      if( alg == 'M' ) // hoka no thread ga M ni shitakamo shirenainode
 
-  Three things would actually make it faster, in increasing order of risk.
-  **The two pairwise matrices** -- the ktuple one in `dist.rs` and the cycle-2
-  MSA recompute, both all-pairs -- are deterministic under any thread count by
-  construction, because each `mtx[i][j-i]` is a pure function of (i, j), so
-  partitioning by row needs no differential to justify its *output*, only its
-  correctness. The skip-table fix removed this module's `thread_local`, so
-  `naivepairscorefast` is already reentrant. **The progressive step** holds the
-  rest of the time at scale and is the one to be afraid of: the C hands out
-  tree nodes readiness-driven, and the aligners keep persistent scratch that
-  items 1 and 2 below exist to warn about -- a different node order over shared
-  scratch is exactly the shape that changes an alignment quietly.
-  **Vectorising the matrix loop** is not threading but has the same target:
-  `objdump -d | grep -c zmm` is 0 for `disttbfast-rs` against 63 and 67 for
-  `dvtditr-rs` and `tbfast-rs`, because both AVX-512 kernels are in
-  `L__align11` on the `-INS-i` path and FFT-NS-2 never reaches it.
+  "because another thread may have set it to M". Up to `nthreadtb` workers run
+  in there at once (`:1826`), so which nodes align in memsave mode depends on
+  thread timing, and so does the alignment. That is the same situation as
+  `dvtditr` below rather than a milder one, and it is why the C's own `-C 8-8`
+  being faster than this port is not a gap worth closing: part of that speed is
+  an answer that is not reproducible.
 
-  No port figure is quoted for any of those on purpose. Projecting one means
-  splitting the port's wall clock between the two matrices and everything else,
-  and the only honest split available is `-E 2` minus `-E 1`, which isolates
-  the MSA recompute and leaves the ktuple matrix's share inferred from its
-  instruction count. The first attempt at exactly that counted the MSA matrix
-  and forgot the ktuple one, and was low by about a third. The measured C
-  ratios above -- 1.45x for the matrices, 1.78x with the progressive step,
-  3.74x at 3831 -- are the budget; anything finer needs measuring.
+  Below 30000 columns the C's threaded progressive step *is* deterministic, and
+  a threaded `treebase` that matched it there could be written. It would also
+  silently change its answer the first time an input crossed the threshold,
+  which is the one thing this repository exists to prevent, so the switch is
+  not worth having at any speed.
+
+  Nothing above says threading the progressive step is impossible for the
+  *port* -- the port could serialise its own `alg`, or thread only below the
+  threshold and fall back. It says there is no reference to verify it against,
+  and a differential against a nondeterministic C is not a gate.
+
+  `dvtditr` is closer to "cannot" for the same class of reason: the C's
+  threaded refinement is **nondeterministic** -- three `--thread 4` runs of one
+  input give three different alignments -- so there is again no fixed reference.
+  A callgrind profile confirms `athread` never runs at `-C 0`.
+
+  History, because the refusal's error message was wrong for a long time and
+  someone will find the old wording in the history. `disttbfast` used to refuse
+  every `-C > 0` with "threads change the result". That was an assumption, never
+  measured, and it cost any caller passing an explicit `--thread 1` a hard
+  failure with no output -- one thread being semantically sequential. Measured
+  on 2026-10-29: `core/disttbfast` built with `-Denablemultithread` gives
+  byte-identical stdout and side files at `-C 1-1`, `-C 8-8` and `-C 8-0` as at
+  `-C 0-0`, over 1038 comparisons across four strategies and two payloads.
+
+  What threading is worth, on 6 physical cores (12 logical) at 790 sequences:
+  the C goes 825 ms to 569 at `-C 8-0` and 464 at `-C 8-8`; the port goes 723 to
+  518, which beats the C's pairwise-only arm and loses to its full one by
+  exactly the progressive step it declines to thread. A consumer measured 3.74x
+  for the C's full form at 3831 sequences, where the matrices dominate more.
+  Both arms stop scaling past about six workers here, which is the physical core
+  count and not a property of either implementation.
 
 The configurations that still need the C are tracked as issues, one per gap,
 indexed by the repository's "what is still not done" issue — each carries what

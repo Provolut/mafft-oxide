@@ -1799,3 +1799,82 @@ No synthetic 3831 payload was built here to check it. Mutated copies of one
 root align far more cleanly than real homologues, so the alignment width and
 therefore the per-pair cost would both have been wrong, and the number would
 have looked like evidence without being any.
+
+## Threading the all-pairs matrices
+
+`--thread n` now drives the three all-pairs matrices and nothing else. 790
+sequences, `-E 2 -F`, best of 7, interleaved, every arm byte-identical to the
+C's sequential run:
+
+```
+  C   -C 0-0     825 ms     port  -C 0-0     723 ms
+  C   -C 8-0     569 ms     port  -C 2-2     594 ms
+  C   -C 8-8     464 ms     port  -C 4-4     530 ms
+                            port  -C 8-8     518 ms
+                            port  -C 12-12   520 ms
+```
+
+1.59x against the C's unthreaded run, and ahead of the C's own pairwise-only
+`-C 8-0`. Both stop scaling at about six workers: this box is a 6-core Ryzen
+9600X with SMT, so `-C 8-8` already oversubscribes the physical cores and the
+flat step from 8 to 12 is the hardware, not the partitioning.
+
+### Why these loops and not the progressive step
+
+Each cell of those matrices is a pure function of its own `(i, j)` and of data
+the loop does not write. Nothing accumulates across cells and no cell reads one
+another writes, so a thread count cannot change the result -- there is no
+f64 ordering question here at all, which is the only reason this was reachable
+without touching the one rule.
+
+The C threads the same loops with a mutex-guarded `(i, j)` cursor every worker
+pulls from (`disttbfast.c:1274-1296`), so its own assignment of pairs to
+threads differs run to run; it reaches the same answer for the same reason.
+Static round-robin by row is used here instead because it needs no lock, and
+because a fixed assignment is reproducible under a debugger. Round-robin rather
+than contiguous blocks: these are half matrices, so row `i` holds `njob - i`
+cells and a block split would hand the first worker most of the work.
+
+The progressive step is left sequential, and not out of caution. `alg` is a
+process-wide global (`defs.c:80`) selecting between `A__align` and `MSalignmm`,
+which are different recurrences, and `treebasethread` writes it with no lock at
+`disttbfast.c:1929` when a node exceeds 30000 columns. Upstream's comment on
+the next line -- "hoka no thread ga M ni shitakamo shirenainode", because
+another thread may have set it to M -- documents that this is visible across
+workers. So above 30000 columns **the C's threaded progressive step has no
+fixed answer to be byte-identical to**, which is the `dvtditr` situation and not
+a milder one. Part of the C's `-C 8-8` advantage is therefore an answer that is
+not reproducible, and it is not a target.
+
+### What the refusal used to say
+
+`-C > 0` was refused outright with "threads change the result". That was never
+measured. `core/disttbfast` built with `-Denablemultithread` gives
+byte-identical stdout and side files at `-C 1-1`, `-C 8-8` and `-C 8-0` as at
+`-C 0-0` on 1038 comparisons across four strategies and two payloads. The claim
+was an assumption wearing an error message, and the cost of believing it was
+that `--thread 1` -- semantically sequential -- exited 1 with no output.
+
+### Verified
+
+`verify_threads.sh` pass=2752 fail=0: 86 corpus inputs x 4 strategies x 8 `-C`
+specs, each compared against the **C's** `-C 0-0` run rather than against the
+port's own, because a port that was self-consistently wrong at every thread
+count would pass the weaker comparison. The specs include 3 and 5, which do not
+divide the row count, and 64, which exceeds it so some workers get no rows at
+all; `-C 8-0` and `-C 0-8` catch a transposed parse of `-C a-b`, which every
+symmetric spec would miss. Mutation-tested by dropping one worker's bucket:
+exit 1, 24 of 64 failed.
+
+`verify.sh` pass=12018 fail=0 and `verify_tbfast.sh` pass=1690 fail=0 unchanged,
+against binaries frozen and `sha256sum -c`-checked across the run. 245 tests;
+region coverage 91.37%, line 90.82%.
+
+The golden matrix went 553 cases to 567. The seven `*.threads` fixtures were
+declared refusals -- with a comment saying a future thread implementation would
+have to update them -- and are now byte-identity cases against the C, which is
+a stronger assertion than the refusal they replace; `threads3` (`-C 3-3`) and
+`threadspair` (`-C 2-0`) were added. This is the permitted regeneration: a
+feature landed and its fixtures came from the real C. All 546 non-thread
+manifest entries are byte-identical across the regeneration, checked rather
+than asserted.

@@ -479,7 +479,13 @@ fn main() {
         ));
         (Vec::new(), ngl)
     } else {
-        dist::distance_matrix(&cn, &input.seq, njob, args.tuplesize as usize)
+        dist::distance_matrix(
+            &cn,
+            &input.seq,
+            njob,
+            args.tuplesize as usize,
+            mafft_oxide::parallel::workers(args.nthreadpair),
+        )
     };
 
     let mut nlen: Vec<i32> = input.seq.iter().map(|s| s.len() as i32).collect();
@@ -935,35 +941,47 @@ fn main() {
             }
         } else if calcpairdists {
             let skiptable: Vec<Vec<i32>> = bseq.iter().map(|s| score::makeskiptable(s)).collect();
-            for i in 0..njob - 1 {
-                let ssi = selfscore[i] as f64;
-                for j in i + 1..njob {
-                    let ssj = selfscore[j] as f64;
-                    let bunbo = if ssi < ssj { ssi } else { ssj };
-                    let mut v = if bunbo == 0.0 {
-                        2.0
-                    } else {
-                        let s = score::naivepairscorefast(
-                            &cn,
-                            &bseq[i],
-                            &bseq[j],
-                            &skiptable[i],
-                            &skiptable[j],
-                            cn.penalty_dist,
-                        );
-                        let mut t = (1.0 - s / bunbo) * 2.0;
-                        if t > 10.0 {
-                            t = 10.0;
-                        }
-                        t
-                    };
-                    if v < 0.0 {
-                        eprintln!("WARNING: negative distance, iscoretmp = {}", v);
-                        v = 0.0;
+            // The O(n^2) half of an `--auto` build at these sizes: 7.3 million
+            // pairs at 3831 sequences. Each cell reads only `bseq`, `skiptable`
+            // and `selfscore`, none of which this loop writes, so the matrix is
+            // the same for any worker count -- see `mafft_oxide::parallel`.
+            mafft_oxide::parallel::fill_rows(
+                &mut mtx,
+                mafft_oxide::parallel::workers(args.nthreadpair),
+                || (),
+                |_, i, row| {
+                    if i + 1 >= njob {
+                        return;
                     }
-                    mtx[i][j - i] = v;
-                }
-            }
+                    let ssi = selfscore[i] as f64;
+                    for j in i + 1..njob {
+                        let ssj = selfscore[j] as f64;
+                        let bunbo = if ssi < ssj { ssi } else { ssj };
+                        let mut v = if bunbo == 0.0 {
+                            2.0
+                        } else {
+                            let s = score::naivepairscorefast(
+                                &cn,
+                                &bseq[i],
+                                &bseq[j],
+                                &skiptable[i],
+                                &skiptable[j],
+                                cn.penalty_dist,
+                            );
+                            let mut t = (1.0 - s / bunbo) * 2.0;
+                            if t > 10.0 {
+                                t = 10.0;
+                            }
+                            t
+                        };
+                        if v < 0.0 {
+                            eprintln!("WARNING: negative distance, iscoretmp = {}", v);
+                            v = 0.0;
+                        }
+                        row[j - i] = v;
+                    }
+                },
+            );
         }
     }
 

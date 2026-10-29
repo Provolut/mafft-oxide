@@ -236,10 +236,22 @@ def distt_cases(rng):
         ("merge3", f"{DF} -H 0", lambda r, g, p: subalignments(p, "3"), ALIGNED, False),
         ("mergeint", f"{DF} -H 0", lambda r, g, p: subalignments(p, "2 interleave"), ALIGNED, False),
         ("mergekeep", f"{DF} -H 0", lambda r, g, p: subalignments(p, "2 interleave preservegaps"), ALIGNED, False),
-        # Configurations the port refuses up front: coverage for params.rs.
-        # The port refuses threads rather than pretending -C 0-0: declared, not
-        # discovered, so a future thread implementation has to update this too.
-        ("threads", f"{DF} -C 2-2", None, ANY, True),
+        # Threads. These were declared refusals, with a note that a future
+        # thread implementation would have to update them; this is that update.
+        # The port now honours `-C` for the three all-pairs matrices, so these
+        # are ordinary byte-identity cases against the C -- a stronger
+        # assertion than the refusal they replace, and one that runs in
+        # `cargo test` with no C present.
+        #
+        # Three shapes because the failure modes differ. `2-2` is the ordinary
+        # case; `3-3` does not divide the row count, so one worker ends up with
+        # an extra row and a partition bug shows as a wrong cell rather than a
+        # crash; `2-0` asks for pair threads and no progressive threads, which
+        # is the only spec that distinguishes the two halves of `-C a-b` from a
+        # transposed parse.
+        ("threads", f"{DF} -C 2-2", None),
+        ("threads3", f"{DF} -C 3-3", None),
+        ("threadspair", f"{DF} -C 2-0", None),
         ("badblosum", "-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 " + TAIL, None),
     ]
     return c

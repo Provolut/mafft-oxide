@@ -947,9 +947,34 @@ fn unsupported_configurations_are_refused() {
     argv.push("-Y".into()); // --keeplength
     assert!(Args::parse(&argv).unwrap().check_supported().is_err());
 
-    // Threads change the result, so they must not be silently accepted.
-    let argv: Vec<String> = vec!["-C".into(), "4".into()];
-    assert!(Args::parse(&argv).unwrap().check_supported().is_err());
+    // Threads are accepted. This asserted a refusal until the claim behind it
+    // -- "threads change the result" -- was measured and found false for this
+    // binary: `core/disttbfast` built with `-Denablemultithread` gives
+    // byte-identical output at `-C 1-1`, `-C 8-8` and `-C 8-0` as at `-C 0-0`
+    // over 1038 comparisons, and the port's own matrices are thread-count
+    // independent over 2752 (`verify/verify_threads.sh`). What is asserted is
+    // the same strength as before, with the opposite sign, and both halves of
+    // `-C a-b` are checked because a transposed parse would pass either alone.
+    for spec in ["4", "0-0", "8-8", "8-0", "0-8", "1-1"] {
+        let argv: Vec<String> = vec!["-C".into(), spec.into()];
+        let a = Args::parse(&argv).unwrap();
+        assert!(
+            a.check_supported().is_ok(),
+            "-C {} should be accepted",
+            spec
+        );
+    }
+    // Accepted means parsed, not ignored: `-C a-b` sets the pair count from
+    // the left and the progressive count from the right, and `-C a` sets both.
+    // `nthreadpair` is what drives the matrices, so a parse that dropped it
+    // would silently run single-threaded and every speed claim here would be
+    // untestable.
+    let argv: Vec<String> = vec!["-C".into(), "8-3".into()];
+    let a = Args::parse(&argv).unwrap();
+    assert_eq!((a.nthread, a.nthreadpair, a.nthreadtb), (8, 8, 3));
+    let argv: Vec<String> = vec!["-C".into(), "5".into()];
+    let a = Args::parse(&argv).unwrap();
+    assert_eq!((a.nthread, a.nthreadpair, a.nthreadtb), (5, 5, 5));
 
     // The supported baseline passes.
     let argv: Vec<String> = base.to_vec();
@@ -1091,6 +1116,61 @@ fn fast_and_plain_pair_scores_agree() {
             assert_eq!(plain, fast, "pair {}-{}", i, j);
         }
     }
+}
+
+/// `fill_rows` must give the same matrix for every worker count.
+///
+/// The three all-pairs matrices rely on this, and the thread count is the one
+/// input to them that a user can change from the command line. The body here
+/// is deliberately a pure function of `(i, j)` -- that is the contract callers
+/// sign -- and the counts include ones that do not divide the row count, one
+/// that exceeds it so some workers get no rows at all, and 0 and 1, which take
+/// the inline path and must agree with the threaded ones.
+#[test]
+fn fill_rows_does_not_depend_on_the_worker_count() {
+    use crate::parallel::{fill_rows, workers};
+    // A half matrix, the shape the real callers use: row i holds n - i cells.
+    let build = |n: usize, nthreads: usize| -> Vec<Vec<f64>> {
+        let mut mtx: Vec<Vec<f64>> = (0..n).map(|i| vec![-1.0; n - i]).collect();
+        fill_rows(
+            &mut mtx,
+            nthreads,
+            // Per-worker scratch, to exercise that it is built per worker and
+            // that a worker which writes into it cannot disturb another's.
+            || vec![0.0f64; 8],
+            |scratch, i, row| {
+                for (k, cell) in row.iter_mut().enumerate() {
+                    let j = i + k;
+                    scratch[i % 8] = (i * 31 + j) as f64;
+                    *cell = scratch[i % 8] * 0.5 + (j as f64) / 7.0;
+                }
+            },
+        );
+        mtx
+    };
+    let mut compared = 0usize;
+    for &n in &[0usize, 1, 2, 3, 17, 64] {
+        let reference = build(n, 1);
+        // Every cell must have been written, or a matrix of untouched -1.0
+        // would compare equal to another matrix of untouched -1.0.
+        for row in &reference {
+            for &c in row {
+                assert_ne!(c, -1.0, "n={}: a cell was never written", n);
+            }
+        }
+        for &t in &[0usize, 1, 2, 3, 5, 8, 64] {
+            let got = build(n, t);
+            assert_eq!(got, reference, "n={}, {} workers", n, t);
+            compared += 1;
+        }
+    }
+    assert_eq!(compared, 6 * 7, "case count");
+    // `-C 0-0` and anything negative mean sequential; the wrapper has already
+    // resolved `--thread -1` to a core count before a component sees it.
+    assert_eq!(workers(0), 1);
+    assert_eq!(workers(-1), 1);
+    assert_eq!(workers(1), 1);
+    assert_eq!(workers(8), 8);
 }
 
 /// The fused `naivepairscorefast` against the unfused `naivepairscore11`, on
