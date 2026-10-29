@@ -1878,3 +1878,89 @@ a stronger assertion than the refusal they replace; `threads3` (`-C 3-3`) and
 feature landed and its fixtures came from the real C. All 546 non-thread
 manifest entries are byte-identical across the regeneration, checked rather
 than asserted.
+
+## match_calc's row pointers, and two things that did not work
+
+Once the matrices were threaded the progressive step became the dominant cost
+at high thread counts, so `match_calc` was worth a second look. Two of its
+hottest lines were addressing and nothing else:
+
+```
+282M   let codes = &intwork[j];
+141M   let vals = &doublework[j];
+```
+
+423M instructions -- 2% of a build -- re-walking two outer `Vec`s once per
+column, in a function called 578,166 times. Slicing all three row tables to one
+length before the loop and zipping them removes it:
+
+```
+21,095M -> 20,534M instructions, -560M, -2.7%
+wall clock at 790 sequences: 723 ms -> 722 ms
+```
+
+**The wall clock did not move**, and that is the honest headline. It is kept
+anyway: the reduction is real and deterministic, the code is simpler than the
+indexing it replaces, and a payload or a machine with less headroom than this
+one will not necessarily hide it. But nobody should quote this change as a
+speedup.
+
+### The counted loop that was a wash
+
+The inner loop over a column's non-zero entries was rewritten from
+`codes.iter().zip(vals.iter())` to `for k in 0..m` over slices, on the theory
+that building an adapter per column cost more than the one or two
+multiplications it feeds -- the lists average 1.35 entries of 26. The theory was
+wrong and the measurement says so precisely:
+
+```
+                   before      after
+zip.rs              723M        144M
+iter/range.rs          0        719M
+match_calc total    2312M      2306M
+```
+
+579M left `zip.rs` and 719M appeared in `range.rs`, for a net 6M. `zip` over
+two slices of equal length already compiles to the counted loop; the adapter was
+never the cost. Reverted, and the row-pointer hoist re-measured on its own at
+20,534,325,958 -- within 0.6M of the two changes together, so the whole 560M is
+the hoist. That split is the only reason the attribution is known, and the
+reason the two were not committed together.
+
+### The AVX-512 kernel that was not written
+
+Vectorising `naivepairscorefast` was the plan until the profile priced it. That
+loop is now 3.80G against the C's 5.89G -- already 0.64x -- so the ceiling is
+about 9% of instructions, and reaching it needs: an `unsafe` module, the f64
+accumulator replaced by an integer one (lane-parallel f64 sums are
+reassociation, which is the one thing that may not move, while an integer sum
+is exact in any order -- `score_is_integral` already pins that both addends are
+`i32`), a gather for `amino_dis`, and `vpcompressb` for the gap-run scan, whose
+state is carried column to column. The row-pointer hoist above was the same
+order of win with no unsafe and no ordering question. Priced and declined, not
+attempted and abandoned.
+
+### Noted, not acted on
+
+On the `-INS-i` path `l_align11` is 71.2% of the run with a further 11.5% in
+`zip.rs` and 0.8% in `enumerate.rs` -- 680M of 5.51G in adapters, a larger pool
+than anything above. It is left alone for now for two reasons: the port is
+already 2.32x faster than the C there, so it is upside rather than a gap; and
+the wash recorded above is direct evidence that instructions leaving `zip.rs`
+may simply reappear under another name. It needs the same split-and-measure
+treatment, not a rewrite on the strength of a percentage.
+
+### Verified
+
+Byte-identical to the C on both `-E` arms and at `-C 0-0` and `-C 8-8`.
+`verify.sh` pass=12018 fail=0; `verify_tbfast.sh` pass=1690 fail=0;
+`verify_threads.sh` pass=2752 fail=0; `verify_dvtditr.sh` pass=32 fail=0 --
+`match_calc` feeds `a_align`, which every strategy reaches, so the group and
+refinement harnesses matter here and not just the build one. 245 tests; region
+coverage 91.38%, line 90.83%. All four harnesses ran against binaries copied
+to a directory nothing else writes to, with `sha256sum -c` after the last of
+them confirming none had changed.
+
+`verify_dvtditr.sh` first exited 2 with "no dvtditr in .../core/dvtditr": it
+takes a libexec *directory* and was handed the binary's path. It refused rather
+than reporting a vacuous pass, which is what that exit code is for.
