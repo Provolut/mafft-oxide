@@ -147,6 +147,33 @@ The production invocation at true size -- `--auto --preservecase` on a
 3831 x 334 input, where `disttbfast` is 98% of the call -- is byte-identical to
 the C at 4,542,015 bytes.
 
+Re-measured there on 2026-10-29 after the skip-table fix, same payload, best of
+2, fresh process, output byte-identical at those same 4,542,015 bytes:
+
+    C                  10844 ms   1.000
+    port, 0.3.0 _2     14682 ms   1.354   the packaged artifact
+    port, cde06cc       9054 ms   0.835
+
+So the port leads the C by 1.20x at production size, against 1.14x at 790 here
+-- the fix targets the O(n^2) term, so its share grows with n. Attributed, not
+claimed: measured on the consumer's machine and payload. The binaries were
+staged from this tree's `rust/target/release` under their C names and run
+through the shipped driver with `MAFFT_BINARIES`, with an empty-variable canary
+failing first so the variable is demonstrably honoured, and `sha256sum -c`
+afterwards showing 9 of 9 unchanged during the run. Those binaries are the ones
+this repository's own differentials ran against: same sha256, and `cargo build
+--release` reports nothing to do at `cde06cc` with a clean tree, so they
+correspond to that commit.
+
+**The packaged artifact still carries the 1.354x.** `0.3.0-h1250391_2` predates
+this fix, so a consumer installing the conda package gets the slow build path
+until a new one is published. The consumer's manifest pins
+`mafft-oxide = "0.3.0.*"`, which accepts a new *build number* with no manifest
+edit -- a `_3` needs only a re-lock -- but refuses a version move, so 0.3.1 or
+0.4.0 would need a change to their `pyproject.toml` and therefore a PR.
+Publishing this as a 0.3.0 rebuild is the cheaper path for them. Both the
+rebuild and the re-lock are the user's to run.
+
 The strategy matrix was *not* run at 3831 sequences, deliberately and after
 discussion. `--globalpair --maxiterate 100` at that size is on the order of
 seven million pairwise alignments, and it would characterise a strategy nobody

@@ -1785,3 +1785,17 @@ almost certainly tested the right thing. "Almost certainly" is not what these
 harnesses are for. They were re-run against binaries copied to a directory
 nothing else writes to, with `sha256sum -c` after the run confirming neither
 had changed while it was in progress.
+
+### Confirmed at production size
+
+Measured by the consumer's session on its own 3831 x 334 payload, best of 2,
+fresh process, `--auto --preservecase`, output byte-identical at 4,542,015
+bytes: C 10844 ms, the packaged `0.3.0 _2` 14682 ms (1.354x), and `cde06cc`
+9054 ms (0.835x). 1.20x ahead of the C at production size against 1.14x at 790,
+which is the direction the size ladder predicts -- the fix targets the O(n^2)
+term, so its share grows with n.
+
+No synthetic 3831 payload was built here to check it. Mutated copies of one
+root align far more cleanly than real homologues, so the alignment width and
+therefore the per-pair cost would both have been wrong, and the number would
+have looked like evidence without being any.

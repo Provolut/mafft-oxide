@@ -54,6 +54,58 @@ quietly returning a different alignment:
   to. A callgrind profile confirms `athread` never runs at `-C 0`. Run with
   `-C 0` / `-C 0-0`, which is what the wrapper passes by default.
 
+  Re-measured and widened on 2026-10-29, because the refusal's own message
+  ("threads change the result") is not true for `disttbfast` and was costing a
+  consumer a real speedup. `disttbfast -C 0-0` against `-C 1-1`, `-C 8-8` and
+  `-C 8-0`, comparing stdout *and* every side file the run leaves: 86 corpus
+  inputs x 3 specs x 4 strategies (FFT-NS-2, NW-NS-2, memsave, cycle-1) = 1032
+  comparisons, plus the 790- and 123-sequence payloads x 3 = 6. All 1038
+  byte-identical, against a `core/` built with `-Denablemultithread`. On 12
+  cores at 790 sequences the C gets 825 ms to 464 at `-C 8-8` and 569 at
+  `-C 8-0`; a consumer measured 3.74x at 3831.
+
+  **It still refuses, and that is a decision rather than an omission.** Three
+  things carried it. `dvtditr` is the "cannot" above and `--thread n` reaches
+  it on every `-INS-i` strategy, so accepting `-C` for `disttbfast` alone buys
+  a flag that works on one arm of `--auto` and not another. The 1038
+  comparisons cover four strategies and not `--add`, `--merge` or `--treein`,
+  so the invariance is established where it was measured and nowhere else. And
+  after the skip-table fix the port does that build path in 724 ms against the
+  C's unthreaded 825, so the gap threading would close is against a C that is
+  itself already behind on one core.
+
+  The cost of refusing, stated plainly because it is sharp: `--thread 1` exits
+  1 with no output, and one thread is semantically sequential, so a caller
+  passing an explicit default gets a hard failure. Accepting `-C` and running
+  the existing sequential path would fix that on its own, with no threading and
+  no output change. If anyone revisits this, that is the cheap half, and the
+  numbers above are the expensive half's budget.
+
+  Three things would actually make it faster, in increasing order of risk.
+  **The two pairwise matrices** -- the ktuple one in `dist.rs` and the cycle-2
+  MSA recompute, both all-pairs -- are deterministic under any thread count by
+  construction, because each `mtx[i][j-i]` is a pure function of (i, j), so
+  partitioning by row needs no differential to justify its *output*, only its
+  correctness. The skip-table fix removed this module's `thread_local`, so
+  `naivepairscorefast` is already reentrant. **The progressive step** holds the
+  rest of the time at scale and is the one to be afraid of: the C hands out
+  tree nodes readiness-driven, and the aligners keep persistent scratch that
+  items 1 and 2 below exist to warn about -- a different node order over shared
+  scratch is exactly the shape that changes an alignment quietly.
+  **Vectorising the matrix loop** is not threading but has the same target:
+  `objdump -d | grep -c zmm` is 0 for `disttbfast-rs` against 63 and 67 for
+  `dvtditr-rs` and `tbfast-rs`, because both AVX-512 kernels are in
+  `L__align11` on the `-INS-i` path and FFT-NS-2 never reaches it.
+
+  No port figure is quoted for any of those on purpose. Projecting one means
+  splitting the port's wall clock between the two matrices and everything else,
+  and the only honest split available is `-E 2` minus `-E 1`, which isolates
+  the MSA recompute and leaves the ktuple matrix's share inferred from its
+  instruction count. The first attempt at exactly that counted the MSA matrix
+  and forgot the ktuple one, and was low by about a third. The measured C
+  ratios above -- 1.45x for the matrices, 1.78x with the progressive step,
+  3.74x at 3831 -- are the budget; anything finer needs measuring.
+
 The configurations that still need the C are tracked as issues, one per gap,
 indexed by the repository's "what is still not done" issue — each carries what
 porting it would take and what verifying it would need. One of them —
