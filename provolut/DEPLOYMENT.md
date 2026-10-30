@@ -322,15 +322,38 @@ read in reverse is what caught the wrong build: `_0`'s `depends` was
 `__glibc`, `libgcc`, no gawk. Prefer a check like this -- one the artifact
 answers -- over asserting that a cache was bypassed.
 
-**Nothing gates a channel push.** `core.hooksPath` is the relative
-`.githooks`, which git resolves against the worktree, and the orphan
-`gh-pages` branch contains no such directory -- so pushing the channel runs no
-hook at all. Verified rather than inferred: `ls .githooks` in that worktree is
-`No such file or directory`. The gates would be meaningless there anyway, as
-the branch holds no source, and `pre-push` bails at `cd "$here/rust" || exit
-0` for exactly that reason. The consequence is what to keep in mind: the
+**Whether a channel push is gated depends on where you type it, and neither
+answer gates the channel.** `core.hooksPath` is the relative `.githooks`, and
+git resolves it against *the worktree the push is issued from* -- not against
+the ref being pushed. Two routes, two behaviours, and this cost two sessions a
+round of contradicting each other before either had both halves:
+
+- `git -C <main checkout> push origin <sha>:gh-pages` -- `.githooks/pre-push`
+  exists there, so it runs, and `$here` is the main checkout, so `$here/rust`
+  exists and the **full Rust gate runs**: `cargo test`, then coverage. It
+  inspects nothing about the channel. It can refuse the channel push for
+  reasons with no bearing on it, which is what happened here -- the gate died
+  on `cargo: Befehl nicht gefunden` and took the push with it.
+- `cd <gh-pages worktree> && git push origin HEAD:gh-pages` -- that worktree
+  has no `.githooks`, so **no hook runs at all**. Verified: `ls .githooks`
+  there is `No such file or directory`.
+
+The first route is the likelier one to be typed, since `git -C <repo> push …`
+is the natural way to write it. So "nothing gates a channel push" is false,
+and an earlier revision of this section said it; what is true is that nothing
+gates *the channel*. One route runs a source gate that cannot see the channel,
+the other runs nothing.
+
+The consequence is the same either way, and it is the part worth keeping: the
 append-only rule and the identity of the uploaded artifact are enforced by a
 person checking, and by nothing else.
+
+The mechanism generalises past this repository, and it has now been seen twice
+in this body of work with opposite effects: a relative `core.hooksPath`
+resolves per worktree, so a worktree can silently run *no* hooks, or silently
+run its own *stale* ones. The second case produced a halt line that was not
+true. If you are reasoning about what a hook did, establish which worktree
+issued the command before anything else.
 
 Verify what is served, not what was built. For 0.4.0 build 1 that meant: the
 remote branch at the expected commit, the Pages build reporting that same
