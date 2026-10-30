@@ -592,10 +592,17 @@ headers rather than recalling them:
   thirty-odd program objects. Run against a fully built `core/`, it therefore
   pulls in every binary's `main` and dies in the linker with `multiple
   definition of 'main'`. That is a loud exit 2, not a silent pass, so it is a
-  wart and not a hole. It was worked around here by shaping the scratch objdir
-  to the same set `verify_td.sh` excludes -- 56 objects down to 26, none
-  defining `main` -- rather than by editing a gate script, which is not an
-  agent's call to make.
+  wart and not a hole. It was handled here by shaping the scratch objdir to
+  the same set `verify_td.sh` excludes -- 56 objects down to 26, none defining
+  `main` -- rather than by editing a gate script, which is not an agent's call
+  to make.
+
+  Read that as a tighter probe, not a shortcut, which is the opposite of how
+  the word "workaround" invites reading it: linking 26 objects that define no
+  `main` is a *narrower* link than the harness's own glob would have produced,
+  so the symbols that resolved are more precisely accounted for. Extending the
+  harness's filter would be the better fix and would produce this same link;
+  it is left for a human because the file is a gate.
 - `verify_flh.sh`, `verify_td.sh` and `verify_tdi.sh` take a plain
   `<path-to-core-dir>`. They compile their own C harness against that
   directory's objects at run time -- `verify_td.sh:32` is a `gcc -std=c99
