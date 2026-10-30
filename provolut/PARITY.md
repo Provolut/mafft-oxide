@@ -501,6 +501,76 @@ exists to prevent, however much better the pinned answer is. That trade is a
 human's to make. What a caller can do without touching either program is pin
 `LC_NUMERIC=C` itself, which is the recommendation.
 
+## The parity evidence at 0.4.0, and the pin that did not hold
+
+The differential suite had never run against the threading code. `pre-push`
+says so in as many words -- `no recorded store; the full differential did not
+run` -- and exits 0 anyway, which is worth stating plainly: a check that
+reports it could not run is indistinguishable, at the call site, from one that
+passed. It printed that line on every push since the threading work landed.
+
+Run at `v0.4.0`, all four corpus differentials, `LC_NUMERIC=C` pinned and
+absolute paths throughout:
+
+    verify.sh         pass=12018  fail=0      88 corpus files
+    verify_tbfast.sh  pass=1690   fail=0      40 corpus files
+    verify_threads.sh pass=2752   fail=0  skipped=0
+    verify_dvtditr.sh pass=32     fail=0      of 32 staged runs
+                      -----------------
+                      16492 comparisons, no failures
+
+Still pending, and named rather than implied: `verify_e2e.sh` and the four
+f64-bit-pattern harnesses (`verify_gaplen.sh`, `verify_flh.sh`, `verify_td.sh`,
+`verify_tdi.sh`), which compare at function level and need a `core/` built with
+the file-local statics exposed. So this is four of nine harnesses, not "parity
+at 0.4.0".
+
+What makes those counts attestable rather than merely plausible, since a clean
+run proves nothing about bytes it did not actually execute:
+
+- **The source is the tag.** `git diff v0.4.0 HEAD -- rust/` is empty; the only
+  commits since are CI, docs and this recipe.
+- **The binaries were built from it, not left over.** All nine post-date the
+  tag commit by 7-11 seconds and post-date every source file. A cargo build
+  that finds everything fresh does not relink, so a stale artifact would carry
+  an mtime *earlier* than its sources; the inequality runs the other way.
+- **And they are reproducible.** `cargo clean` (10550 files, 2.1 GiB) then
+  `cargo build --locked --release` on the same toolchain and the same absolute
+  target directory reproduced all nine sha256 digests exactly. Pinning those
+  variables is what makes the comparison mean something: a Rust rebuild is not
+  reproducible across toolchain versions, `RUSTFLAGS` or target paths, so
+  differing digests would have licensed only "these were not the same build",
+  not "the tested binary was stale".
+- **The reference arm too.** `core/` is from an older build, which is fine for
+  an unmodified upstream tree but only once checked:
+  `find core -maxdepth 1 -name '*.c' -newer core/disttbfast` is empty.
+- **No case read another's output.** All four harnesses use `mktemp -d` with an
+  EXIT trap and `rm -rf` per case, so nothing writes into a populated
+  directory.
+
+### The pin that did not hold
+
+The consumer manifest pins `mafft-oxide = "0.3.0.*"`, and its comment explains
+that this admits a rebuild of the same version but not a version move, "because
+its byte-for-byte agreement with the stock build is established per version".
+That reasoning is false, and this recipe is why.
+
+`_2` was built from tag `v0.3.0`. `_3` was built from a bare commit that
+already carried the threading work: 566 insertions across 8 files, `score.rs`
+rewritten by 231 lines, `parallel.rs` new. Both carry the version string
+`0.3.0`. So the 566 insertions reached consumers *as a rebuild*, under a pin
+whose whole purpose was to refuse code movement, and two downstream checkouts
+are running different numeric cores under the same manifest line today.
+
+Two things follow. A `<version>.*` pin is only as strong as the publisher's
+discipline about what a build number means -- the rule is in `recipe/meta.yaml`
+now, and it is that a build number may only repackage the same code. And the
+move from `_2` to `0.4.0_1` is a genuine code move rather than a relabel, which
+is why the parity run above exists and why the component-level counts are
+necessary evidence without being the whole gate: the consumer's own gate is a
+pipeline-level comparison of its output through the port against stock `mafft`,
+and that one belongs to the consumer, not here.
+
 ## If parity is the goal, the order that makes sense
 
 Ranked by what it unblocks per unit of risk, not by size.

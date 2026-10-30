@@ -25,9 +25,24 @@ build:
   # filename: shipping different contents under one build string hands
   # whoever installs next whichever copy landed first. A version move resets
   # it. The channel still serves 0.3.0 builds 2 and 3, because it is
-  # append-only once anything has locked against it; what each of those
-  # numbers held, and why 0.3.0 ended with a build cut from a commit rather
-  # than a tag, is in this file's git history.
+  # append-only once anything has locked against it.
+  #
+  # The rule, which this recipe broke once and should not break again: a build
+  # number may only ever repackage *the same code*. A change to anything under
+  # `rust/src` takes a version, never a build number. The cache argument above
+  # is about not serving two different files under one name; it is not a
+  # licence to move code under a fixed version, and reading it that way is how
+  # 0.3.0 build 3 happened.
+  #
+  # What went wrong, recorded because a consumer is still exposed to it: `_2`
+  # was built from tag v0.3.0, `_3` from a bare commit that already carried the
+  # threading work -- 566 insertions across 8 files, `score.rs` rewritten by
+  # 231 lines and `parallel.rs` new. Both say `0.3.0`. So a consumer pinned
+  # `0.3.0.*` can be moved between two materially different numeric cores by a
+  # rebuild, with no version change to notice it by, and that is exactly what
+  # happened: two downstream checkouts are on `_2` and `_3` today under the
+  # same manifest line. A pin of the form `<version>.*` is a weaker guarantee
+  # than it looks wherever this rule is not held to.
   #
   # 0 -> 1 declares `gawk`. No source change: the same tag, the same nine
   # binaries, the same bytes out of them. What changes is which `awk` the
