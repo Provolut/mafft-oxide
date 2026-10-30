@@ -19,8 +19,11 @@ The channel is append-only. A `pixi.lock` records a URL *and* a sha256, so
 removing or rewriting a build 404s every locked install; new builds are added
 alongside the old ones instead.
 
-Current build: `0.3.0-h1250391_3`. Build 2 is still served for anything locked
-against it, and produces the same alignments to the byte -- it is the speed
-that differs. On a 790-sequence `--auto` run against the stock C: build 2 at
-1.35x of the C's time, build 3 at 0.87x, or 0.64x with `--thread 8`. The two
-were cut from different commits, which `recipe/meta.yaml` records.
+Current: `0.4.0-h1250391_0`, which is what to pin -- `mafft-oxide = "0.4.0.*"`.
+It honours `--thread N`, which earlier versions refused.
+
+Earlier builds stay served for anything locked against them, and every one of
+them produces the same alignments to the byte; it is the speed that differs.
+On a 790-sequence `--auto` run against the stock C: 0.4.0 at 0.87x of the C's
+time, or 0.64x with `--thread 8`; 0.3.0 build 3 the same source and the same
+0.87x; 0.3.0 build 2 at 1.35x.
