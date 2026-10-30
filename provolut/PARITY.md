@@ -285,6 +285,64 @@ nothing wider.
 Two bounded claims rather than one unbounded run: the production path verified
 at true size, the strategy matrix verified at a size where it can complete.
 
+## The driver reads the operator's locale, and the answer changes
+
+Not the port, and not the package: upstream's shell driver. Recorded here
+because it is the one thing measured in this tree that changes an alignment
+without any code changing, and because it invalidates comparisons made across
+two machines without anyone doing anything wrong.
+
+Same driver, same input, same binaries, nothing varied but `LC_NUMERIC`, on a
+123-sequence corpus through `--auto --preservecase`:
+
+    LC_NUMERIC=C            101549 bytes   742 columns
+    LC_NUMERIC=de_DE.UTF-8   95768 bytes   696 columns
+
+Stock C from `core/` gives the same two numbers. Within each locale the C and
+the port stay byte-identical to each other, so the port is faithful in both and
+the one rule is not in question. It is the driver that changes its mind.
+
+The mechanism is one argument. `core/mafft.tmpl:1507` computes the similarity
+offset with `awk`, and mawk's string-to-number conversion honours `LC_NUMERIC`
+(gawk does not, outside POSIX mode -- so this depends on which `awk` the host
+has). Captured with logging shims, exactly one argument differs across the
+whole run:
+
+    C locale : tbfast ... -Q 100.0 -h 0.1 -L ...
+    de_DE    : tbfast ... -Q 100.0 -h 0,1 -L ...
+
+The component parses that with C `strtod` -- there is no `setlocale` anywhere in
+`core/*.c` -- so `0,1` reads as `0` and the similarity offset is silently
+dropped. Measured rather than argued: injecting `-h 0,1` under `LC_NUMERIC=C`
+and changing nothing else reproduces the comma-locale output to the byte. The
+C-locale answer is the intended one, so a comma-decimal shell is the aberrant
+arm -- and it is the arm every driver-level run on this machine has taken.
+
+What it does and does not touch:
+
+- **The golden fixtures and `tests/matrix.rs` are unaffected.** They drive
+  components with explicit argv, never through the driver, and 134 tracked
+  cases already carry `-h 0.1`. The component-side parse is covered at the
+  correct value.
+- **Every differential harness result stands.** Both arms of every comparison
+  ran in one locale, so what they measured is what they claim to measure.
+  `verify_pkg.sh --shapes` was re-run against the installed 0.4.0 package under
+  `LC_NUMERIC=C`, which is the parameterisation the comma locale had been
+  hiding: `pass=37 fail=0 refused=1`, the refusal the same
+  `--allowshift --globalpair --maxiterate 100`. The package is clean at both.
+- **Absolute timings are locale-bound.** A figure measured in a comma-decimal
+  shell was measured at `-h 0`, on a different alignment from the one a
+  C-locale host computes. Ratios between two arms in the same shell are
+  unaffected; a number carried from one machine to another is not.
+
+Nothing in this tree pins the locale -- not a harness, not the recipe, not a
+hook -- and nothing here changes that. Pinning `LC_NUMERIC=C` inside the
+packaged launcher would make `mafft-oxide` answer differently from stock
+`mafft` under a comma locale, which is exactly the divergence this repository
+exists to prevent, however much better the pinned answer is. That trade is a
+human's to make. What a caller can do without touching either program is pin
+`LC_NUMERIC=C` itself, which is the recommendation.
+
 ## If parity is the goal, the order that makes sense
 
 Ranked by what it unblocks per unit of risk, not by size.
