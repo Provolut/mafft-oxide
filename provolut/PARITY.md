@@ -165,14 +165,39 @@ this repository's own differentials ran against: same sha256, and `cargo build
 --release` reports nothing to do at `cde06cc` with a clean tree, so they
 correspond to that commit.
 
-**The packaged artifact still carries the 1.354x.** `0.3.0-h1250391_2` predates
-this fix, so a consumer installing the conda package gets the slow build path
-until a new one is published. The consumer's manifest pins
-`mafft-oxide = "0.3.0.*"`, which accepts a new *build number* with no manifest
-edit -- a `_3` needs only a re-lock -- but refuses a version move, so 0.3.1 or
-0.4.0 would need a change to their `pyproject.toml` and therefore a PR.
-Publishing this as a 0.3.0 rebuild is the cheaper path for them. Both the
-rebuild and the re-lock are the user's to run.
+**Build 3 carries the fix; build 2 does not.** `0.3.0-h1250391_2` predates it,
+so a consumer on that build gets the slow path. `0.3.0-h1250391_3` is built
+from `debddb7`, the commit this work merged as, and was installed into a fresh
+pixi environment and timed there -- the installed artifact, not this tree's
+`target/release` -- on the 790 x ~384 payload, best of 5 interleaved, each arm
+byte-identical to the C at 621,040 bytes:
+
+    C, stock                 871 ms   1.000
+    packaged _3              756 ms   0.868
+    packaged _3 --thread 8   559 ms   0.642
+    packaged _2             1175 ms   1.349
+
+The `_2` row is the reason the table exists rather than an aside. Output never
+changed, so byte-identity passes for both builds and cannot tell them apart; a
+rebuild that had quietly picked up the old source would read 1.349 here and
+pass every correctness check in this repository. The clock is the only
+discriminator, and it was run as one.
+
+Acceptance, against the installed libexec rather than against this tree:
+`verify_pkg.sh --shapes` reports `pass=37 fail=0 refused=1`, the refusal being
+the declared `--allowshift --globalpair --maxiterate 100`, with 9 of 9
+components differing between the two arms and the empty-`MAFFT_BINARIES`
+canary failing first so the variable is demonstrably honoured. Run twice: once
+with the stock driver over both libexecs, once with the packaged driver.
+
+Two notes for whoever reads the artifact rather than this file. The consumer's
+manifest pins `mafft-oxide = "0.3.0.*"`, which accepts a new build number, so
+picking this up is a `pixi lock` with no manifest edit, where 0.3.1 or 0.4.0
+would have needed a `pyproject.toml` change and a PR. And because of that, the
+version string 0.3.0 now covers two different trees: crates.io's 0.3.0 is the
+tag, builds 0 to 2 came from it, and build 3 came from `debddb7`. Same
+alignments to the byte, different speed. `recipe/meta.yaml` records which
+commit each build number was cut from.
 
 The strategy matrix was *not* run at 3831 sequences, deliberately and after
 discussion. `--globalpair --maxiterate 100` at that size is on the order of

@@ -1,4 +1,5 @@
 {% set version = "0.3.0" %}
+{% set commit = "debddb7d9e418af5ff9b4f5915b5079414715224" %}
 {% set mafft_version = "7.526" %}
 
 package:
@@ -6,13 +7,24 @@ package:
   version: {{ version }}
 
 source:
-  # The tagged release tarball rather than `path: ..` (which would copy
-  # `rust/target/`, several GB of build output, into the work directory) and
-  # rather than `git_url` (which builds whatever is checked out, so the recipe
-  # and the thing it builds could disagree). A url plus a sha256 is also what
+  # A fixed archive rather than `path: ..` (which would copy `rust/target/`,
+  # several GB of build output, into the work directory) and rather than
+  # `git_url` (which builds whatever is checked out, so the recipe and the
+  # thing it builds could disagree). A url plus a sha256 is also what
   # conda-forge requires: it pins the build to bytes a reviewer can fetch.
-  url: https://github.com/Provolut/mafft-oxide/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: 186f2244c6ab3c3d4550af9fe4b66dac59655ca2a8f31d90143507836abb7130
+  #
+  # A commit archive rather than `refs/tags/v{{ version }}`, which is where
+  # this pointed for build 2, and the reason belongs here rather than being
+  # left to be inferred. `v0.3.0` is the commit crates.io's 0.3.0 was
+  # published from and it must keep pointing there; the four performance
+  # commits squashed as {{ commit[:7] }} landed after it. So this version
+  # string now covers a tree the tag does not: identical alignments -- that is
+  # the one rule, and it is measured -- but a build path 1.37x faster. The
+  # build number below is what separates the two, and that is the whole reason
+  # this ships as a number rather than as 0.3.1: a consumer pinned `0.3.0.*`
+  # picks it up on a re-lock with no manifest edit.
+  url: https://github.com/Provolut/mafft-oxide/archive/{{ commit }}.tar.gz
+  sha256: 216e67572776f74c22d52ad3b78336ab3672635b0af370b9ed5e02cd096e4272
 
 build:
   # Bumped on every content change, because rattler and conda cache by
@@ -27,7 +39,14 @@ build:
   # applied to myself. 1 -> 2 is `source:` moving from the working tree to the
   # tagged tarball; the tree is the same commit, but the recipe is not, and the
   # rule above does not make an exception for a change I expect to be a no-op.
-  number: 2
+  # 2 -> 3 is the four performance commits: `naivepairscorefast` reading the
+  # gap skip tables only where they can skip something, `--thread` honoured
+  # for the three all-pairs matrices, and the `match_calc` row-pointer hoist.
+  # Byte-identical output, and the build path at 0.88x of the C unthreaded or
+  # 0.63x at `--thread 8`, where build 2 was 1.37x slower than the C. This is
+  # the first bump where the *source* differs rather than the recipe, so
+  # `source:` above carries why that is still a build number.
+  number: 3
   # The driver is a POSIX shell script and the components are built with
   # conda's unix rust toolchain. `__unix` as a run dependency expressed this
   # too, but a skip is what conda-forge's build matrix reads.
