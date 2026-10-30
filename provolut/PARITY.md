@@ -582,15 +582,33 @@ build-string lines, no manifest change, nothing on its face for a reviewer to
 stop at. A version pin can be defeated through the lock without the manifest
 ever being touched.
 
-One traceability gap follows and is recorded here because it is not answerable
-from this repository. Nothing in a produced number says which build made it:
-the consumer stamps a `code_version` from its own git tag onto run records, and
-that string is identical whether the box was on `_2` or `_3`. The package does
-not help either -- `mafft-oxide --version` reports upstream's `v7.526`, not the
-conda build string. So "which numeric core produced this result" cannot be
-recovered after the fact. Making the package state its own build identity would
-close the half of that which is ours; it has not been done, and it is a change
-to what the package prints rather than to what it computes.
+One traceability gap follows. Nothing in a produced number says which build
+made it: the consumer stamps a `code_version` from its own git tag onto run
+records, and that string is identical whether the box was on `_2` or `_3`. So
+"which numeric core produced this result" cannot be recovered from a run
+record after the fact.
+
+An earlier revision of this paragraph said the package should state its own
+build identity to close "our half" of that. That was wrong twice over, and the
+check that settles it is one file read.
+
+**The identity is already on disk, per environment, and it is better than a
+build string.** `<prefix>/conda-meta/mafft-oxide-*.json` carries the build
+string, the build number, the exact download URL and the artifact's `sha256` --
+so the installed bytes are identifiable by hash, not merely by label, without
+running anything and without the package printing anything. Nothing needs to
+change here for a caller to record which aligner it used; what is missing is a
+stamp in the run record, which is the consumer's surface and not this one.
+
+**And the change it proposed would not have been free.** The driver reads the
+`version` component's stdout and compares it against its own baked string --
+`versionbin=\`"$prefix/version"\`` then
+`expr "$version" : v"$versionbin"` at `core/mafft.tmpl:49-59`, warning
+`v$versionbin != $version` on a mismatch. So making `version-rs` print a build
+identity on stdout would trip upstream's own consistency check on every run.
+The surface that looks inert is load-bearing. If a packaged build identity were
+ever wanted anyway, it belongs on a flag stock does not have, or a stream
+nothing parses -- not in what `version` prints.
 
 Two things follow. A `<version>.*` pin is only as strong as the publisher's
 discipline about what a build number means -- the rule is in `recipe/meta.yaml`
