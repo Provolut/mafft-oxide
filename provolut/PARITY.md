@@ -546,7 +546,11 @@ the claim about them turned out to be wrong:
                       -----------------
                       348 comparisons, no failures
 
-**Eight of nine harnesses, 16840 comparisons, zero failures.** The one
+And then the ninth, on a scratch `core/` built for it:
+
+    verify_gaplen.sh  pass=203    fail=0
+
+**Nine of nine harnesses, 17043 comparisons, zero failures.** The one
 refusal is expected and is counted apart from the passes rather than inside
 them: `verify_e2e.sh:100` sets `REFUSED_BY_DVTDITR_RS="--allowshift"`, so
 `--allowshift --globalpair --maxiterate 100` is required to be refused, which
@@ -568,7 +572,30 @@ headers rather than recalling them:
 - `verify_gaplen.sh <path-to-core-objdir>` needs the special build -- a
   `core/` whose `Dalignmm.c` has had `static` removed from `gaplencount` and
   the three live `calcpfac` functions, which are file-local in the shipped
-  source. This is the one genuinely blocked harness.
+  source. Done on a scratch copy, which is what CLAUDE.md sanctions; `core/`
+  itself was not touched. Which four is not a guess: `rust/gen/gen_glharness.c`
+  declares exactly four `extern`s, so the symbols it cannot link without are
+  `gaplencount`, `calcpfacnoidatend`, `calcpfac_gap_noidatend` and
+  `calcpfac_gapex_noidatend` -- the three `calcpfac` variants ending
+  `noidatend`. `Dalignmm.c` holds seven `static` `calcpfac*` functions, so
+  reading the harness beat inferring from the name.
+
+  **The link is the dispatch check.** There is no need to argue that the
+  scratch objects were the ones used: had the stock `Dalignmm.o` been linked
+  instead, those four symbols would still be file-local and the link would
+  have failed with undefined references. It succeeded, so the externalised
+  build is what ran. Stripping `static` changes linkage, not arithmetic.
+
+  One wart, recorded because it costs the next person a confusing failure:
+  `verify_gaplen.sh:19` filters the object glob with `grep -v
+  'disttbfast\.o$'` alone, where its sibling `verify_td.sh:26` excludes all
+  thirty-odd program objects. Run against a fully built `core/`, it therefore
+  pulls in every binary's `main` and dies in the linker with `multiple
+  definition of 'main'`. That is a loud exit 2, not a silent pass, so it is a
+  wart and not a hole. It was worked around here by shaping the scratch objdir
+  to the same set `verify_td.sh` excludes -- 56 objects down to 26, none
+  defining `main` -- rather than by editing a gate script, which is not an
+  agent's call to make.
 - `verify_flh.sh`, `verify_td.sh` and `verify_tdi.sh` take a plain
   `<path-to-core-dir>`. They compile their own C harness against that
   directory's objects at run time -- `verify_td.sh:32` is a `gcc -std=c99
