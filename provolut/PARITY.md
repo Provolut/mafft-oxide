@@ -335,7 +335,24 @@ The component parses that with C `strtod` -- there is no `setlocale` anywhere in
 dropped. Measured rather than argued: injecting `-h 0,1` under `LC_NUMERIC=C`
 and changing nothing else reproduces the comma-locale output to the byte. The
 C-locale answer is the intended one, so a comma-decimal shell is the aberrant
-arm -- and it is the arm every driver-level run on this machine has taken.
+arm.
+
+**How to tell which arm a run was in, and why the obvious test is no longer
+enough on its own.** In the shell that will launch the run:
+
+    awk 'BEGIN{print 0.1}'      # 0,1 = aberrant arm   0.1 = intended arm
+
+That is correct and it is not sufficient, because it answers about the shell
+and two other things can decide independently of it. `PATH` decides which
+`awk` the driver finds, so an activated environment carrying gawk takes the
+intended arm on a host whose `/usr/bin/awk` is mawk -- an earlier revision of
+this line claimed every driver-level run on this machine had taken the
+aberrant arm, which was wrong for exactly that reason. And a caller that sets
+`LC_NUMERIC=C` in the child environment it spawns puts the run in the intended
+arm whatever the launching shell prints; the consumer repository does this as
+of its own change, so a run through its Python path answers for itself. The
+discriminator therefore reports on the shell, and the code path has to be
+asked separately.
 
 What it does and does not touch:
 
