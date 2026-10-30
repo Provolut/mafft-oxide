@@ -1,0 +1,100 @@
+name: Release
+
+# The only workflow in this repository that can change something outside it. A
+# version on crates.io can be yanked but never deleted and never reused, so
+# everything here exists to make a wrong publish impossible rather than
+# recoverable.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Deliberately not cancel-in-progress, unlike ci.yml's group: interrupting an
+# upload is worse than letting a redundant run finish.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The same gates a branch push runs, called rather than copied: the tests,
+  # the coverage floor and the encoding check stay in `.githooks/pre-push` and
+  # this workflow cannot drift away from the one CI runs. ci.yml no longer
+  # triggers on tags, so a tag runs them exactly once, here.
+  gates:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: publish to crates.io
+    # `needs` is the fence that matters: nothing the gates rejected can reach
+    # the registry. The other two are the tag/Cargo.toml check below and the
+    # fact that only a v-tag triggers this file at all.
+    needs: gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Mints the OIDC token crates.io exchanges for a publish token. This is
+      # the only job in the repository that holds it, and the reason the
+      # publish lives in a workflow of its own rather than in ci.yml: the
+      # claim crates.io checks is the *workflow filename*, so a job added to
+      # ci.yml later cannot reach the registry, however it is written.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.0"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      # A tag that disagrees with Cargo.toml publishes the right name at the
+      # wrong number, and the tag is then a lie about what is on crates.io.
+      # Caught here rather than discovered in the registry, where it cannot be
+      # taken back.
+      - name: Tag matches Cargo.toml version
+        working-directory: rust
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "tag $GITHUB_REF_NAME -> $tag; Cargo.toml -> $crate"
+          if [ "$tag" != "$crate" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $crate"
+            exit 1
+          fi
+
+      # Trusted publishing. GitHub mints a short-lived OIDC JWT, crates.io
+      # exchanges it for a token scoped to this one job, and the action's
+      # `post` step revokes that token when the job ends. There is no
+      # long-lived `CARGO_REGISTRY_TOKEN` secret, which is the point: nothing
+      # in this repository, and nothing on a developer machine, can publish
+      # this crate.
+      #
+      # Pinned to a commit rather than to `v1`. A mutable tag in a job holding
+      # `id-token: write` would let whoever can move that tag mint registry
+      # tokens for this crate at any later date.
+      #
+      # This needs one matching configuration on crates.io, under the crate's
+      # settings: owner `Provolut`, repository `mafft-oxide`, workflow
+      # `release.yml`, environment left empty. Until that exists the exchange
+      # is refused and this job fails -- which is the right failure, since the
+      # alternative is a release that silently falls back to a stored
+      # credential. Adding an `environment:` here means filling that field
+      # there too, and is how to put a human approval in front of a release if
+      # that is ever wanted; the two must agree or the exchange is refused.
+      - name: Mint a crates.io token
+        id: auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+
+      # --locked because a publish that silently re-resolved dependencies is
+      # not the thing the gates just measured. The crate declares none, so
+      # this costs nothing and still asserts it.
+      - name: cargo publish
+        working-directory: rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked

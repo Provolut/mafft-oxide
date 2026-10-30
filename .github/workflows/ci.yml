@@ -3,9 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
-    # A v-tag runs the gates and then publishes; see the `publish` job.
-    tags: ["v*"]
   pull_request:
+  # release.yml calls this workflow on a v-tag and publishes if it passes, so
+  # the gates live here in one copy and a tag does not run them twice.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -108,61 +109,3 @@ jobs:
       - name: cargo publish --dry-run
         working-directory: rust
         run: cargo publish --dry-run
-
-  publish:
-    name: publish to crates.io
-    # The only irreversible job in this file. A version on crates.io can be
-    # yanked but never deleted and never reused, so it is fenced three ways:
-    # only a v-tag reaches it, `needs: gates` means it cannot publish anything
-    # the pre-push gates rejected, and the tag has to agree with Cargo.toml.
-    #
-    # Needs a CARGO_REGISTRY_TOKEN secret with publish scope for this crate.
-    # Without it the job fails at the last step rather than publishing
-    # something wrong. (crates.io Trusted Publishing over GitHub OIDC would
-    # drop the long-lived token, but it has to be configured against a crate
-    # that already exists, so it is a follow-up to the first release, not a
-    # prerequisite.) Add `environment:` here if the release should wait for a
-    # human approval in repository settings.
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: gates
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    # Deliberately not cancel-in-progress, unlike the workflow-level group:
-    # interrupting an upload is worse than letting a redundant run finish.
-    concurrency:
-      group: publish-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.98.0"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-
-      # A tag that disagrees with Cargo.toml publishes the right name at the
-      # wrong number, and the tag is then a lie about what is on crates.io.
-      # Caught here rather than discovered in the registry, where it cannot be
-      # taken back.
-      - name: Tag matches Cargo.toml version
-        working-directory: rust
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          crate=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-          echo "tag $GITHUB_REF_NAME -> $tag; Cargo.toml -> $crate"
-          if [ "$tag" != "$crate" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $crate"
-            exit 1
-          fi
-
-      # --locked because a publish that silently re-resolved dependencies is
-      # not the thing the gates just measured. The verify build cargo runs here
-      # is the one `cargo publish --dry-run` runs on every push.
-      - name: cargo publish
-        working-directory: rust
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked
