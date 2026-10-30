@@ -215,9 +215,52 @@ the tag and the commit disagree. `verify_pkg.sh --shapes` reports
 both drivers; and `disttbfast` accepts `-C 8-8` returning its own `-C 0-0`
 bytes, which is the structural half of the check that needs no clock.
 
-The consumer's pin moves to `0.4.0.*`, which is a `pyproject.toml` edit plus a
-re-lock. 0.3.0 builds 2 and 3 stay on the channel, which is append-only once
-anything has locked against it.
+**What the consumer took, and the verb that moves a build number.** They stayed
+on `0.3.0.*` and took build 3: no manifest edit and no PR, where `0.4.0.*`
+needs both -- and in that repository a dependency change may not ride a
+feature branch, so it would have waited for a `chore(deps)` PR. 0.4.0 is still
+the better thing to install once such a PR is going out anyway. Same source,
+same speed, so the choice was paperwork and not performance.
+
+The command is `pixi update mafft-oxide`, not `pixi lock`. Measured on a
+replica rather than reasoned about: with the pin still satisfied by `_2`,
+`pixi lock` prints "Lock-file was already up-to-date" and changes nothing,
+because a lock that satisfies the manifest is already correct. Only an upgrade
+verb moves within a satisfied constraint. A *changed* constraint is different
+-- with the pin edited to `0.4.0.*`, plain `pixi lock` moved `_2` to 0.4.0.
+Both sessions advising this had the verb wrong before one of them tested it.
+
+**At production size, measured by pml0 on the installed package:** 3831 x 334,
+1,202,735 bytes of real pipeline payload, `--auto --preservecase`, best of 2
+interleaved per arm, through the environment's own `mafft` and `mafft-oxide`
+on PATH, wall clock under `LC_ALL=C`. No cache on either side: the aligner is
+a binary invocation and the pipeline's realignment and trace caches sit above
+it, untouched by a direct run.
+
+    C          10767 ms   1.000
+    oxide _3    9067 ms   0.842
+
+Byte-identical at 4,542,015 bytes. Attributed to pml0, as the 9054 was.
+
+9067 against that 9054, measured earlier from a staged `target/release` and
+0.14% apart on the same payload, closes independently the question the `_2`
+row answers at 790: the package carries the source it claims to. A rebuild
+that had quietly picked up the old tree would have read about 14,700 here, as
+`_2` did.
+
+**A lock is not an installation.** After the update the lock named `_3` in all
+nine of its references, while of the consumer's six materialised environments
+only `full-cuda` held `_3` on disk -- `ci-cuda` and `ci-cuda-adept` still held
+`_2`'s binaries, and the structural check says so without a clock:
+`full-cuda`'s `disttbfast` accepts `-C 8-8`, the other two exit 1 with the old
+`threads change the result` refusal. `pixi run` re-syncs an environment before
+running, so this closes itself on next use; what it does not survive is a
+binary invoked by absolute path, or a shell activated before the update. Check
+what executed rather than what the lock records -- the same lesson as the
+empty-`MAFFT_BINARIES` canary.
+
+0.3.0 builds 2 and 3 and 0.4.0 all stay on the channel, which is append-only
+once anything has locked against it.
 
 The strategy matrix was *not* run at 3831 sequences, deliberately and after
 discussion. `--globalpair --maxiterate 100` at that size is on the order of
