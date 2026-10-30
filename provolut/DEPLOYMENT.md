@@ -290,14 +290,47 @@ rather than a quirk of one session's settings -- two independent sessions were
 refused the identical command. The right response is to hand the command to
 the user, not to look for a route around it.
 
-**Pages reporting `built` does not mean the CDN is serving it.** Measured on
-2026-10-30: the Pages build API reported `built` for the pushed commit, and a
-`repodata.json` fetch *after* that still returned the previous index, without
-the new build in it. A cache-busted re-fetch had it. So a resolver that cannot
-see a just-published build is looking at Fastly cache, not at a failed
-publish -- retry, rather than concluding the push did not land or repointing a
-pin at something older. Do not work around it by putting a cache-buster in a
-consumer's manifest.
+**Pages reporting `built` does not mean a resolver will see it, and a fresh
+`curl` cannot tell you whether it will.** Measured on 2026-10-30, and the
+second half of this was established by pml2-b4 from the resolver side after
+the first half had already been written down wrongly here.
+
+The Pages build API reported `built` for the pushed commit while
+`repodata.json` still came back as the previous index. That much a cache-busted
+re-fetch appeared to settle. It does not, and the reason matters: a fresh
+`curl` carries no validator, so it asks a different question than the resolver
+asks. `pixi lock` sends a conditional request with the ETag it already has, and
+the CDN answered **304 Not Modified** -- so rattler kept its stored payload,
+which listed 0.3.0 `_2`, `_3` and 0.4.0 `_0` and no `_1`. Visible in the cache
+directory as a split pair of mtimes: `…info.json` rewritten at revalidation
+time, the `…json` payload beside it untouched from hours earlier.
+
+The solve that followed was legal and silent. `0.4.0.*` admits any build
+number, so the solver picked `_0`, printed `Updated lock file`, and satisfied
+the pin. Nothing was broken and nothing warned. That is the false-pass shape
+this repository keeps getting caught by, and a cache-busted `curl` reported
+green through all of it.
+
+**So certify the resolve from the artifact, not from a claim about cache
+state.** Build 1's only difference from build 0 is the `gawk` run dependency,
+which makes the lock self-identifying:
+
+    grep -A4 'mafft-oxide-0.4.0-h1250391_1.conda' pixi.lock   # depends must list gawk
+
+`gawk` in the resolved entry's `depends` proves the solver saw `_1`. The same
+read in reverse is what caught the wrong build: `_0`'s `depends` was
+`__glibc`, `libgcc`, no gawk. Prefer a check like this -- one the artifact
+answers -- over asserting that a cache was bypassed.
+
+**Nothing gates a channel push.** `core.hooksPath` is the relative
+`.githooks`, which git resolves against the worktree, and the orphan
+`gh-pages` branch contains no such directory -- so pushing the channel runs no
+hook at all. Verified rather than inferred: `ls .githooks` in that worktree is
+`No such file or directory`. The gates would be meaningless there anyway, as
+the branch holds no source, and `pre-push` bails at `cd "$here/rust" || exit
+0` for exactly that reason. The consequence is what to keep in mind: the
+append-only rule and the identity of the uploaded artifact are enforced by a
+person checking, and by nothing else.
 
 Verify what is served, not what was built. For 0.4.0 build 1 that meant: the
 remote branch at the expected commit, the Pages build reporting that same
@@ -305,4 +338,7 @@ commit, `repodata.json` listing the file with its sha256 and size, and then
 the `.conda` actually fetched over HTTPS and `cmp`-ed against the local build
 -- byte-identical, sha256
 `abe7984179d9d0c06ec24521d4a366b38cde66c999af6b39b0ad671ee91dac06`. A digest
-in the index is a claim about a file; fetching the file is the check.
+in the index is a claim about a file; fetching the file is the check. That
+establishes the channel serves the bytes that were built, and nothing more --
+it is not the parity gate, and it says nothing about what a resolver will
+pick.
