@@ -606,9 +606,25 @@ stamp in the run record, which is the consumer's surface and not this one.
 `expr "$version" : v"$versionbin"` at `core/mafft.tmpl:49-59`, warning
 `v$versionbin != $version` on a mismatch. So making `version-rs` print a build
 identity on stdout would trip upstream's own consistency check on every run.
-The surface that looks inert is load-bearing. If a packaged build identity were
-ever wanted anyway, it belongs on a flag stock does not have, or a stream
-nothing parses -- not in what `version` prints.
+
+There is no gentler variant that survives, which is worth knowing before
+someone tries one. Line 52 is a commented-out `| awk '{print $1}'`; the live
+line takes raw stdout, so the `expr` match is against the whole string. The
+component must print exactly `7.526` (`VERSION` in `core/mltaln.h:39`), and
+every way of adding to it fires the warning -- measured against
+`version="v7.526 (2024/Apr/26)"`:
+
+    7.526                        ok, silent
+    7.526 build=h1250391_1       MISMATCH WARNING fires
+    7.526-h1250391_1             MISMATCH WARNING fires
+    7.526\nh1250391_1            MISMATCH WARNING fires
+
+Not just an extra line, and not just a trailing field: a suffix of any kind
+breaks it, because the regex is anchored at the start and the next character
+has to be the space in upstream's own string. The surface that looks inert is
+load-bearing. If a packaged build identity were ever wanted anyway, it belongs
+on a flag stock does not have, or a stream nothing parses -- not in what
+`version` prints.
 
 Two things follow. A `<version>.*` pin is only as strong as the publisher's
 discipline about what a build number means -- the rule is in `recipe/meta.yaml`
