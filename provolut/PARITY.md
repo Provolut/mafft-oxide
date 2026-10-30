@@ -536,11 +536,54 @@ absolute paths throughout:
                       -----------------
                       16492 comparisons, no failures
 
-Still pending, and named rather than implied: `verify_e2e.sh` and the four
-f64-bit-pattern harnesses (`verify_gaplen.sh`, `verify_flh.sh`, `verify_td.sh`,
-`verify_tdi.sh`), which compare at function level and need a `core/` built with
-the file-local statics exposed. So this is four of nine harnesses, not "parity
-at 0.4.0".
+Then the four that had been recorded here as pending, run the same day once
+the claim about them turned out to be wrong:
+
+    verify_flh.sh     pass=98     fail=0   sequence of 60 calls identical
+    verify_td.sh      pass=96     fail=0
+    verify_tdi.sh     pass=126    fail=0
+    verify_e2e.sh     pass=28     fail=0   refused=1
+                      -----------------
+                      348 comparisons, no failures
+
+**Eight of nine harnesses, 16840 comparisons, zero failures.** The one
+refusal is expected and is counted apart from the passes rather than inside
+them: `verify_e2e.sh:100` sets `REFUSED_BY_DVTDITR_RS="--allowshift"`, so
+`--allowshift --globalpair --maxiterate 100` is required to be refused, which
+is the envelope the package documents. A harness that scored a refusal as a
+pass would be the failure mode this file exists to catch.
+
+That `verify_e2e.sh` run had `TBFAST_RS` and `DVTDITR_RS` set as well as the
+positional `disttbfast-rs`, so every `--maxiterate` strategy in it ran with no
+C binary anywhere in the pipeline -- the driver, the three all-pairs matrices
+and the refinement all on ported code, compared against the same driver over
+the stock libexec.
+
+**What was wrong, recorded because it was repeated to three sessions and to
+the user before anyone checked it.** This section previously said the five
+pending harnesses "compare at function level and need a `core/` built with the
+file-local statics exposed". That is true of exactly one of them. Reading the
+headers rather than recalling them:
+
+- `verify_gaplen.sh <path-to-core-objdir>` needs the special build -- a
+  `core/` whose `Dalignmm.c` has had `static` removed from `gaplencount` and
+  the three live `calcpfac` functions, which are file-local in the shipped
+  source. This is the one genuinely blocked harness.
+- `verify_flh.sh`, `verify_td.sh` and `verify_tdi.sh` take a plain
+  `<path-to-core-dir>`. They compile their own C harness against that
+  directory's objects at run time -- `verify_td.sh:32` is a `gcc -std=c99
+  -Denablemultithread -O0` over `$COREDIR/*.o` -- so a normally built `core/`
+  is all they need, and one was sitting in the tree the whole time. They are
+  live differentials against the C, not replays: the `tests/golden/` fixtures
+  beside them are written only under `--regenerate`.
+- `verify_e2e.sh` needs no special build either, only absolute paths, a
+  libexec of C binaries, and `MAFFT` pointing at an executable driver.
+
+So the blocker reported for four harnesses applied to one, and a 4-of-9 figure
+was carried for a day when 8-of-9 was available for the cost of running it.
+The lesson is the narrow one: "pending" is a claim about what was tried, and
+reading a harness's usage line is cheaper than inferring its requirements from
+a sibling's.
 
 What makes those counts attestable rather than merely plausible, since a clean
 run proves nothing about bytes it did not actually execute:
