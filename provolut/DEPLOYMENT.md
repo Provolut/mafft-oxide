@@ -264,8 +264,8 @@ convenience.
 The channel is an orphan `gh-pages` branch of this repository, served by GitHub
 Pages at `https://provolut.github.io/mafft-oxide`. It holds `linux-64/` and
 `noarch/` subdirectories with their `repodata.json`, a `.nojekyll` at the root
-so Pages does not eat the underscore-prefixed names, and the `.conda` files
-themselves. As of 2026-10-30 it serves 0.3.0 builds 2 and 3, and 0.4.0 builds
+so Pages serves the tree as-is instead of running it through Jekyll, and the
+`.conda` files themselves. As of 2026-10-30 it serves 0.3.0 builds 2 and 3, and 0.4.0 builds
 0 and 1.
 
 Four things about the mechanism are not recoverable by reading the recipe, and
@@ -273,8 +273,9 @@ each of them has either cost time here or come close to it.
 
 **Index with a relative path.** The module is `conda_index`, not
 `conda-index`, and it must be run as `cd <channel> && python -m conda_index .`
-An absolute path argument produces an index that does not match where the
-files are served from.
+Passing an absolute path did not produce a usable channel here; the relative
+form does. The mechanism was never pinned down, so treat this as the invocation
+that works rather than as an explanation.
 
 **The channel is append-only.** Once a consumer's lock names a file, removing
 or rewriting that file 404s their CI. Replacements ship as a new build number;
