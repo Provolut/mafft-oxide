@@ -335,6 +335,54 @@ What it does and does not touch:
   C-locale host computes. Ratios between two arms in the same shell are
   unaffected; a number carried from one machine to another is not.
 
+There are in fact **two** locale faults in the driver, not one, and they fail
+at different points. Found by pml0-51 on the second and separated by
+measurement:
+
+    mawk, LC_NUMERIC=de_DE.UTF-8
+      print 0.0 + "0.1"      -> 0        coercion: the value never exists
+      print 0.1              -> 0,1      formatting: the value survives, the text does not
+    gawk 5.4.1, either locale -> 0.1 and 0.1
+
+**Coercion** is the worse one and the narrower. A quoted string coerced to a
+number yields `0`, so the value is gone inside `awk`, before anything reaches
+`strtod`; no component-side change could recover it. It is what
+`mafft.tmpl:904` and `:914` do, and those lines are gated on `--exp` and
+`--ep`, so only a run passing those flags reaches it. The `expr` guard
+underneath them does not catch it, because `0` is a number.
+
+**Formatting** is what the `--auto` path hits. A numeric literal in the awk
+source keeps its value -- mawk's lexer is locale-independent -- and `print`
+then emits it with the locale's decimal separator. That is the `-h 0,1` above,
+and the injection test shows it accounts for the whole difference on that path.
+
+**Which `awk` runs decides whether either fires, and PATH decides that.**
+gawk is locale-independent here, mawk is not. pml0-51's production figure --
+0.842x, byte-identical at 4,542,015 bytes -- was measured in a shell whose
+PATH put a pixi environment ahead of `/usr/bin`, and that environment ships
+gawk 5.4.1, so the driver got gawk and the intended `-0.1`. The figure
+describes the correct parameterisation after all; the inference that it was
+measured at `-h 0` was wrong, and the thing that decided it was PATH order
+rather than the locale.
+
+That is also what joins this to the service-host gap, and it is the reason to
+read the two as one finding rather than two. A host that execs the launcher by
+absolute path from a systemd unit loads no activation environment, so it gets
+`/usr/bin/awk`. On this machine that is mawk. Off the activation environment
+you therefore lose two things at once: the oxide binaries, and the similarity
+offset -- and only the first is visible. The second changes the alignment and
+says nothing.
+
+**This package is exposed to it.** `recipe/meta.yaml` declares no `run:`
+section, on the stated grounds that the driver's external commands are
+"coreutils/busybox-level". That is true as a claim about *presence* and false
+as a claim about *the answer*: the installed environment ships no `awk` at
+all, so the driver resolves whichever one the host has, and which one that is
+changes the output. Left as it stands rather than pinned, for the same reason
+the launcher is not pinned -- a `gawk` run-dependency would make this package
+answer differently from a stock `mafft` on a mawk host -- but it is a thing the
+recipe asserts and should not.
+
 Nothing in this tree pins the locale -- not a harness, not the recipe, not a
 hook -- and nothing here changes that. Pinning `LC_NUMERIC=C` inside the
 packaged launcher would make `mafft-oxide` answer differently from stock
