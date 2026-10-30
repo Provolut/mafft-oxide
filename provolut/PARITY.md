@@ -605,6 +605,25 @@ records, and that string is identical whether the box was on `_2` or `_3`. So
 "which numeric core produced this result" cannot be recovered from a run
 record after the fact.
 
+For the one case it mattered -- did any produced number come from `_3`, the
+build that reached the channel without a differential -- the answer is **no**,
+established on the consumer side against its tracking server: 33 experiments,
+103,137 runs including deleted ones, zero at or after the `_3` install at
+2026-10-30T08:20:57Z (dated from that checkout's own `conda-meta` mtime). Two
+details are worth keeping because they are the method rather than the result.
+The host tag that looked like the obvious discriminator could not have answered
+it -- both checkouts sit on the same host, so the tag cannot tell them apart.
+What carried it was a maximum timestamp: the newest run of any kind started
+about 36 hours before `_3` was installed, which covers the 21,218 rows carrying
+no host tag at all. A bound that holds for untagged rows is stronger than a
+filter that depends on the tag being present. Stated limits travelled with the
+answer: the port queried was not verified to be the shared server rather than a
+local store, and runs that never reached a server are outside it.
+
+So the distinction this section turns on is not merely defensible, it is moot
+in fact: `_3`'s numbers were unattested rather than suspect, and there are no
+such numbers.
+
 An earlier revision of this paragraph said the package should state its own
 build identity to close "our half" of that. That was wrong twice over, and the
 check that settles it is one file read.
