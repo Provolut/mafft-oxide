@@ -47,12 +47,35 @@ requirements:
     - {{ compiler('c') }}        # cargo needs a linker
     - {{ stdlib('c') }}          # required alongside a compiler
     - cargo-bundle-licenses      # writes THIRDPARTY.yml, listed below
-  # No `run:` section at all. The driver is a POSIX shell script whose only
-  # external commands are cat awk grep tr head sed wc mktemp basename uname
-  # tail sort dirname -- all coreutils/busybox-level -- and both `perl`
-  # references in the template are commented out. The nine components are
-  # static but for libc, which the compiler's own run-export pins. So there is
-  # nothing left to declare.
+  # No `run:` section, and one open question about that rather than a settled
+  # argument. The driver is a POSIX shell script whose only external commands
+  # are cat awk grep tr head sed wc mktemp basename uname tail sort dirname,
+  # and both `perl` references in the template are commented out. The nine
+  # components are static but for libc, which the compiler's own run-export
+  # pins.
+  #
+  # `awk` is the exception in that list and the earlier version of this
+  # comment was wrong to file it with the rest as "coreutils-level". It is
+  # present everywhere, but which *flavour* is present decides the answer, not
+  # merely whether the driver runs. mafft.tmpl:1507-1509 computes the
+  # similarity offset with awk, and mawk honours `LC_NUMERIC` where gawk does
+  # not: under a comma-decimal locale mawk hands the component `-h 0,1`, which
+  # it reads with C `strtod` as 0, and the alignment changes. Stock MAFFT does
+  # this too -- it is upstream's driver -- so it is not a divergence of the
+  # port, and within one locale the port stays byte-identical to the C. See
+  # `provolut/PARITY.md`.
+  #
+  # What that costs this recipe: conda-forge's own `mafft` package declares
+  # `gawk`, and conda-forge's gawk ships `bin/awk`, so installing the package
+  # this one substitutes for puts a locale-proof awk in the environment.
+  # Declaring `gawk` here would match that, and omitting it is what makes this
+  # package answer differently from stock on a host whose `/usr/bin/awk` is
+  # mawk. It is left undeclared pending a decision, not because the case is
+  # closed. Note also what the dependency would and would not buy: the driver
+  # resolves bare `awk` through PATH, so a gawk in the environment is found
+  # only when `<prefix>/bin` is on PATH -- a unit execing the launcher by
+  # absolute path still gets the host's awk, and for that case the fix is
+  # `LC_NUMERIC=C` in the unit rather than anything expressible here.
 
 test:
   files:
