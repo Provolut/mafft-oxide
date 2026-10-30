@@ -326,10 +326,15 @@ What it does and does not touch:
   correct value.
 - **Every differential harness result stands.** Both arms of every comparison
   ran in one locale, so what they measured is what they claim to measure.
-  `verify_pkg.sh --shapes` was re-run against the installed 0.4.0 package under
-  `LC_NUMERIC=C`, which is the parameterisation the comma locale had been
-  hiding: `pass=37 fail=0 refused=1`, the refusal the same
-  `--allowshift --globalpair --maxiterate 100`. The package is clean at both.
+  `verify_pkg.sh --shapes` was re-run under `LC_NUMERIC=C`, which is the
+  parameterisation the comma locale had been hiding from every acceptance run
+  made here: `pass=37 fail=0 refused=1` against the installed 0.4.0 package,
+  and the same `pass=37 fail=0 refused=1` against installed `0.3.0 _2` -- the
+  build provolut-ml's lock actually holds, run because acceptance for a
+  version the consumer does not install is evidence about the wrong artifact
+  (pml2-b4's flag). Same refusal both times,
+  `--allowshift --globalpair --maxiterate 100`. The package is clean at both
+  parameterisations and on both builds.
 - **Absolute timings are locale-bound.** A figure measured in a comma-decimal
   shell was measured at `-h 0`, on a different alignment from the one a
   C-locale host computes. Ratios between two arms in the same shell are
@@ -355,6 +360,41 @@ underneath them does not catch it, because `0` is a number.
 source keeps its value -- mawk's lexer is locale-independent -- and `print`
 then emits it with the locale's decimal separator. That is the `-h 0,1` above,
 and the injection test shows it accounts for the whole difference on that path.
+
+Which of the two fires on the default path follows from the two argument slots
+in `mafft.tmpl:1507-1509`, and pml2-b4 worked it out:
+
+    aof=`awk "BEGIN{print 0.0 + \"$similarityoffset\" + $aof}"`
+
+`$similarityoffset` lands in the quoted **string** slot, so it goes through the
+coercion -- but its default is `"0.0"` (:293), which is 0 either way, so the
+fault is invisible there. `$aof` is substituted bare, as an awk numeric
+**literal**: mawk's lexer reads it locale-independently, so the value survives
+and it is `print` that then renders it with a comma. The nonzero defaults are
+all in that literal slot -- `defaultlaof="0.100"` (:91), `pgaof="0.10"` (:206);
+`defaultaof="0.000"` (:90) reads as `0` in either locale. So comma-on-output is
+the form the default path takes, which is why the captured argv shows `-h 0,1`
+and not `-h 0`.
+
+**The driver's own `LANG=C` does not protect it.** `mafft.tmpl:5` is
+`LANG=C; export LANG`, which looks like exactly this defence and is not one:
+`LANG` is only the fallback an unset category falls back to, and an explicit
+`LC_NUMERIC` overrides it. Measured on mawk:
+
+    LANG=C, LC_NUMERIC unset        -> 0.1
+    LANG=C, LC_NUMERIC=de_DE.UTF-8  -> 0,1
+    LANG=de_DE.UTF-8, unset         -> 0,1
+
+This also bounds the `env -i` test above. That test set no locale at all, so
+the driver's `LANG=C` won by default and the run took the correct arm -- which
+makes it sound evidence for the claim it was making, that the launcher
+self-locates without an activation environment, and no evidence at all about
+the locale. The realistic unit is worse than it, because **systemd propagates
+`/etc/default/locale` into services** and on this machine that file sets
+`LC_NUMERIC=de_DE.UTF-8`. Measured with exactly that environment and systemd's
+default unit PATH: 95768 bytes, the broken arm. Adding one line,
+`Environment=LC_NUMERIC=C`, restores 101549. So the fix is a unit line and it
+is verified to work, rather than inferred to.
 
 **Which `awk` runs decides whether either fires, and PATH decides that.**
 gawk is locale-independent here, mawk is not. pml0-51's production figure --
