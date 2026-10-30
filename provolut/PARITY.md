@@ -190,14 +190,34 @@ components differing between the two arms and the empty-`MAFFT_BINARIES`
 canary failing first so the variable is demonstrably honoured. Run twice: once
 with the stock driver over both libexecs, once with the packaged driver.
 
-Two notes for whoever reads the artifact rather than this file. The consumer's
-manifest pins `mafft-oxide = "0.3.0.*"`, which accepts a new build number, so
-picking this up is a `pixi lock` with no manifest edit, where 0.3.1 or 0.4.0
-would have needed a `pyproject.toml` change and a PR. And because of that, the
-version string 0.3.0 now covers two different trees: crates.io's 0.3.0 is the
-tag, builds 0 to 2 came from it, and build 3 came from `debddb7`. Same
-alignments to the byte, different speed. `recipe/meta.yaml` records which
-commit each build number was cut from.
+Build 3 went out as a build number because the consumer's manifest pinned
+`mafft-oxide = "0.3.0.*"`, which accepts one with no `pyproject.toml` edit and
+no PR, where a version move would have needed both. The cost of that was a
+version string covering two trees: crates.io's 0.3.0 and builds 0 to 2 are the
+`v0.3.0` tag, build 3 was cut from `debddb7`.
+
+**0.4.0 closes that, and is what to install.** Same source as build 3, tagged
+`v0.4.0`, so the tag, the crate and the package describe one tree again, and
+`--thread` is named in the version rather than hidden in a build number --
+which it is, since the flag went from exiting 1 to being honoured. Built from
+the tag, installed from a fresh pixi environment and measured there, same
+payload and method, best of 5 interleaved:
+
+    C, stock                    873 ms   1.000
+    packaged 0.4.0              763 ms   0.874
+    packaged 0.4.0 --thread 8   562 ms   0.644
+    packaged 0.3.0 _3           761 ms   0.872
+
+0.4.0 and 0.3.0 build 3 agreeing to 2 ms is the expected result and worth
+recording as one: they are the same source, so a difference would have meant
+the tag and the commit disagree. `verify_pkg.sh --shapes` reports
+`pass=37 fail=0 refused=1` against the installed 0.4.0 libexec, again run with
+both drivers; and `disttbfast` accepts `-C 8-8` returning its own `-C 0-0`
+bytes, which is the structural half of the check that needs no clock.
+
+The consumer's pin moves to `0.4.0.*`, which is a `pyproject.toml` edit plus a
+re-lock. 0.3.0 builds 2 and 3 stay on the channel, which is append-only once
+anything has locked against it.
 
 The strategy matrix was *not* run at 3831 sequences, deliberately and after
 discussion. `--globalpair --maxiterate 100` at that size is on the order of
