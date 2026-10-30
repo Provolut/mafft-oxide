@@ -258,3 +258,50 @@ convenience.
   the driver would mean reproducing its strategy selection exactly -- a
   different choice produces different output even with bit-exact components --
   for no benefit over composing with the C script.
+
+## Publishing a build to the channel
+
+The channel is an orphan `gh-pages` branch of this repository, served by GitHub
+Pages at `https://provolut.github.io/mafft-oxide`. It holds `linux-64/` and
+`noarch/` subdirectories with their `repodata.json`, a `.nojekyll` at the root
+so Pages does not eat the underscore-prefixed names, and the `.conda` files
+themselves. As of 2026-10-30 it serves 0.3.0 builds 2 and 3, and 0.4.0 builds
+0 and 1.
+
+Four things about the mechanism are not recoverable by reading the recipe, and
+each of them has either cost time here or come close to it.
+
+**Index with a relative path.** The module is `conda_index`, not
+`conda-index`, and it must be run as `cd <channel> && python -m conda_index .`
+An absolute path argument produces an index that does not match where the
+files are served from.
+
+**The channel is append-only.** Once a consumer's lock names a file, removing
+or rewriting that file 404s their CI. Replacements ship as a new build number;
+nothing already published is ever deleted or overwritten. This is why four
+builds are served rather than one, and the build-number rule in
+`recipe/meta.yaml` -- a build number may only ever repackage the same code --
+is the other half of the same constraint.
+
+**The push needs a person.** An agent cannot push this branch: the permission
+classifier refuses it as creating a public surface, and that is structural
+rather than a quirk of one session's settings -- two independent sessions were
+refused the identical command. The right response is to hand the command to
+the user, not to look for a route around it.
+
+**Pages reporting `built` does not mean the CDN is serving it.** Measured on
+2026-10-30: the Pages build API reported `built` for the pushed commit, and a
+`repodata.json` fetch *after* that still returned the previous index, without
+the new build in it. A cache-busted re-fetch had it. So a resolver that cannot
+see a just-published build is looking at Fastly cache, not at a failed
+publish -- retry, rather than concluding the push did not land or repointing a
+pin at something older. Do not work around it by putting a cache-buster in a
+consumer's manifest.
+
+Verify what is served, not what was built. For 0.4.0 build 1 that meant: the
+remote branch at the expected commit, the Pages build reporting that same
+commit, `repodata.json` listing the file with its sha256 and size, and then
+the `.conda` actually fetched over HTTPS and `cmp`-ed against the local build
+-- byte-identical, sha256
+`abe7984179d9d0c06ec24521d4a366b38cde66c999af6b39b0ad671ee91dac06`. A digest
+in the index is a claim about a file; fetching the file is the check.
