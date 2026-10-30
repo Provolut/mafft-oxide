@@ -28,7 +28,11 @@ build:
   # append-only once anything has locked against it; what each of those
   # numbers held, and why 0.3.0 ended with a build cut from a commit rather
   # than a tag, is in this file's git history.
-  number: 0
+  #
+  # 0 -> 1 declares `gawk`. No source change: the same tag, the same nine
+  # binaries, the same bytes out of them. What changes is which `awk` the
+  # driver finds, and that changes the answer -- see `run:` below.
+  number: 1
   # The driver is a POSIX shell script and the components are built with
   # conda's unix rust toolchain. `__unix` as a run dependency expressed this
   # too, but a skip is what conda-forge's build matrix reads.
@@ -47,35 +51,42 @@ requirements:
     - {{ compiler('c') }}        # cargo needs a linker
     - {{ stdlib('c') }}          # required alongside a compiler
     - cargo-bundle-licenses      # writes THIRDPARTY.yml, listed below
-  # No `run:` section, and one open question about that rather than a settled
-  # argument. The driver is a POSIX shell script whose only external commands
-  # are cat awk grep tr head sed wc mktemp basename uname tail sort dirname,
-  # and both `perl` references in the template are commented out. The nine
-  # components are static but for libc, which the compiler's own run-export
-  # pins.
+  # One run dependency, and it is not about whether the driver runs.
   #
-  # `awk` is the exception in that list and the earlier version of this
-  # comment was wrong to file it with the rest as "coreutils-level". It is
-  # present everywhere, but which *flavour* is present decides the answer, not
-  # merely whether the driver runs. mafft.tmpl:1507-1509 computes the
-  # similarity offset with awk, and mawk honours `LC_NUMERIC` where gawk does
-  # not: under a comma-decimal locale mawk hands the component `-h 0,1`, which
-  # it reads with C `strtod` as 0, and the alignment changes. Stock MAFFT does
-  # this too -- it is upstream's driver -- so it is not a divergence of the
-  # port, and within one locale the port stays byte-identical to the C. See
-  # `provolut/PARITY.md`.
+  # The driver is a POSIX shell script whose external commands are cat awk
+  # grep tr head sed wc mktemp basename uname tail sort dirname; both `perl`
+  # references in the template are commented out, and the nine components are
+  # static but for libc, which the compiler's own run-export pins. All of
+  # those are present on any host, and for all of them but one that is the
+  # whole question.
   #
-  # What that costs this recipe: conda-forge's own `mafft` package declares
-  # `gawk`, and conda-forge's gawk ships `bin/awk`, so installing the package
-  # this one substitutes for puts a locale-proof awk in the environment.
-  # Declaring `gawk` here would match that, and omitting it is what makes this
-  # package answer differently from stock on a host whose `/usr/bin/awk` is
-  # mawk. It is left undeclared pending a decision, not because the case is
-  # closed. Note also what the dependency would and would not buy: the driver
-  # resolves bare `awk` through PATH, so a gawk in the environment is found
-  # only when `<prefix>/bin` is on PATH -- a unit execing the launcher by
-  # absolute path still gets the host's awk, and for that case the fix is
-  # `LC_NUMERIC=C` in the unit rather than anything expressible here.
+  # `awk` is the exception. Which *flavour* is present decides the answer, not
+  # merely whether the driver runs. `mafft.tmpl:1507-1509` computes the
+  # similarity offset with awk; mawk honours `LC_NUMERIC` where gawk does not,
+  # so under a comma-decimal locale mawk hands the component `-h 0,1`, which it
+  # reads with C `strtod` as 0 -- and the alignment changes. Stock MAFFT does
+  # this too, because it is upstream's driver, and within any one locale the
+  # port stays byte-identical to the C. The mechanism and the measurements are
+  # in `provolut/PARITY.md`.
+  #
+  # conda-forge's own `mafft` declares `gawk`, and conda-forge's gawk ships
+  # `bin/awk` as well as `bin/gawk`. So installing the package this one
+  # substitutes for puts a locale-proof awk in the environment, and declaring
+  # it here is what makes this package behave like the thing it replaces
+  # rather than what makes it differ. An earlier revision of this comment
+  # argued the opposite and was wrong; the git history has it.
+  #
+  # What it does not buy, so this is not mistaken for the whole fix: the
+  # driver resolves bare `awk` through PATH, so this gawk is found only when
+  # `<prefix>/bin` is on PATH -- an activated environment, `pixi run`, or a
+  # unit that sets PATH. A systemd unit execing the launcher by absolute path
+  # and leaving PATH alone still finds the host's awk, and for that case the
+  # fix is `LC_NUMERIC=C` in the unit, which nothing in this recipe can
+  # express. Pinning the locale inside the launcher is deliberately not done:
+  # it would make this package answer differently from a stock `mafft` run the
+  # same way, which is the one rule this repository exists to keep.
+  run:
+    - gawk
 
 test:
   files:

@@ -249,11 +249,30 @@ that had quietly picked up the old tree would have read about 14,700 here, as
 `_2` did.
 
 **A lock is not an installation.** After the update the lock named `_3` in all
-nine of its references, while of the consumer's six materialised environments
-only `full-cuda` held `_3` on disk -- `ci-cuda` and `ci-cuda-adept` still held
-`_2`'s binaries, and the structural check says so without a clock:
-`full-cuda`'s `disttbfast` accepts `-C 8-8`, the other two exit 1 with the old
-`threads change the result` refusal. `pixi run` re-syncs an environment before
+nine of its references, while in pml0's checkout only `full-cuda` held `_3` on
+disk -- `ci-cuda` and `ci-cuda-adept` still held `_2`'s binaries, and the
+structural check says so without a clock: `full-cuda`'s `disttbfast` accepts
+`-C 8-8`, the other two exit 1 with the old `threads change the result`
+refusal.
+
+Which environments exist is a property of a checkout rather than of the
+project, which is worth stating because both this file and pml2-b4 have given
+a single number for it and no single number is right. Measured across the five
+clones:
+
+    checkout  materialised environments                                  mafft-oxide
+    pml0      ci-adept ci-cuda ci-cuda-adept default full full-cuda      _3 in full-cuda, _2 in ci-cuda and ci-cuda-adept
+    pml1      ci ci-cuda-adept default full full-cuda                    _2 in full-cuda
+    pml2      ci ci-cuda-adept default full full-cuda full-cuda-probe    _2 in full-cuda
+    pml3      full full-cuda                                             _2 in full-cuda
+    pml4      full-cuda                                                  _2 in full-cuda
+
+So `ci-cuda` is real in pml0, where the observation was made, and absent in
+pml2, where pml2-b4 looked for it -- neither reading was wrong about its own
+tree. Seven materialised environments hold the package in all, six of them at
+`_2` and one at `_3`. Every one of those builds produces byte-identical
+alignments, so a stale environment is slow and never wrong, and no computed
+result anywhere in that table needs revisiting. `pixi run` re-syncs an environment before
 running, so this closes itself on next use; what it does not survive is a
 binary invoked by absolute path, or a shell activated before the update. Check
 what executed rather than what the lock records -- the same lesson as the
