@@ -9,6 +9,19 @@ Output did not change at any point. Every kept change was measured with
 `bench/profile.sh`, which refuses to record a row unless both binaries exit 0
 and produce identical bytes.
 
+> **This file is chronological, and a stale entry is not a contradiction.**
+> Entries are appended and dated; an estimate or a ranking is superseded by a
+> later entry that names and refutes it, never by editing the earlier one. So
+> an item that looks wrong -- `## What is left` still ranks the scan fusion
+> first at "perhaps 15%", which the next section measures and rejects -- is
+> answered by reading forward, not by correcting it in place. That edit was
+> drafted once and stopped only by reading on. It is worth saying why it would
+> have been worse than the inconsistency it removed: it would have deleted the
+> evidence that the estimate was tested and refuted, which is unrecoverable
+> from the tree afterwards, and it would have left the document looking *more*
+> coherent than the work it records. A log that reads cleanly because its
+> refuted predictions were tidied away is no longer evidence of anything.
+
 > **The 90 minutes here are an estimate, not a record.** GOAL.md asks for start
 > and finish times in the write-up and they were never taken; the figure is the
 > author's own tally of effort spent on optimisation attempts. Stated plainly
