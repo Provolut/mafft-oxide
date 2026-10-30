@@ -558,9 +558,39 @@ That reasoning is false, and this recipe is why.
 `_2` was built from tag `v0.3.0`. `_3` was built from a bare commit that
 already carried the threading work: 566 insertions across 8 files, `score.rs`
 rewritten by 231 lines, `parallel.rs` new. Both carry the version string
-`0.3.0`. So the 566 insertions reached consumers *as a rebuild*, under a pin
-whose whole purpose was to refuse code movement, and two downstream checkouts
-are running different numeric cores under the same manifest line today.
+`0.3.0`. So the 566 insertions were *published* as a rebuild, under a pin whose
+whole purpose was to refuse code movement.
+
+How far they actually travelled is narrower than that, and the correction is
+worth keeping because the first version of this section overstated it. The
+consumer's **committed lock still names `_2`**, so every machine that
+materialises `--locked` gets the tag build. Exactly one checkout runs `_3`,
+because someone ran `pixi update mafft-oxide` standing in it, and that lock
+change is still unstaged. Measured three ways in that checkout: `git show
+HEAD:pixi.lock` gives nine `_2` references, the working tree gives nine `_3`,
+and the installed `conda-meta` says `_3`. So the exposure was one machine, not
+a fleet, and the lock is what held the line -- not the pin, which had already
+been crossed at publish time.
+
+That relocates where the remaining risk lives, and it is the part the recipe
+rule above cannot reach. The rule stops the *package* being built that way. It
+does nothing about a lock that already names such a build, and committing that
+lock would have moved the 566 insertions onto every machine in the fleet under
+an unchanged `0.3.0.*` manifest line, with no differential ever having run
+against them. The shape that would have carried it is a `chore(deps)` PR: nine
+build-string lines, no manifest change, nothing on its face for a reviewer to
+stop at. A version pin can be defeated through the lock without the manifest
+ever being touched.
+
+One traceability gap follows and is recorded here because it is not answerable
+from this repository. Nothing in a produced number says which build made it:
+the consumer stamps a `code_version` from its own git tag onto run records, and
+that string is identical whether the box was on `_2` or `_3`. The package does
+not help either -- `mafft-oxide --version` reports upstream's `v7.526`, not the
+conda build string. So "which numeric core produced this result" cannot be
+recovered after the fact. Making the package state its own build identity would
+close the half of that which is ours; it has not been done, and it is a change
+to what the package prints rather than to what it computes.
 
 Two things follow. A `<version>.*` pin is only as strong as the publisher's
 discipline about what a build number means -- the rule is in `recipe/meta.yaml`

@@ -39,10 +39,12 @@ build:
   # threading work -- 566 insertions across 8 files, `score.rs` rewritten by
   # 231 lines and `parallel.rs` new. Both say `0.3.0`. So a consumer pinned
   # `0.3.0.*` can be moved between two materially different numeric cores by a
-  # rebuild, with no version change to notice it by, and that is exactly what
-  # happened: two downstream checkouts are on `_2` and `_3` today under the
-  # same manifest line. A pin of the form `<version>.*` is a weaker guarantee
-  # than it looks wherever this rule is not held to.
+  # rebuild, with no version change to notice it by. What limited the damage
+  # was not the pin: the consumer's committed lock still named `_2`, so every
+  # machine materialising `--locked` got the tag build, and only the one
+  # checkout where someone ran an update interactively ended up on `_3`. A pin
+  # of the form `<version>.*` is a weaker guarantee than it looks wherever this
+  # rule is not held to, and the lock is what actually held the line.
   #
   # 0 -> 1 declares `gawk`. No source change: the same tag, the same nine
   # binaries, the same bytes out of them. What changes is which `awk` the
