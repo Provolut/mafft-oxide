@@ -418,10 +418,39 @@ section, on the stated grounds that the driver's external commands are
 "coreutils/busybox-level". That is true as a claim about *presence* and false
 as a claim about *the answer*: the installed environment ships no `awk` at
 all, so the driver resolves whichever one the host has, and which one that is
-changes the output. Left as it stands rather than pinned, for the same reason
-the launcher is not pinned -- a `gawk` run-dependency would make this package
-answer differently from a stock `mafft` on a mawk host -- but it is a thing the
-recipe asserts and should not.
+changes the output.
+
+The first reason given here for leaving it unpinned was wrong, and pml2-b4
+inverted it from the packaging metadata. It read: a `gawk` run-dependency
+would make this package answer differently from a stock `mafft` on a mawk
+host. But the comparison that matters is against the *package* this one
+substitutes for, and conda-forge's `mafft` pins `gawk`:
+
+    mafft-7.526-h4bc722e_0        depends: __glibc, gawk, libgcc-ng
+    mafft-oxide-0.4.0-h1250391_0  depends: __glibc, libgcc
+
+Read from installed metadata, not from a recipe. conda-forge's `gawk 5.4.1`
+ships `bin/awk` as well as `bin/gawk`, and that gawk is locale-independent for
+both faults -- verified, `0.1` under `de_DE.UTF-8` for coercion and
+formatting alike. So installing stock `mafft` from conda-forge *brings* a
+locale-proof `awk` into the environment, and the mafft feedstock evidently
+knows why. Faithfulness to the thing being replaced therefore argues **for**
+the run-dependency; omitting it is what makes this package behave differently
+from stock. The exposed case is the one this work is heading for: a lean
+service host that installs the port and no stock `mafft`.
+
+One limit on what the run-dependency would buy, because it is not a substitute
+for the unit line. The driver calls bare `awk`, resolved through `PATH`. A
+`gawk` inside the environment is only found when `<env>/bin` is on `PATH` --
+measured: with a gawk-providing bin directory ahead of the system one, the
+launcher returns the correct arm under `de_DE.UTF-8`. A unit that execs
+`<env>/bin/mafft-oxide` by absolute path and leaves `PATH` alone never searches
+that directory and still gets `/usr/bin/awk`. So the run-dependency closes the
+activated-environment case and `Environment=LC_NUMERIC=C` closes the unit case,
+and neither covers the other.
+
+Unchanged for now because a run-dependency means a build, a channel publish and
+a consumer re-lock, which is a decision rather than an edit.
 
 Nothing in this tree pins the locale -- not a harness, not the recipe, not a
 hook -- and nothing here changes that. Pinning `LC_NUMERIC=C` inside the
