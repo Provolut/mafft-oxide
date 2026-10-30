@@ -450,9 +450,24 @@ impl Args {
             // segfaults; there is no output to be identical to.
             bad.push("-Y (--keeplength) without -I <n> crashes the C too");
         }
-        if self.nthread > 0 || self.nthreadpair > 0 || self.nthreadtb > 0 {
-            bad.push("threads change the result; run with -C 0-0");
-        }
+        // Threads used to be refused outright here, with the message "threads
+        // change the result". That was never measured and is not true of this
+        // binary: `core/disttbfast` built with `-Denablemultithread` gives
+        // byte-identical stdout and side files at `-C 1-1`, `-C 8-8` and
+        // `-C 8-0` as at `-C 0-0`, on 1038 comparisons across four strategies
+        // and two payloads. The claim was an assumption wearing an error
+        // message, and it cost a caller passing an explicit `--thread 1` a
+        // hard failure with no output.
+        //
+        // `nthreadpair` now drives the three all-pairs matrices, whose cells
+        // are each a pure function of their own `(i, j)` -- so the result does
+        // not depend on the count. `nthreadtb` is *accepted and ignored*: the
+        // progressive step runs sequentially whatever it says, because its
+        // node order is load-bearing and it walks persistent scratch. That
+        // follows the C, which also decides internally how much of what it was
+        // asked for it can use (`disttbfast.c:3554` drops `nthreadtb` to 0
+        // above 20000 sequences, `:3961` for the chain guide trees).
+        let _ = self.nthreadtb;
         if self.scoremtx == 2 {
             bad.push("-b 2 (Miyata-Yasunaga) is not supported by the C either");
         }

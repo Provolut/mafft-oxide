@@ -280,11 +280,15 @@ pub fn build_tuples(cn: &Constants, seq: &[Vec<u8>], njob: usize, tuplesize: usi
     }
 }
 
+/// `nthreads` is what `-C` asked for; 1 or less runs inline. Every cell is a
+/// pure function of its own `(i, j)`, so the matrix does not depend on it --
+/// see `crate::parallel`.
 pub fn distance_matrix(
     cn: &Constants,
     seq: &[Vec<u8>],
     njob: usize,
     tuplesize: usize,
+    nthreads: usize,
 ) -> (Vec<Vec<f64>>, Vec<usize>) {
     let Tuples {
         pointt,
@@ -297,35 +301,55 @@ pub fn distance_matrix(
         lenfacd,
     } = build_tuples(cn, seq, njob, tuplesize);
 
-    let mut sextet = Sextet::new(tsize, maxl);
     let mut mtx: Vec<Vec<f64>> = (0..njob).map(|i| vec![0.0; njob - i]).collect();
-    let mut table1 = vec![0i32; tsize];
-    for i in 0..njob {
-        table1.iter_mut().for_each(|v| *v = 0);
-        makecompositiontable_p(&mut table1, &pointt[i]);
-        for j in i..njob {
-            mtx[i][j - i] = sextet.common(&table1, &pointt[j]) as f64;
-        }
-    }
 
-    let ien = njob - 1;
-    for i in 0..ien {
-        for j in i + 1..njob {
-            let (longer, shorter) = if nogaplen[i] > nogaplen[j] {
-                (nogaplen[i] as f64, nogaplen[j] as f64)
-            } else {
-                (nogaplen[j] as f64, nogaplen[i] as f64)
-            };
-            let lenfac =
-                1.0 / (shorter / longer * lenfacd + lenfacb / (longer + lenfacc) + lenfaca);
-            let bunbo = mtx[i][0].min(mtx[j][0]);
-            mtx[i][j - i] = if bunbo == 0.0 {
-                2.0
-            } else {
-                (1.0 - mtx[i][j - i] / bunbo) * lenfac * 2.0
-            };
-        }
-    }
+    // The `Sextet` and the composition table are per-worker scratch, which is
+    // what the C allocates per thread as well. `table1` is rebuilt for every
+    // row regardless, so sharing one per worker costs nothing.
+    crate::parallel::fill_rows(
+        &mut mtx,
+        nthreads,
+        || (Sextet::new(tsize, maxl), vec![0i32; tsize]),
+        |(sextet, table1), i, row| {
+            table1.iter_mut().for_each(|v| *v = 0);
+            makecompositiontable_p(table1, &pointt[i]);
+            for j in i..njob {
+                row[j - i] = sextet.common(table1, &pointt[j]) as f64;
+            }
+        },
+    );
+
+    // The second pass reads the diagonal of row `j` while writing row `i`, so
+    // it cannot borrow the matrix row-wise with those reads still in it. The
+    // diagonals are finished and never written again here -- this pass only
+    // touches `j > i`, and `mtx[i][0]` is the `j == i` cell -- so lifting them
+    // out first is not a reordering, it is the same values read from a copy.
+    let diag: Vec<f64> = mtx.iter().map(|row| row[0]).collect();
+    crate::parallel::fill_rows(
+        &mut mtx,
+        nthreads,
+        || (),
+        |_, i, row| {
+            if i + 1 >= njob {
+                return;
+            }
+            for j in i + 1..njob {
+                let (longer, shorter) = if nogaplen[i] > nogaplen[j] {
+                    (nogaplen[i] as f64, nogaplen[j] as f64)
+                } else {
+                    (nogaplen[j] as f64, nogaplen[i] as f64)
+                };
+                let lenfac =
+                    1.0 / (shorter / longer * lenfacd + lenfacb / (longer + lenfacc) + lenfaca);
+                let bunbo = diag[i].min(diag[j]);
+                row[j - i] = if bunbo == 0.0 {
+                    2.0
+                } else {
+                    (1.0 - row[j - i] / bunbo) * lenfac * 2.0
+                };
+            }
+        },
+    );
 
     (mtx, nogaplen)
 }

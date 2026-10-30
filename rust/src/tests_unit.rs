@@ -947,9 +947,34 @@ fn unsupported_configurations_are_refused() {
     argv.push("-Y".into()); // --keeplength
     assert!(Args::parse(&argv).unwrap().check_supported().is_err());
 
-    // Threads change the result, so they must not be silently accepted.
-    let argv: Vec<String> = vec!["-C".into(), "4".into()];
-    assert!(Args::parse(&argv).unwrap().check_supported().is_err());
+    // Threads are accepted. This asserted a refusal until the claim behind it
+    // -- "threads change the result" -- was measured and found false for this
+    // binary: `core/disttbfast` built with `-Denablemultithread` gives
+    // byte-identical output at `-C 1-1`, `-C 8-8` and `-C 8-0` as at `-C 0-0`
+    // over 1038 comparisons, and the port's own matrices are thread-count
+    // independent over 2752 (`verify/verify_threads.sh`). What is asserted is
+    // the same strength as before, with the opposite sign, and both halves of
+    // `-C a-b` are checked because a transposed parse would pass either alone.
+    for spec in ["4", "0-0", "8-8", "8-0", "0-8", "1-1"] {
+        let argv: Vec<String> = vec!["-C".into(), spec.into()];
+        let a = Args::parse(&argv).unwrap();
+        assert!(
+            a.check_supported().is_ok(),
+            "-C {} should be accepted",
+            spec
+        );
+    }
+    // Accepted means parsed, not ignored: `-C a-b` sets the pair count from
+    // the left and the progressive count from the right, and `-C a` sets both.
+    // `nthreadpair` is what drives the matrices, so a parse that dropped it
+    // would silently run single-threaded and every speed claim here would be
+    // untestable.
+    let argv: Vec<String> = vec!["-C".into(), "8-3".into()];
+    let a = Args::parse(&argv).unwrap();
+    assert_eq!((a.nthread, a.nthreadpair, a.nthreadtb), (8, 8, 3));
+    let argv: Vec<String> = vec!["-C".into(), "5".into()];
+    let a = Args::parse(&argv).unwrap();
+    assert_eq!((a.nthread, a.nthreadpair, a.nthreadtb), (5, 5, 5));
 
     // The supported baseline passes.
     let argv: Vec<String> = base.to_vec();
@@ -1091,6 +1116,168 @@ fn fast_and_plain_pair_scores_agree() {
             assert_eq!(plain, fast, "pair {}-{}", i, j);
         }
     }
+}
+
+/// `fill_rows` must give the same matrix for every worker count.
+///
+/// The three all-pairs matrices rely on this, and the thread count is the one
+/// input to them that a user can change from the command line. The body here
+/// is deliberately a pure function of `(i, j)` -- that is the contract callers
+/// sign -- and the counts include ones that do not divide the row count, one
+/// that exceeds it so some workers get no rows at all, and 0 and 1, which take
+/// the inline path and must agree with the threaded ones.
+#[test]
+fn fill_rows_does_not_depend_on_the_worker_count() {
+    use crate::parallel::{fill_rows, workers};
+    // A half matrix, the shape the real callers use: row i holds n - i cells.
+    let build = |n: usize, nthreads: usize| -> Vec<Vec<f64>> {
+        let mut mtx: Vec<Vec<f64>> = (0..n).map(|i| vec![-1.0; n - i]).collect();
+        fill_rows(
+            &mut mtx,
+            nthreads,
+            // Per-worker scratch, to exercise that it is built per worker and
+            // that a worker which writes into it cannot disturb another's.
+            || vec![0.0f64; 8],
+            |scratch, i, row| {
+                for (k, cell) in row.iter_mut().enumerate() {
+                    let j = i + k;
+                    scratch[i % 8] = (i * 31 + j) as f64;
+                    *cell = scratch[i % 8] * 0.5 + (j as f64) / 7.0;
+                }
+            },
+        );
+        mtx
+    };
+    let mut compared = 0usize;
+    for &n in &[0usize, 1, 2, 3, 17, 64] {
+        let reference = build(n, 1);
+        // Every cell must have been written, or a matrix of untouched -1.0
+        // would compare equal to another matrix of untouched -1.0.
+        for row in &reference {
+            for &c in row {
+                assert_ne!(c, -1.0, "n={}: a cell was never written", n);
+            }
+        }
+        for &t in &[0usize, 1, 2, 3, 5, 8, 64] {
+            let got = build(n, t);
+            assert_eq!(got, reference, "n={}, {} workers", n, t);
+            compared += 1;
+        }
+    }
+    assert_eq!(compared, 6 * 7, "case count");
+    // `-C 0-0` and anything negative mean sequential; the wrapper has already
+    // resolved `--thread -1` to a core count before a component sees it.
+    assert_eq!(workers(0), 1);
+    assert_eq!(workers(-1), 1);
+    assert_eq!(workers(1), 1);
+    assert_eq!(workers(8), 8);
+}
+
+/// The fused `naivepairscorefast` against the unfused `naivepairscore11`, on
+/// rows built to reach what the fusion changed.
+///
+/// `fast_and_plain_pair_scores_agree` compares the same two functions, and it
+/// stays. What it cannot do is choose its gaps: its rows come out of
+/// `g_align11`, so they are gapped where an aligner would gap them, and an
+/// interior column gapped in *both* rows -- rare there -- is precisely what
+/// this function now treats specially. Those columns are the only place the
+/// skip tables are read, and dropping one lets a gap run in the other row span
+/// it, which is the one piece of state the fused loop carries across columns.
+/// So they are generated on purpose here rather than hoped for.
+///
+/// `naivepairscore11` is the oracle and it is genuinely independent: it drops
+/// both-gap columns by looking at them (`commongappickpair`) and never
+/// consults a skip table at all, so agreement is evidence about the table
+/// logic and not a tautology.
+#[test]
+fn fused_pair_score_matches_the_unfused_one_on_gap_heavy_rows() {
+    use crate::score;
+    let cn = tree_constants();
+    const ALPHA: &[u8] = b"ARNDCQEGHILKMFPSTWYV";
+    let mut s = 0x2545_F491_4F6C_DD1Du64;
+    let mut next = move || {
+        s ^= s << 13;
+        s ^= s >> 7;
+        s ^= s << 17;
+        s
+    };
+    let mut cases = 0usize;
+    let mut with_bothgap = 0usize;
+    // Gap rates in percent, per row. The pairs where both are high are the
+    // ones that produce long runs gapped in both rows; the (0, high) pairs
+    // give a row with no gaps at all, and (97, 97) reaches rows that are
+    // almost entirely gaps.
+    for &(g1, g2) in &[
+        (0u64, 0u64),
+        (0, 50),
+        (10, 10),
+        (35, 35),
+        (50, 50),
+        (70, 70),
+        (90, 90),
+        (97, 97),
+        (97, 5),
+    ] {
+        for &width in &[1usize, 2, 7, 40, 200] {
+            for _trial in 0..12 {
+                let mut r1 = Vec::with_capacity(width);
+                let mut r2 = Vec::with_capacity(width);
+                let mut both = false;
+                for _ in 0..width {
+                    let c1 = if next() % 100 < g1 {
+                        b'-'
+                    } else {
+                        ALPHA[(next() % ALPHA.len() as u64) as usize]
+                    };
+                    let c2 = if next() % 100 < g2 {
+                        b'-'
+                    } else {
+                        ALPHA[(next() % ALPHA.len() as u64) as usize]
+                    };
+                    both |= c1 == b'-' && c2 == b'-';
+                    r1.push(c1);
+                    r2.push(c2);
+                }
+                let sk1 = score::makeskiptable(&r1);
+                let sk2 = score::makeskiptable(&r2);
+                for &penal in &[0i32, -17, 42] {
+                    let plain = score::naivepairscore11(&cn, &r1, &r2, penal);
+                    let fast = score::naivepairscorefast(&cn, &r1, &r2, &sk1, &sk2, penal);
+                    // Bit equality, not `==`: the point of the fusion is that
+                    // the f64 addend chain is unchanged, and `==` would let a
+                    // `-0.0` for a `+0.0` through.
+                    assert_eq!(
+                        plain.to_bits(),
+                        fast.to_bits(),
+                        "gaps {}/{}%, width {}, penal {}: plain {} fast {}\n  r1 {}\n  r2 {}",
+                        g1,
+                        g2,
+                        width,
+                        penal,
+                        plain,
+                        fast,
+                        String::from_utf8_lossy(&r1),
+                        String::from_utf8_lossy(&r2),
+                    );
+                    cases += 1;
+                }
+                if both {
+                    with_bothgap += 1;
+                }
+            }
+        }
+    }
+    // A harness that compared nothing would report success just as loudly.
+    assert_eq!(cases, 9 * 5 * 12 * 3, "case count");
+    // And one that never built a both-gap column would be testing the old
+    // code path only, however many cases it ran.
+    assert!(
+        with_bothgap >= 200,
+        "only {} of {} row pairs had a column gapped in both rows; the skip-table \
+         jump and the run-spanning case are what this test exists for",
+        with_bothgap,
+        9 * 5 * 12
+    );
 }
 
 /// The premise that lets `pairscore` accumulate in `i64`.

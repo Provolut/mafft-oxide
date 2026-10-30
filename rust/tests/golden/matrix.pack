@@ -1,5 +1,5 @@
 # mafft-rs golden pack v1
-MANIFEST 85404
+MANIFEST 87279
 aa.nwns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 aa.nwns1	disttbfast	-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 aa.fftns2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100	order		ok
@@ -49,7 +49,9 @@ aa.merge2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.5
 aa.merge3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 aa.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 aa.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
-aa.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+aa.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+aa.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+aa.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 aa.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
 aa.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 aa.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -116,7 +118,9 @@ dup.merge2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.
 dup.merge3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 dup.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 dup.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
-dup.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+dup.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+dup.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+dup.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 dup.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
 dup.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 dup.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -183,7 +187,9 @@ gapped.merge2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f 
 gapped.merge3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 gapped.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 gapped.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
-gapped.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+gapped.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+gapped.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+gapped.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 gapped.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
 gapped.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 gapped.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -250,7 +256,9 @@ nuc.merge2	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.
 nuc.merge3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 nuc.mergeint	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
 nuc.mergekeep	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -H 0	order,infile.tree	_subalignmentstable	ok
-nuc.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+nuc.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+nuc.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+nuc.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 nuc.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order		ok
 nuc.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 nuc.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -313,7 +321,9 @@ ragged.verycompact	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 
 ragged.stepadd	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U	order	_guidetree	ok
 ragged.youngest	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U	order	_guidetree	ok
 ragged.aamatrix	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order	_aamtx	ok
-ragged.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+ragged.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+ragged.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+ragged.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 ragged.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
 ragged.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 ragged.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -376,7 +386,9 @@ tandem.verycompact	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 
 tandem.stepadd	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U	order	_guidetree	ok
 tandem.youngest	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U	order	_guidetree	ok
 tandem.aamatrix	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order	_aamtx	ok
-tandem.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+tandem.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+tandem.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+tandem.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 tandem.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
 tandem.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 tandem.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -439,7 +451,9 @@ wildx.verycompact	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0
 wildx.stepadd	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U	order	_guidetree	ok
 wildx.youngest	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -U	order	_guidetree	ok
 wildx.aamatrix	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b -1 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100	order	_aamtx	ok
-wildx.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		refuse
+wildx.threads	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-2	order		ok
+wildx.threads3	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 3-3	order		ok
+wildx.threadspair	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -x 100 -C 2-0	order		ok
 wildx.badblosum	disttbfast	-q 0 -E 2 -V -1.53 -s 0.0 -W 6 -O -C 0-0 -b 47 -g 0 -f -1.53 -Q 100.0 -h 0 -X 0.1 -x 100			exit
 wildx.linsi	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 2 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2,hat3		ok
 wildx.linsi1	tbfast	_ -u 0.0 -l 2.7 -C 0 -b 62 -g -0.100 -f -2.00 -Q 100.0 -h 0.1 -L _ -+ 0 -W 0.00001 -V -1.53 -s 0.0 -C 0 -b 62 -f -1.53 -Q 100.0 -h 0 -F -l 2.7 -X 0.1 -O	pre,order,hat2		ok
@@ -2516,6 +2530,46 @@ SVIFTFIVMLKNETKIARCKGNHKCREHAGVKWIVIGDVRIRAQVYTGFQPKKIFEEKVSRDVTSRGHQHEGALVIPLWT
 >s5
 VKYNKVQKFHCLGTACVCCIDWLIGVWKALCHMFKNYPVRLEAQVTTNVPPHAMNERKVMMRCTCGLHTRTYHFVGPESY
 aa.threads.order 12
+0
+1
+2
+3
+4
+5
+aa.threads3.fa 510
+>s0
+EHPHTIISFAKNSTKILSCFDNLMCHQKAGWKWSKDEPSRANCQVTTGFRPKAKFECKVMMRVTCVGHQRNNHLVIPTWF
+>s1
+EGPKTNISFACNSTVIVKCNDELSCHQCAIWKWSKDSIVRYNCQVWANFQPKAGFEDKVYMRVACSGHQRNYFAVIPEWH
+>s2
+EKPDTIYQFAQDSQKDVQRFRNLSCHQKAGWTGSKDEAVRSNCQWDTTFTMGEPMERKVMMYVTCMGHQRNYHLVIPEWD
+>s3
+EHPKKIIMHAHNSTKFVPCVMNPSHHKVMGAKHSKFWPPRAACQVTTMFKPGAKFERMVITPVTHYKQQRIYWQVIPEWD
+>s4
+SVIFTFIVMLKNETKIARCKGNHKCREHAGVKWIVIGDVRIRAQVYTGFQPKKIFEEKVSRDVTSRGHQHEGALVIPLWT
+>s5
+VKYNKVQKFHCLGTACVCCIDWLIGVWKALCHMFKNYPVRLEAQVTTNVPPHAMNERKVMMRCTCGLHTRTYHFVGPESY
+aa.threads3.order 12
+0
+1
+2
+3
+4
+5
+aa.threadspair.fa 510
+>s0
+EHPHTIISFAKNSTKILSCFDNLMCHQKAGWKWSKDEPSRANCQVTTGFRPKAKFECKVMMRVTCVGHQRNNHLVIPTWF
+>s1
+EGPKTNISFACNSTVIVKCNDELSCHQCAIWKWSKDSIVRYNCQVWANFQPKAGFEDKVYMRVACSGHQRNYFAVIPEWH
+>s2
+EKPDTIYQFAQDSQKDVQRFRNLSCHQKAGWTGSKDEAVRSNCQWDTTFTMGEPMERKVMMYVTCMGHQRNYHLVIPEWD
+>s3
+EHPKKIIMHAHNSTKFVPCVMNPSHHKVMGAKHSKFWPPRAACQVTTMFKPGAKFERMVITPVTHYKQQRIYWQVIPEWD
+>s4
+SVIFTFIVMLKNETKIARCKGNHKCREHAGVKWIVIGDVRIRAQVYTGFQPKKIFEEKVSRDVTSRGHQHEGALVIPLWT
+>s5
+VKYNKVQKFHCLGTACVCCIDWLIGVWKALCHMFKNYPVRLEAQVTTNVPPHAMNERKVMMRCTCGLHTRTYHFVGPESY
+aa.threadspair.order 12
 0
 1
 2
@@ -6319,6 +6373,40 @@ dup.threads.order 10
 2
 3
 4
+dup.threads3.fa 425
+>d0
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d1
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d2
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d3
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d4
+EWPKTINSFAKNSTGIVKCFDNLWYHLKSGWKWMFSEPVRANCWYTTGFQQKAKFEIELMMITWCMGHQRNYHLVIPEWD
+dup.threads3.order 10
+0
+1
+2
+3
+4
+dup.threadspair.fa 425
+>d0
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d1
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d2
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d3
+EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
+>d4
+EWPKTINSFAKNSTGIVKCFDNLWYHLKSGWKWMFSEPVRANCWYTTGFQQKAKFEIELMMITWCMGHQRNYHLVIPEWD
+dup.threadspair.order 10
+0
+1
+2
+3
+4
 dup.treeinbal.fa 425
 >d0
 EFPKTIISFAKNSTKIVKAFDLLSCHQKAGWKWSKDEPVRANQQVSTGFQPKAKFEWKVMMRVTCMGHQRNYHYVIPEWD
@@ -7943,6 +8031,40 @@ EHPKTIISLWKNPTKIVKDHQKAGWKWSKLEPVRANCQVTTGFFDKAKFERKRMMRVTCMDHQRKYHLVKAEWD
 >g4
 EHPKTIISTALNSQKWVKCFDNAGWLWSKDECVRANCHVTTGFQRKAKFERKVNMRVTCMGHQRNYHLVIPEWD
 gapped.threads.order 10
+0
+1
+2
+4
+3
+gapped.threads3.fa 395
+>g0
+EHPKTIISFAVKCFQNKSCHCKAKWKGSKDEPVRANCQVTTSFPPKAKFVRKVQMRVWCMGHARNYHLVIPEWD
+>g1
+EHPKTIGSFAKNSFDCRSCHQKAGWAWSKSEPVRANCQVTTGFQPKAKFKRKVMMRVAKIGHQRNYHLTIPEWD
+>g2
+EHPKTIIDDANNSTKILSCHQVAGWKWFKDEPVRANCRVTTGFQPKAKFERKVMMRVTCMGHQRNRHLNIPNWD
+>g3
+EHPKTIISLWKNPTKIVKDHQKAGWKWSKLEPVRANCQVTTGFFDKAKFERKRMMRVTCMDHQRKYHLVKAEWD
+>g4
+EHPKTIISTALNSQKWVKCFDNAGWLWSKDECVRANCHVTTGFQRKAKFERKVNMRVTCMGHQRNYHLVIPEWD
+gapped.threads3.order 10
+0
+1
+2
+4
+3
+gapped.threadspair.fa 395
+>g0
+EHPKTIISFAVKCFQNKSCHCKAKWKGSKDEPVRANCQVTTSFPPKAKFVRKVQMRVWCMGHARNYHLVIPEWD
+>g1
+EHPKTIGSFAKNSFDCRSCHQKAGWAWSKSEPVRANCQVTTGFQPKAKFKRKVMMRVAKIGHQRNYHLTIPEWD
+>g2
+EHPKTIIDDANNSTKILSCHQVAGWKWFKDEPVRANCRVTTGFQPKAKFERKVMMRVTCMGHQRNRHLNIPNWD
+>g3
+EHPKTIISLWKNPTKIVKDHQKAGWKWSKLEPVRANCQVTTGFFDKAKFERKRMMRVTCMDHQRKYHLVKAEWD
+>g4
+EHPKTIISTALNSQKWVKCFDNAGWLWSKDECVRANCHVTTGFQRKAKFERKVNMRVTCMGHQRNYHLVIPEWD
+gapped.threadspair.order 10
 0
 1
 2
@@ -11223,6 +11345,46 @@ nuc.threads.order 12
 4
 3
 5
+nuc.threads3.fa 570
+>n0
+gtcggggatattgcgcgttagtcccccaagccctcgtctagtaagaaattatgttcctatgtgaacgctgtttttgagttcatacatacc
+>n1
+gtcggggacattgttcgttaggccagcaagcactcgcctattcagacattgtgtttttatgtgatcggtgcttttaagttcatacatacc
+>n2
+gtcccggaaattggacgttagtcctccaaggtctcgtctagtaagaaagtgtgtttctatctccaagctgtttttgactccctacatatc
+>n3
+gtctggttaattgtttgttaatccacgtagtcctcgtttagaatgaaattgacaatctgtgtgaacgctctctttgtcttcaaacatgcc
+>n4
+atcgcggaaactaccgattagtcccctgggctcccgtctagtatggaatggtgctcctatgtgaacgcttcttccgagatgatccattga
+>n5
+atcggggcatttgtacgtcggtccgagcaaccctcctccagtagcaatttgagtcacggagagaatacggtacgtgaattcattcatacc
+nuc.threads3.order 12
+0
+1
+2
+4
+3
+5
+nuc.threadspair.fa 570
+>n0
+gtcggggatattgcgcgttagtcccccaagccctcgtctagtaagaaattatgttcctatgtgaacgctgtttttgagttcatacatacc
+>n1
+gtcggggacattgttcgttaggccagcaagcactcgcctattcagacattgtgtttttatgtgatcggtgcttttaagttcatacatacc
+>n2
+gtcccggaaattggacgttagtcctccaaggtctcgtctagtaagaaagtgtgtttctatctccaagctgtttttgactccctacatatc
+>n3
+gtctggttaattgtttgttaatccacgtagtcctcgtttagaatgaaattgacaatctgtgtgaacgctctctttgtcttcaaacatgcc
+>n4
+atcgcggaaactaccgattagtcccctgggctcccgtctagtatggaatggtgctcctatgtgaacgcttcttccgagatgatccattga
+>n5
+atcggggcatttgtacgtcggtccgagcaaccctcctccagtagcaatttgagtcacggagagaatacggtacgtgaattcattcatacc
+nuc.threadspair.order 12
+0
+1
+2
+4
+3
+5
 nuc.treeinbal.fa 570
 >n0
 gtcggggatattgcgcgttagtcccccaagccctcgtctagtaagaaattatgttcctatgtgaacgctgtttttgagttcatacatacc
@@ -12724,6 +12886,40 @@ EHPKTIISFAKNVTKITKCFDGLSCHQKAGWKPSKDENVYANCQ------------------------------------
 >r4
 EHPCCTISFAKTSNKIVKCFDNLSCTPKAGWK------------------------------------------------
 ragged.threads.order 10
+0
+1
+3
+4
+2
+ragged.threads3.fa 425
+>r0
+EHPKTIESEAKNSTKIVKCFDNLSCHQHAGWKWNKPEPVYAYCQVTTGFDPYAKTERKRMMRVTCDGHQRNYRLVIPQWD
+>r1
+EHPKTIISFSKNSTKQVNCFDNLSCHQRAGWKMSKDEPSRANCQVTNDFQMKCKFERAVMVRVTCMTH------------
+>r2
+EHEKTISSFAPNHTKIVKCFCNLSCHQKAGSKWSKDERVRANCIVTTGTQPKPKFE------------------------
+>r3
+EHPKTIISFAKNVTKITKCFDGLSCHQKAGWKPSKDENVYANCQ------------------------------------
+>r4
+EHPCCTISFAKTSNKIVKCFDNLSCTPKAGWK------------------------------------------------
+ragged.threads3.order 10
+0
+1
+3
+4
+2
+ragged.threadspair.fa 425
+>r0
+EHPKTIESEAKNSTKIVKCFDNLSCHQHAGWKWNKPEPVYAYCQVTTGFDPYAKTERKRMMRVTCDGHQRNYRLVIPQWD
+>r1
+EHPKTIISFSKNSTKQVNCFDNLSCHQRAGWKMSKDEPSRANCQVTNDFQMKCKFERAVMVRVTCMTH------------
+>r2
+EHEKTISSFAPNHTKIVKCFCNLSCHQKAGSKWSKDERVRANCIVTTGTQPKPKFE------------------------
+>r3
+EHPKTIISFAKNVTKITKCFDGLSCHQKAGWKPSKDENVYANCQ------------------------------------
+>r4
+EHPCCTISFAKTSNKIVKCFDNLSCTPKAGWK------------------------------------------------
+ragged.threadspair.order 10
 0
 1
 3
@@ -15456,6 +15652,40 @@ tandem.threads.order 10
 2
 4
 3
+tandem.threads3.fa 625
+>t0
+YAEKEWSGLHWQLFRCHKKTTTFTNACYSLYAYKEWWGLHWQLFTCHKKYLTFGNACYSLYAYKEWSGGHWQLFTCKHKYTTFTNACYSLYAYKEWSGLHSQLFTCHKKYTTFTNACYSL
+>t1
+YAYKEWSGLHWQLFTCHKKCTTATNACY------------------------------SLYAYKEWSGPHWQLFTCKPKYTTFTNACYSLYAYKEWSGLGDQLFTCHKKYTTFTNAHYSL
+>t2
+YAYKQRSGLHWQLFTCHKKYTTVTNACYSLYAYKEWSGLHWQLFTCRKKYQTFTNACYSYYAFKEWSELHWQLFTCHKKYTTFCNACYSLYAYKEWSGLHSGLFTCHGKYTTFTNACYSL
+>t3
+YAYKFWSGLHWQLFTCHKKYTTFTYACY------------------------------SLYAYKNWSGLHWQLFTEHKEYTTFTNACYSLYAYHVWSGLHWQLFTCHKKYTTFTNACYSW
+>t4
+YAMKEWSGDHWQLFTCHKKVTTFTNACYSLYAYKEWSGLHWQGFTCHKKYTSFTNGCYSLYAYKEWSGLHWQLFTCHKKKTTFTNACPSSYAYKEWSGLHWQLFTCHKLYTTFTNACISW
+tandem.threads3.order 10
+0
+1
+2
+4
+3
+tandem.threadspair.fa 625
+>t0
+YAEKEWSGLHWQLFRCHKKTTTFTNACYSLYAYKEWWGLHWQLFTCHKKYLTFGNACYSLYAYKEWSGGHWQLFTCKHKYTTFTNACYSLYAYKEWSGLHSQLFTCHKKYTTFTNACYSL
+>t1
+YAYKEWSGLHWQLFTCHKKCTTATNACY------------------------------SLYAYKEWSGPHWQLFTCKPKYTTFTNACYSLYAYKEWSGLGDQLFTCHKKYTTFTNAHYSL
+>t2
+YAYKQRSGLHWQLFTCHKKYTTVTNACYSLYAYKEWSGLHWQLFTCRKKYQTFTNACYSYYAFKEWSELHWQLFTCHKKYTTFCNACYSLYAYKEWSGLHSGLFTCHGKYTTFTNACYSL
+>t3
+YAYKFWSGLHWQLFTCHKKYTTFTYACY------------------------------SLYAYKNWSGLHWQLFTEHKEYTTFTNACYSLYAYHVWSGLHWQLFTCHKKYTTFTNACYSW
+>t4
+YAMKEWSGDHWQLFTCHKKVTTFTNACYSLYAYKEWSGLHWQGFTCHKKYTSFTNGCYSLYAYKEWSGLHWQLFTCHKKKTTFTNACPSSYAYKEWSGLHWQLFTCHKLYTTFTNACISW
+tandem.threadspair.order 10
+0
+1
+2
+4
+3
 tandem.treeinbal.fa 775
 >t0
 YAEKEWSGLHWQLFRCHKKTTTFTNACYSLYAYKEWWGLHWQLFTCHKKYLTFGNACYSLYAYKEWSGGHWQLFTCKHKYTTFTNACYS------------------------------LYAYKEWSGLHSQLFTCHKKYTTFTNACYSL
@@ -17273,6 +17503,46 @@ EHPITIISFEKNSTKIVKCFDNLHCHQKAGWKWXXXXPRRANCQVTTGFQPKAKFERKVMMRVTCMTHQRNYHLNICEWD
 >xshort
 EHPK----------------------------------------------------------------------------
 wildx.threads.order 12
+0
+1
+3
+4
+2
+5
+wildx.threads3.fa 514
+>x0
+EHPKTXXXXAKVSTKIVTCFDNLSCHQKAWWKWSKDEPVRDNCQVGTGFQKKAPFERKVMMRVTCMGHQANYHLVWPEWD
+>x1
+EHTKTVISFAKNXXXXVKCFDELSCENKAGWWWSKDEPVRANCQPTHGFQSKAKFERKVMMRVTCMGHVRNYHLVIPEWD
+>x2
+EHPKVIISFAANSTKIVKCXXXXSCHQKEGCRWSKDEPVRMKCQVTTGFQPKAKFERKYMMRVACMGHQRNPILVIPEWE
+>x3
+ERPKCIISFAKNSQANVKCFDNLSCHXXXXWKWSKDEPQRANCQVTTGFVPKAKHERKVQMRVTCMGHQRNYHLVIPDWD
+>x4
+EHPITIISFEKNSTKIVKCFDNLHCHQKAGWKWXXXXPRRANCQVTTGFQPKAKFERKVMMRVTCMTHQRNYHLNICEWD
+>xshort
+EHPK----------------------------------------------------------------------------
+wildx.threads3.order 12
+0
+1
+3
+4
+2
+5
+wildx.threadspair.fa 514
+>x0
+EHPKTXXXXAKVSTKIVTCFDNLSCHQKAWWKWSKDEPVRDNCQVGTGFQKKAPFERKVMMRVTCMGHQANYHLVWPEWD
+>x1
+EHTKTVISFAKNXXXXVKCFDELSCENKAGWWWSKDEPVRANCQPTHGFQSKAKFERKVMMRVTCMGHVRNYHLVIPEWD
+>x2
+EHPKVIISFAANSTKIVKCXXXXSCHQKEGCRWSKDEPVRMKCQVTTGFQPKAKFERKYMMRVACMGHQRNPILVIPEWE
+>x3
+ERPKCIISFAKNSQANVKCFDNLSCHXXXXWKWSKDEPQRANCQVTTGFVPKAKHERKVQMRVTCMGHQRNYHLVIPDWD
+>x4
+EHPITIISFEKNSTKIVKCFDNLHCHQKAGWKWXXXXPRRANCQVTTGFQPKAKFERKVMMRVTCMTHQRNYHLNICEWD
+>xshort
+EHPK----------------------------------------------------------------------------
+wildx.threadspair.order 12
 0
 1
 3

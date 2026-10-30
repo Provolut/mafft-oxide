@@ -5,7 +5,6 @@
 //! `core/mltaln9.c`.
 
 use crate::constants::Constants;
-use std::cell::RefCell;
 
 /// `commongappickpair()`: drop columns that are gaps in both sequences.
 fn commongappickpair(i1: &[u8], i2: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -36,91 +35,12 @@ pub fn makeskiptable(seq: &[u8]) -> Vec<i32> {
     skip
 }
 
-/// `commongappickpairfast()`: the skip-table accelerated form of the above.
+/// The shared scoring loop of `naivepairscore11`.
 ///
-/// Writes into `r1`/`r2` rather than returning two fresh `Vec`s, and returns
-/// how many columns it wrote. `naivepairscorefast` calls this once per
-/// sequence pair -- 311,655 times on a 790-sequence input -- and the two
-/// allocations cost 1.53G instructions in `Vec::push` plus 0.42G in allocator
-/// plumbing, measured with callgrind against the C's 5.89G for this function
-/// and the scoring loop together. The C `calloc`s and `free`s two buffers per
-/// call; this reuses one pair per thread.
-///
-/// The bytes written and the order they are written in are unchanged, so the
-/// f64 sum `pairscore` then computes over them is bit-identical.
-fn commongappickpairfast(
-    i1: &[u8],
-    i2: &[u8],
-    skip1: &[i32],
-    skip2: &[i32],
-    r1: &mut Vec<u8>,
-    r2: &mut Vec<u8>,
-) -> usize {
-    // The two aligned rows are the same length by construction; the C walks
-    // them with one pair of pointers that it advances together. Slicing both
-    // to one hoisted length lets the indexing below drop its bounds checks.
-    debug_assert_eq!(i1.len(), i2.len());
-    let len = i1.len().min(i2.len());
-    let i1 = &i1[..len];
-    let i2 = &i2[..len];
-    if r1.len() < len {
-        r1.resize(len, 0);
-    }
-    if r2.len() < len {
-        r2.resize(len, 0);
-    }
-    let o1 = &mut r1[..len];
-    let o2 = &mut r2[..len];
-
-    let mut n = 0usize;
-    // `p1` and `p2` in the C advance by the same amounts and are compared
-    // against the same bound, so they are one cursor.
-    let mut p = 0usize;
-    let mut k1 = 0usize;
-    let mut k2 = 0usize; // cursors into skip1 / skip2
-    let mut skipped1 = 0i32;
-    let mut skipped2 = 0i32;
-    loop {
-        let cand1 = skip1[k1] - skipped1;
-        let cand2 = skip2[k2] - skipped2;
-        let skip = if cand1 < cand2 { cand1 } else { cand2 };
-        p += skip as usize;
-        skipped1 += skip;
-        skipped2 += skip;
-        if p >= len {
-            break;
-        }
-        // Read before the two updates below, which cannot touch `i1`/`i2`.
-        let b1 = i1[p];
-        let b2 = i2[p];
-        if b1 != b'-' {
-            skipped1 = 0;
-            k1 += 1;
-        } else {
-            skipped1 += 1;
-        }
-        if b2 != b'-' {
-            skipped2 = 0;
-            k2 += 1;
-        } else {
-            skipped2 += 1;
-        }
-        o1[n] = b1;
-        o2[n] = b2;
-        n += 1;
-        p += 1;
-    }
-    n
-}
-
-thread_local! {
-    /// The scratch pair `commongappickpairfast` writes into, grown
-    /// monotonically and never shrunk -- the same shape as `commonip`'s
-    /// matrix pool, and for the same reason.
-    static PICKED: RefCell<(Vec<u8>, Vec<u8>)> = const { RefCell::new((Vec::new(), Vec::new())) };
-}
-
-/// The shared scoring loop of `naivepairscore11` / `naivepairscorefast`.
+/// `naivepairscorefast` had the same loop until it was fused into its own
+/// column walk; this is still the independent second implementation that
+/// `fast_and_plain_pair_scores_agree` checks the fused one against, and it
+/// reaches the same answer without consulting a skip table at all.
 fn pairscore(cn: &Constants, s1: &[u8], s2: &[u8], penal: i32) -> f64 {
     // Both callers build the two rows in lockstep, so they are the same
     // length and the C's `while( *p1 )` and its inner `while( *p2 == '-' )`
@@ -159,7 +79,37 @@ pub fn naivepairscore11(cn: &Constants, seq1: &[u8], seq2: &[u8], penal: i32) ->
     pairscore(cn, &s1, &s2, penal)
 }
 
-/// `naivepairscorefast()`.
+/// `naivepairscorefast()`: the skip-table form, with the column pick and the
+/// scoring fused into one pass.
+///
+/// The C runs this in two passes. `commongappickpairfast` walks the two
+/// aligned rows, using the skip tables to jump whole gap runs, and copies the
+/// surviving columns into two freshly `calloc`ed buffers; `naivepairscorefast`
+/// then walks those buffers and adds up the score. This does both in the one
+/// walk, so the buffers do not exist and the columns are read once.
+///
+/// **The additions, and their order, are untouched** -- which is the only
+/// thing that may not move here. The second pass consumed the picked columns
+/// strictly left to right, and so does this, with the same value added at the
+/// same point of the sequence: `amino_dis[b1][b2]` for a residue pair, and
+/// `penal` once per gap run. The f64 accumulator therefore sees an identical
+/// chain of addends and the result is bit-identical, not merely close. This is
+/// not a reassociation, and nothing here would be sound as one.
+///
+/// Carrying `run` across columns is what replaces the second pass's inner
+/// `while( *p1 == '-' )` loops. That loop existed to charge a gap run once and
+/// then walk to its end; charging only when the run *opens* is the same thing
+/// expressed forward, and `run` is the only state it needed.
+///
+/// One ordering detail is load-bearing and is preserved: the C tests row 1 for
+/// a gap **before** row 2, so a column gapped in both rows is charged as a
+/// row-1 run. `commongappickpairfast` is not supposed to emit such a column
+/// and the C has a disabled check saying so, but the two passes agreed on what
+/// to do if one appeared, and so do this one and `pairscore`. The fusion
+/// therefore does not rest on that invariant holding.
+///
+/// Worth 1.7G instructions of the 6.81G this function cost at 790 sequences:
+/// the two scratch writes per column, and the whole of the second walk.
 pub fn naivepairscorefast(
     cn: &Constants,
     seq1: &[u8],
@@ -168,12 +118,109 @@ pub fn naivepairscorefast(
     skip2: &[i32],
     penal: i32,
 ) -> f64 {
-    PICKED.with(|cell| {
-        let mut cell = cell.borrow_mut();
-        let (r1, r2) = &mut *cell;
-        let n = commongappickpairfast(seq1, seq2, skip1, skip2, r1, r2);
-        pairscore(cn, &r1[..n], &r2[..n], penal)
-    })
+    // The two aligned rows are the same length by construction; the C walks
+    // them with one pair of pointers that it advances together. Slicing both
+    // to one hoisted length lets the indexing below drop its bounds checks.
+    debug_assert_eq!(seq1.len(), seq2.len());
+    let len = seq1.len().min(seq2.len());
+    let i1 = &seq1[..len];
+    let i2 = &seq2[..len];
+
+    let penal = penal as f64;
+    let mut vali = 0.0f64;
+    // Which row the previous *kept* column was gapped in: 1, 2, or 0 for
+    // neither. Starts at 0 so the first gap column opens a run. This is what
+    // replaces the second pass's inner `while( *p1 == '-' )` loops: they
+    // existed to charge a run once and then walk to its end, and charging only
+    // where a run opens is the same thing expressed forward.
+    let mut run = 0u8;
+
+    // `p1` and `p2` in the C advance by the same amounts and are compared
+    // against the same bound, so they are one cursor.
+    let mut p = 0usize;
+    let mut k1 = 0usize;
+    let mut k2 = 0usize; // cursors into skip1 / skip2
+    let mut skipped1 = 0i32;
+    let mut skipped2 = 0i32;
+    while p < len {
+        let b1 = i1[p];
+        let b2 = i2[p];
+        // The C reads both skip tables at the top of every column, to ask how
+        // far it may jump. That jump is non-zero *exactly* when both rows are
+        // inside a gap run: a row sitting on a residue has already consumed
+        // every gap recorded before that residue, so its candidate is 0 and
+        // the minimum with it is 0. Both rows gapped is also exactly the
+        // condition for dropping the column. So testing the two bytes first
+        // and reading the tables only then makes the same jumps while taking
+        // two loads, two bounds checks and a serial load-to-branch dependency
+        // off the common path -- which is nearly every column, since a column
+        // gapped in both rows is the minority case.
+        //
+        // That is where this function's time was. Dropping the tables
+        // altogether and walking every column ran the 790-sequence build in
+        // 708 ms against the C's 822 and this loop's 1123, so the per-column
+        // table traffic cost far more than the columns it let us skip. But it
+        // is O(alignment width) per pair where the table is O(columns kept),
+        // and those diverge badly for two short rows in a wide alignment --
+        // which is the case the table was added for. Hence neither: keep the
+        // jump, pay for it only where it can fire.
+        if b1 == b'-' && b2 == b'-' {
+            let cand1 = skip1[k1] - skipped1;
+            let cand2 = skip2[k2] - skipped2;
+            let skip = if cand1 < cand2 { cand1 } else { cand2 };
+            if skip > 0 {
+                p += skip as usize;
+                skipped1 += skip;
+                skipped2 += skip;
+                continue;
+            }
+            // `skip == 0` on a both-gap column means the tables disagree with
+            // the rows they describe. The C cannot spin here because it
+            // recomputes nothing: it falls through, emits the column, and its
+            // disabled check at `mltaln9.c:13351` says it does not expect to
+            // reach this at all. Falling through does the same and keeps the
+            // cursor moving, rather than re-reading a table that will give the
+            // same answer forever.
+        }
+        // Per-row bookkeeping, each row independently, exactly as the C.
+        if b1 != b'-' {
+            skipped1 = 0;
+            k1 += 1;
+        } else {
+            skipped1 += 1;
+        }
+        if b2 != b'-' {
+            skipped2 = 0;
+            k2 += 1;
+        } else {
+            skipped2 += 1;
+        }
+        // This column is one the C would have copied into its scratch pair and
+        // then read back out to score. Score it here instead, which is what
+        // makes the second pass and the two buffers unnecessary.
+        //
+        // Row 1 is tested before row 2 because the C's scoring loop does, so a
+        // column gapped in both rows is charged as a row-1 run. Such a column
+        // should not reach here, but the C's two passes agreed on what to do
+        // with one and this agrees with them, so the fusion does not rest on
+        // that invariant.
+        if b1 == b'-' {
+            if run != 1 {
+                vali += penal;
+                run = 1;
+            }
+        } else if b2 == b'-' {
+            if run != 2 {
+                vali += penal;
+                run = 2;
+            }
+        } else {
+            vali += cn.amino_dis[b1 as usize][b2 as usize] as f64;
+            run = 0;
+        }
+        p += 1;
+    }
+    vali
 }
 
 /// `intergroup_score()`: the weighted sum-of-pairs score between two aligned

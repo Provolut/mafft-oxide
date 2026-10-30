@@ -43,6 +43,7 @@ pub mod naivescore;
 pub mod pairalign;
 pub mod partalign;
 pub mod partalign_avx512;
+pub mod parallel;
 pub mod params;
 pub mod profile;
 pub mod saalign;

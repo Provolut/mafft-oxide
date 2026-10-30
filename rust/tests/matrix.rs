@@ -210,7 +210,12 @@ fn every_case_is_byte_identical_to_the_c() {
 /// a single residue in `aa.fftns2.fa` made the run report
 /// "1 of 553 cases differ ... differs at line 4" with both versions printed --
 /// and pinned here so a refactor of `same()` cannot quietly turn the matrix
-/// into 553 assertions that nothing is wrong.
+/// into an equal number of assertions that nothing is wrong. (It was 553 cases
+/// when that was done by hand and is 567 now; the count is deliberately not
+/// asserted anywhere, because a feature landing should not have to touch a
+/// number in a comment to stay honest. `cases.len() > 100` above is the
+/// non-vacuity guard, and the feature list below is what keeps coverage from
+/// shrinking.)
 #[test]
 fn the_comparison_detects_a_one_byte_difference() {
     let a = b">s0\nMNGTEG\n>s1\nMNGTEG\n";
@@ -259,6 +264,14 @@ fn the_matrix_covers_the_features_it_claims_to() {
         "linsi",
         "ginsi",
         "einsi",
+        // Threads. These were `refuse` fixtures until the port honoured `-C`;
+        // they are byte-identity cases now, and naming all three here means a
+        // regeneration that quietly dropped one cannot pass. `threadspair` is
+        // the `-C 2-0` shape, the only one that tells the two halves of
+        // `-C a-b` apart from a transposed parse.
+        "threads",
+        "threads3",
+        "threadspair",
     ] {
         assert!(
             keys.iter().any(|k| k.ends_with(feature)),

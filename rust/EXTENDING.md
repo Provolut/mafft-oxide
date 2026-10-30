@@ -43,16 +43,68 @@ quietly returning a different alignment:
   own past 30000 columns) is ported, both its DP and its FFT anchoring, and so
   is `-&` (`Aalign`).
 - `--parttree` / `--dpparttree` (a separate binary, `splittbfast`)
-- **threads.** The port is single-threaded and refuses `-C > 0`. For
-  `disttbfast` and `tbfast` that is a "not implemented", not a "cannot be":
-  measured on 39 corpus inputs x 3 repeats, the C's own binaries give
-  byte-identical `pre`, `order`, `hat2` and `hat3` at `-C 4` as at `-C 0`,
-  including on an 80-sequence input where four threads are a real 3.3x speedup.
-  For `dvtditr` it is closer to "cannot": the C's threaded refinement is
-  **nondeterministic** — three `--thread 4` runs of one input give three
-  different alignments — so there is no fixed reference to be byte-identical
-  to. A callgrind profile confirms `athread` never runs at `-C 0`. Run with
-  `-C 0` / `-C 0-0`, which is what the wrapper passes by default.
+- **threads, partly.** `disttbfast` honours `-C` for the three all-pairs
+  matrices -- the k-tuple matrix, its length-corrected second pass, and the
+  matrix recomputed over the aligned rows -- and runs everything else
+  sequentially. `tbfast` and `dvtditr` still refuse `-C > 0` entirely.
+
+  Those matrices are safe to thread for a structural reason, not a measured
+  one: each cell is a pure function of its own `(i, j)` and of data the loop
+  does not write, so no thread count can change the result. `verify_threads.sh`
+  checks it anyway, over eight `-C` specs including counts that do not divide
+  the row count and one larger than it -- 2752 comparisons, each against the
+  C's *sequential* output rather than against the port's own, since a port that
+  were self-consistently wrong at every count would pass the weaker test.
+
+  **The progressive step is not threaded, and this is the interesting half.**
+  It is not merely risky: above 30000 columns the C has no fixed answer to be
+  identical to. `alg` is a process-wide global (`defs.c:80`, `extern` in
+  `mltaln.h:138`) that selects between `A__align` and `MSalignmm` -- two
+  different recurrences, see note 12 -- and `disttbfast.c:1929`, inside
+  `treebasethread`, writes it with no lock when a node crosses that width.
+  Upstream documents the consequence itself on the very next line:
+
+      if( alg == 'M' ) // hoka no thread ga M ni shitakamo shirenainode
+
+  "because another thread may have set it to M". Up to `nthreadtb` workers run
+  in there at once (`:1826`), so which nodes align in memsave mode depends on
+  thread timing, and so does the alignment. That is the same situation as
+  `dvtditr` below rather than a milder one, and it is why the C's own `-C 8-8`
+  being faster than this port is not a gap worth closing: part of that speed is
+  an answer that is not reproducible.
+
+  Below 30000 columns the C's threaded progressive step *is* deterministic, and
+  a threaded `treebase` that matched it there could be written. It would also
+  silently change its answer the first time an input crossed the threshold,
+  which is the one thing this repository exists to prevent, so the switch is
+  not worth having at any speed.
+
+  Nothing above says threading the progressive step is impossible for the
+  *port* -- the port could serialise its own `alg`, or thread only below the
+  threshold and fall back. It says there is no reference to verify it against,
+  and a differential against a nondeterministic C is not a gate.
+
+  `dvtditr` is closer to "cannot" for the same class of reason: the C's
+  threaded refinement is **nondeterministic** -- three `--thread 4` runs of one
+  input give three different alignments -- so there is again no fixed reference.
+  A callgrind profile confirms `athread` never runs at `-C 0`.
+
+  History, because the refusal's error message was wrong for a long time and
+  someone will find the old wording in the history. `disttbfast` used to refuse
+  every `-C > 0` with "threads change the result". That was an assumption, never
+  measured, and it cost any caller passing an explicit `--thread 1` a hard
+  failure with no output -- one thread being semantically sequential. Measured
+  on 2026-10-29: `core/disttbfast` built with `-Denablemultithread` gives
+  byte-identical stdout and side files at `-C 1-1`, `-C 8-8` and `-C 8-0` as at
+  `-C 0-0`, over 1038 comparisons across four strategies and two payloads.
+
+  What threading is worth, on 6 physical cores (12 logical) at 790 sequences:
+  the C goes 825 ms to 569 at `-C 8-0` and 464 at `-C 8-8`; the port goes 723 to
+  518, which beats the C's pairwise-only arm and loses to its full one by
+  exactly the progressive step it declines to thread. A consumer measured 3.74x
+  for the C's full form at 3831 sequences, where the matrices dominate more.
+  Both arms stop scaling past about six workers here, which is the physical core
+  count and not a property of either implementation.
 
 The configurations that still need the C are tracked as issues, one per gap,
 indexed by the repository's "what is still not done" issue — each carries what
@@ -176,6 +228,27 @@ Most were found the hard way, by a corpus case rather than by reading.
    It was 4 of 688 cases on the first differential run of the clustal writer,
    all on `d_rna.fa`, all in the mark row only. The protein branch has no such
    gap: its `nstrong`/`nweaker` match its nine and eleven groups.
+
+15. **A dropped column must not end a gap run.** `naivepairscorefast` scores the
+   columns that are left after the ones gapped in *both* rows are thrown away,
+   and it charges a gap run once rather than per column. Those two rules
+   interact: a run of gaps in row 1 that is interrupted only by a column gapped
+   in both rows is still *one* run, because that column is not there any more.
+   The C gets this for free by picking the columns into a buffer first and
+   scoring the buffer second. The port fuses the two passes, so it carries the
+   open run across columns explicitly, and the obvious tidy — clearing that
+   state when a column is dropped, which reads like the right thing to do —
+   charges the second half of the run again. Measured, not reasoned: it moves
+   the distance matrix on ordinary input, caught by
+   `fused_pair_score_matches_the_unfused_one_on_gap_heavy_rows`, which exists
+   because an aligner's own output rarely produces interior both-gap columns
+   and so would not have caught it.
+
+   The same function reads its two skip tables only at a both-gap column. That
+   is not a shortcut: the C's `min(skip1[k1] - skipped1, skip2[k2] - skipped2)`
+   is non-zero exactly there, because a row sitting on a residue has consumed
+   every gap recorded before it and contributes zero. Reading them on every
+   column instead is correct and was 1.56x slower.
 
 One portability note: `sin(PI/n)` in `make_sintbl` is the only libm
 transcendental the port depends on. Its argument is exact (`PI` scaled by a

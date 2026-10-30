@@ -57,7 +57,7 @@ fails instead of quietly returning a different alignment:
 - `--allowshift` with iterations — `dvtditr -s`, the specificity scoring path
 - `--dash` — `f2cl -d`
 - `--parttree`, and inputs past 20,000 sequences — both need `splittbfast`
-- `-@` (`--sp`), the RNA structure strategies, and threads (`-C > 0`)
+- `-@` (`--sp`) and the RNA structure strategies
 
 `EXTENDING.md` has the full list, with the measured reason for each.
 
@@ -68,13 +68,29 @@ It depends on the shape of the work, in both directions:
 | workload | port against the C |
 |---|---|
 | L-INS-i refinement (ESCOTT's `--auto`, 12 ProteinGym payloads) | **2.32x faster** than `gcc -O3`; 1.38x faster than `-march=native` |
-| FFT-NS-2 build path, 790 to 3831 sequences | **1.35x slower** |
+| FFT-NS-2 build path, 790 sequences | **1.14x faster**; **1.59x** with `--thread 8` |
 
 The refinement win is two AVX-512 kernels in `L__align11` plus removed work in
-`dvtditr`'s hot loops. The build-path deficit is bounds-check branch throughput
-in the O(n²) distance matrix that `--auto`'s second cycle recomputes: the port
-issues 1.96G more conditional branches than the C there, at a *better*
-mispredict rate and with better cache behaviour.
+`dvtditr`'s hot loops. The build-path win is in the O(n²) distance matrix that
+`--auto`'s second cycle recomputes over the aligned rows: the port reads its gap
+skip tables only at a column gapped in both rows, which is the only place their
+jump can be non-zero, instead of on every column as the C does.
+
+The build path was 1.37x *slower* until it was measured properly rather than
+profiled by function. Everything outside that one matrix is at parity to the
+millisecond, so three of the four sites an earlier profile had implicated were
+in the half that already matched.
+
+`--thread n` is honoured for the three all-pairs matrices and nothing else.
+Each of their cells is a pure function of its own `(i, j)`, so the alignment is
+the same for any thread count -- `verify/verify_threads.sh` compares 2,752 runs
+across eight `-C` specs against the C's sequential output. The progressive step
+stays single-threaded whatever `--threadtb` says, and deliberately:
+`core/disttbfast.c:1929` writes the global `alg` from inside a worker with no
+lock, and upstream's own comment on the next line ("another thread may have set
+it to M") is the reason -- that global picks between two different recurrences,
+so above 30,000 columns the C's threaded progressive step has no fixed answer
+to be identical to. `EXTENDING.md` has the detail.
 
 The C's kernel is compiled in, so a build carrying it crashes without AVX-512
 and a portable build never gets it — which is why the conda-forge 7.526 is the
@@ -87,9 +103,9 @@ Bit-exactness is measured, not argued.
 
 | | |
 |---|---|
-| differential against a compiled `core/` | **12,018 + 1,690** comparisons, all byte-identical |
-| unit and property tests, no C needed | **243**, 0 ignored |
-| region coverage | **91.33%** |
+| differential against a compiled `core/` | **12,018 + 1,690 + 2,752** comparisons, all byte-identical |
+| unit and property tests, no C needed | **245**, 0 ignored |
+| region coverage | **91.37%** |
 | upstream's own `test/script` | 8/9 — the ninth is `--allowshift`, refused rather than wrong |
 
 The harnesses live in `verify/`; each script's header says what it stages and
@@ -98,7 +114,7 @@ present.
 
 ## Extending it
 
-`EXTENDING.md` first. Fourteen things about the C are load-bearing and easy to
+`EXTENDING.md` first. Fifteen things about the C are load-bearing and easy to
 "clean up" by accident — scratch buffers that are never zeroed, deliberate
 off-by-one reads of the gap tables, a comparison against the wrong variable
 that decides which anchors survive. Most were found by a corpus case rather
