@@ -468,8 +468,30 @@ that directory and still gets `/usr/bin/awk`. So the run-dependency closes the
 activated-environment case and `Environment=LC_NUMERIC=C` closes the unit case,
 and neither covers the other.
 
-Unchanged for now because a run-dependency means a build, a channel publish and
-a consumer re-lock, which is a decision rather than an edit.
+Declared as of 0.4.0 build 1, after the reasoning above was corrected. No
+source change came with it: the same tag, the same nine binaries, and all nine
+`.text` sections byte-identical to build 0's -- the only raw difference is four
+bytes of padded build-prefix string per binary, which conda rewrites at install
+time. What moved is which `awk` the driver finds.
+
+How much that was riding on luck, measured in a consumer environment rather
+than argued from the feedstock. In `pml0`'s `full-cuda` env the awk on `PATH`
+prints `0.1`, so the runs there were on the correct arm -- but:
+
+    bin/awk -> gawk                       GNU Awk 5.4.1   prints 0.1
+    owned by                              gawk-5.4.1-h0a3468a_0
+    mafft-7.526-h4bc722e_0       depends: __glibc, gawk, libgcc-ng
+    mafft-oxide-0.3.0-h1250391_3 depends: __glibc, libgcc
+
+The locale-proof `awk` keeping those alignments correct is a transitive
+dependency of **the stock C `mafft`**. The installed port declares nothing that
+holds it there. So the exposed case named above is not hypothetical and not
+distant: it is one manifest edit away, and the edit is the obvious one. Dropping
+stock `mafft` on the reasoning that the port is at parity takes `gawk` with it,
+`/usr/bin/awk` wins the search, and every alignment on the host moves -- 101549
+bytes to 95768 on the input measured here, with no error and no warning. That
+ordering constraint is the practical content of this section: the build-1 pin
+has to land before the stock package is removed, not after.
 
 Nothing in this tree pins the locale -- not a harness, not the recipe, not a
 hook -- and nothing here changes that. Pinning `LC_NUMERIC=C` inside the
